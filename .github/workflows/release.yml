@@ -38,9 +38,9 @@ jobs:
       - run: npm ci
 
       - name: Build CLI
-        run: npm run build --workspace=vanish
+        run: npm run build --workspace=vanish-cli
 
       - name: Publish to npm
-        run: npm publish --workspace=vanish --provenance --access public
+        run: npm publish --workspace=vanish-cli --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

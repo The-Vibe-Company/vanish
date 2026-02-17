@@ -3,7 +3,7 @@
 Upload files, get temporary public URLs. Dead simple.
 
 ```bash
-npx vanish upload screenshot.png
+npx vanish-cli upload screenshot.png
 # https://api.vanish.sh/f/a1b2c3d4e5f6
 ```
 
@@ -24,10 +24,10 @@ You're using Claude Code and want screenshots in your PRs. Or you need to quickl
 
 ```bash
 # Use directly with npx (no install needed)
-npx vanish upload file.png
+npx vanish-cli upload file.png
 
 # Or install globally
-npm install -g vanish
+npm install -g vanish-cli
 ```
 
 ## Usage

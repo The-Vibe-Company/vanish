@@ -1,5 +1,5 @@
 {
-  "name": "vanish",
+  "name": "vanish-cli",
   "version": "0.1.0",
   "description": "Upload files, get temporary public URLs. Dead simple.",
   "type": "module",
