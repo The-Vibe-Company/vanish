@@ -63,7 +63,8 @@ upload.post('/upload', async (c) => {
     VALUES (?, ?, ?, ?, ?, ?)
   `).bind(id, user?.id || null, filename, contentType, size, expiresAt).run();
 
-  const url = `${c.env.BASE_URL}/f/${id}`;
+  const fileExt = filename.includes('.') ? filename.split('.').pop()!.toLowerCase() : '';
+  const url = fileExt ? `${c.env.BASE_URL}/f/${id}.${fileExt}` : `${c.env.BASE_URL}/f/${id}`;
 
   return c.json({
     url,
