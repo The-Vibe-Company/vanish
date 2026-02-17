@@ -27,8 +27,8 @@ Use `npx vanish-cli` instead of `vanish` when not globally installed.
 
 | Tier | Retention | Max Size | Rate Limit |
 |------|-----------|----------|------------|
-| Anonymous (no login) | 48 hours | 50 MB | 10/hour |
-| Free (`vanish login`) | 30 days | 50 MB | 50/hour |
+| Anonymous (no login) | 48 hours | 2 MB | 10/hour |
+| Free (`vanish login`) | 30 days | 2 MB | 50/hour |
 | Pro (`vanish upgrade`) | Unlimited | 1 GB | 200/hour |
 
 Blocked extensions: `.exe`, `.bat`, `.cmd`, `.com`, `.msi`, `.scr`, `.sh`, `.bash`, `.ps1`, `.psm1`.
