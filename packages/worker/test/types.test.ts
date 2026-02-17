@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { TIER_LIMITS, BLOCKED_EXTENSIONS } from '../src/types.js';
 
 describe('TIER_LIMITS', () => {
-  it('anonymous tier allows 50MB', () => {
-    expect(TIER_LIMITS.anonymous.maxFileSize).toBe(50 * 1024 * 1024);
+  it('anonymous tier allows 2MB', () => {
+    expect(TIER_LIMITS.anonymous.maxFileSize).toBe(2 * 1024 * 1024);
   });
 
   it('free tier allows 50MB', () => {

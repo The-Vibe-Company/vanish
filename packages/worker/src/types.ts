@@ -38,7 +38,7 @@ export interface Upload {
 
 export const TIER_LIMITS = {
   anonymous: {
-    maxFileSize: 50 * 1024 * 1024, // 50 MB
+    maxFileSize: 2 * 1024 * 1024, // 2 MB
     maxExpiryHours: 48,
     rateLimit: 10, // per hour
   },
