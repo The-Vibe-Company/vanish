@@ -38,6 +38,26 @@ upload.post('/upload', async (c) => {
     }, 413);
   }
 
+  // Check total storage quota
+  if (limits.maxTotalStorage && user) {
+    const stats = await c.env.DB.prepare(`
+      SELECT COALESCE(SUM(size_bytes), 0) as total_bytes
+      FROM uploads
+      WHERE user_id = ? AND deleted_at IS NULL
+    `).bind(user.id).first<{ total_bytes: number }>();
+
+    const currentUsage = stats?.total_bytes || 0;
+    if (currentUsage + size > limits.maxTotalStorage) {
+      const maxMB = Math.round(limits.maxTotalStorage / (1024 * 1024));
+      const usedMB = Math.round(currentUsage / (1024 * 1024));
+      return c.json({
+        error: `Storage quota exceeded. ${usedMB}MB used of ${maxMB}MB for ${tier} tier.`,
+        maxTotalBytes: limits.maxTotalStorage,
+        usedBytes: currentUsage,
+      }, 413);
+    }
+  }
+
   // Detect content type
   const contentType = c.req.header('Content-Type') === 'application/octet-stream'
     ? guessContentType(filename)
