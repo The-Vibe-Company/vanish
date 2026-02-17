@@ -1,12 +1,32 @@
 {
   "name": "vanish-monorepo",
   "private": true,
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "build": "npm run build --workspaces",
     "typecheck": "tsc --noEmit -p packages/cli/tsconfig.json && tsc --noEmit -p packages/worker/tsconfig.json",
     "test": "vitest run",
     "dev:worker": "npm run dev --workspace=@vanish/worker",
-    "dev:cli": "npm run dev --workspace=vanish-cli"
+    "dev:cli": "npm run dev --workspace=vanish-cli",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.4.1",
+    "@commitlint/config-conventional": "^20.4.1",
+    "commitizen": "^4.3.1",
+    "cz-conventional-changelog": "^3.3.0",
+    "husky": "^9.1.7"
+  },
+  "config": {
+    "commitizen": {
+      "path": "cz-conventional-changelog"
+    }
+  },
+  "commitlint": {
+    "extends": [
+      "@commitlint/config-conventional"
+    ]
   }
 }
