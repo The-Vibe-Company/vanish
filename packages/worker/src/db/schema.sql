@@ -46,3 +46,14 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   expires_at TEXT NOT NULL
 );
+
+-- Rate limiting
+CREATE TABLE IF NOT EXISTS rate_limits (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  identifier TEXT NOT NULL,
+  action TEXT NOT NULL DEFAULT 'upload',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_rate_limits_lookup
+  ON rate_limits(identifier, action, created_at);

@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { Env } from './types.js';
 import { authMiddleware } from './middleware/auth.js';
+import { rateLimitMiddleware } from './middleware/rate-limit.js';
 import uploadRoutes from './routes/upload.js';
 import serveRoutes from './routes/serve.js';
 import authRoutes from './routes/auth.js';
@@ -21,6 +22,9 @@ app.use('*', cors({
 
 // Auth middleware for all routes
 app.use('*', authMiddleware);
+
+// Rate limit upload endpoint
+app.use('/upload', rateLimitMiddleware);
 
 // Health check
 app.get('/health', (c) => c.json({ status: 'ok', version: '0.1.0' }));

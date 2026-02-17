@@ -48,5 +48,10 @@ export async function handleCleanup(env: Env): Promise<void> {
     DELETE FROM auth_sessions WHERE expires_at < datetime('now')
   `).run();
 
+  // Clean up old rate limit records (2h retention, beyond the 1h window)
+  await env.DB.prepare(`
+    DELETE FROM rate_limits WHERE created_at < datetime('now', '-2 hours')
+  `).run();
+
   console.log(`Cleanup complete: ${totalDeleted} expired uploads deleted`);
 }
