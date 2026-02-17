@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/The-Vibe-Company/vanish/compare/vanish-cli-v0.1.2...vanish-cli-v0.1.3) (2026-02-17)
+
+
+### Bug Fixes
+
+* read CLI version from package.json ([#7](https://github.com/The-Vibe-Company/vanish/issues/7)) ([c857b83](https://github.com/The-Vibe-Company/vanish/commit/c857b833518952f821d667c768aca7551d5f49d6))
+
 ## [0.1.2](https://github.com/The-Vibe-Company/vanish/compare/vanish-cli-v0.1.1...vanish-cli-v0.1.2) (2026-02-17)
 
 
