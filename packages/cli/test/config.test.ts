@@ -23,7 +23,7 @@ describe('config', () => {
   it('returns defaults when no config exists', () => {
     const config = loadConfig();
     expect(config.api_key).toBeUndefined();
-    expect(config.api_url).toBe('https://api.vanish.sh');
+    expect(config.api_url).toBe('https://vanish.sh');
   });
 
   it('reads API key from env var', () => {

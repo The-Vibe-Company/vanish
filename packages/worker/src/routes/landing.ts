@@ -220,7 +220,7 @@ const html = `<!DOCTYPE html>
 
 <div class="cmd hero-cmd">
   <code><span class="prompt">$ </span>vanish screenshot.png
-<span class="output">https://api.vanish.sh/f/a7xK9mQ2.png</span></code>
+<span class="output">https://vanish.sh/f/a7xK9mQ2.png</span></code>
 </div>
 
 <section>
@@ -240,22 +240,22 @@ const html = `<!DOCTYPE html>
   <p>Upload a file:</p>
   <div class="cmd">
     <code><span class="prompt">$ </span>vanish photo.jpg
-<span class="output">https://api.vanish.sh/f/b3kL8nR4.jpg</span>
+<span class="output">https://vanish.sh/f/b3kL8nR4.jpg</span>
 <span class="comment"># copied to clipboard</span></code>
   </div>
 
   <p>Multiple files:</p>
   <div class="cmd">
     <code><span class="prompt">$ </span>vanish a.png b.png c.png
-<span class="output">https://api.vanish.sh/f/a7xK9mQ2.png</span>
-<span class="output">https://api.vanish.sh/f/c2mP5vX8.png</span>
-<span class="output">https://api.vanish.sh/f/d9nQ3wY1.png</span></code>
+<span class="output">https://vanish.sh/f/a7xK9mQ2.png</span>
+<span class="output">https://vanish.sh/f/c2mP5vX8.png</span>
+<span class="output">https://vanish.sh/f/d9nQ3wY1.png</span></code>
   </div>
 
   <p>With curl:</p>
   <div class="cmd">
-    <code><span class="prompt">$ </span>curl <span class="flag">-T</span> file.png <span class="url">https://api.vanish.sh/upload</span>
-<span class="output">{"url":"https://api.vanish.sh/f/e4rS7tU6.png"}</span></code>
+    <code><span class="prompt">$ </span>curl <span class="flag">-T</span> file.png <span class="url">https://vanish.sh/upload</span>
+<span class="output">{"url":"https://vanish.sh/f/e4rS7tU6.png"}</span></code>
   </div>
 
   <p>JSON output:</p>
