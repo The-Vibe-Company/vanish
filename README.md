@@ -32,7 +32,7 @@ npx vanish-cli upload file.png
 npm install -g vanish-cli
 ```
 
-## Claude Code Skill
+## Install the Skill
 
 ```bash
 npx skills add the-vibe-company/vanish
