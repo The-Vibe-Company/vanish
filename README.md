@@ -16,8 +16,9 @@ You're using Claude Code and want screenshots in your PRs. Or you need to quickl
 | | Anonymous | Free | Pro |
 |---|---|---|---|
 | Account needed | No | GitHub login | GitHub login |
-| Max file size | 50 MB | 50 MB | 1 GB |
+| Max file size | 2 MB | 50 MB | 1 GB |
 | Retention | 48 hours | 30 days | Unlimited |
+| Rate limit | 10/hour | 50/hour | 200/hour |
 | Price | Free | Free | 2 EUR/month |
 
 ## Install
