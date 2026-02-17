@@ -25,7 +25,7 @@ export const authMiddleware = createMiddleware<{ Bindings: Env }>(async (c, next
   }
 
   const apiKey = authHeader.slice(7);
-  if (!apiKey.startsWith('tshot_')) {
+  if (!apiKey.startsWith('vnsh_')) {
     c.set('user', null);
     c.set('tier', 'anonymous');
     return next();
