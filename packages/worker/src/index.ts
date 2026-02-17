@@ -8,6 +8,7 @@ import authRoutes from './routes/auth.js';
 import keysRoutes from './routes/keys.js';
 import userRoutes from './routes/user.js';
 import billingRoutes from './routes/billing.js';
+import landingRoutes from './routes/landing.js';
 import { handleCleanup } from './cron/cleanup.js';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -24,6 +25,9 @@ app.use('*', authMiddleware);
 
 // Health check
 app.get('/health', (c) => c.json({ status: 'ok', version: '0.1.0' }));
+
+// Landing page
+app.route('/', landingRoutes);
 
 // Routes
 app.route('/', uploadRoutes);
