@@ -11,7 +11,7 @@ bucket_name = "vanish-uploads"
 [[d1_databases]]
 binding = "DB"
 database_name = "vanish-db"
-database_id = "placeholder-change-me"
+database_id = "fc0f279b-39bb-4c69-99a2-ce237ce86a24"
 
 # Cron trigger for cleanup
 [triggers]
