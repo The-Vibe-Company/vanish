@@ -4,8 +4,8 @@ import { isExpired } from '../lib/expiry.js';
 
 const serve = new Hono<{ Bindings: Env }>();
 
-serve.get('/f/:id', async (c) => {
-  const id = c.req.param('id');
+serve.get('/f/:id{.+}', async (c) => {
+  const id = c.req.param('id').replace(/\.[^.]+$/, '');
 
   // Look up in D1
   const upload = await c.env.DB.prepare(`
@@ -50,8 +50,8 @@ serve.get('/f/:id', async (c) => {
 });
 
 // DELETE /f/:id — requires auth and ownership
-serve.delete('/f/:id', async (c) => {
-  const id = c.req.param('id');
+serve.delete('/f/:id{.+}', async (c) => {
+  const id = c.req.param('id').replace(/\.[^.]+$/, '');
   const user = c.get('user');
 
   if (!user) {
