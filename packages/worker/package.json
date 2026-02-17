@@ -1,0 +1,23 @@
+{
+  "name": "@vanish/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "db:migrate": "wrangler d1 execute vanish-db --local --file=src/db/schema.sql"
+  },
+  "dependencies": {
+    "hono": "^4.7.2",
+    "nanoid": "^5.1.2"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250214.0",
+    "@cloudflare/vitest-pool-workers": "^0.8.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5",
+    "wrangler": "^4.3.0"
+  }
+}

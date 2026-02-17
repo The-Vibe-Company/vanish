@@ -1,0 +1,11 @@
+{
+  "packages": {
+    "packages/cli": {
+      "package-name": "vanish",
+      "release-type": "node",
+      "changelog-path": "CHANGELOG.md",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true
+    }
+  }
+}

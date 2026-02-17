@@ -1,0 +1,12 @@
+{
+  "name": "vanish-monorepo",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "typecheck": "tsc --noEmit -p packages/cli/tsconfig.json && tsc --noEmit -p packages/worker/tsconfig.json",
+    "test": "vitest run",
+    "dev:worker": "npm run dev --workspace=@vanish/worker",
+    "dev:cli": "npm run dev --workspace=vanish"
+  }
+}

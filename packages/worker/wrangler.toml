@@ -1,0 +1,27 @@
+name = "vanish-worker"
+main = "src/index.ts"
+compatibility_date = "2025-02-14"
+
+# R2 bucket binding
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "vanish-uploads"
+
+# D1 database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "vanish-db"
+database_id = "placeholder-change-me"
+
+# Cron trigger for cleanup
+[triggers]
+crons = ["0 * * * *"]  # Every hour
+
+[vars]
+BASE_URL = "https://api.vanish.sh"
+SELF_HOSTED = "false"
+DEFAULT_TIER = "free"
+
+# Secrets (set via `wrangler secret put`):
+# GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
+# STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID
