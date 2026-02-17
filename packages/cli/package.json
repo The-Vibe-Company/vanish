@@ -1,6 +1,6 @@
 {
   "name": "vanish-cli",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Upload files, get temporary public URLs. Dead simple.",
   "type": "module",
   "bin": {

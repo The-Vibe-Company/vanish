@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5](https://github.com/The-Vibe-Company/vanish/compare/vanish-cli-v0.1.4...vanish-cli-v0.1.5) (2026-02-17)
+
+
+### Bug Fixes
+
+* use monorepo path prefix for release_created output ([#11](https://github.com/The-Vibe-Company/vanish/issues/11)) ([8312b59](https://github.com/The-Vibe-Company/vanish/commit/8312b5926aa73bc798b1065919b9515144d35c3e))
+
 ## [0.1.4](https://github.com/The-Vibe-Company/vanish/compare/vanish-cli-v0.1.3...vanish-cli-v0.1.4) (2026-02-17)
 
 
