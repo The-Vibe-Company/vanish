@@ -14,6 +14,18 @@ describe('TIER_LIMITS', () => {
     expect(TIER_LIMITS.pro.maxFileSize).toBe(1024 * 1024 * 1024);
   });
 
+  it('anonymous tier has no total storage limit', () => {
+    expect(TIER_LIMITS.anonymous.maxTotalStorage).toBeNull();
+  });
+
+  it('free tier has 50MB total storage', () => {
+    expect(TIER_LIMITS.free.maxTotalStorage).toBe(50 * 1024 * 1024);
+  });
+
+  it('pro tier has 1GB total storage', () => {
+    expect(TIER_LIMITS.pro.maxTotalStorage).toBe(1024 * 1024 * 1024);
+  });
+
   it('anonymous tier expires in 48 hours', () => {
     expect(TIER_LIMITS.anonymous.maxExpiryHours).toBe(48);
   });

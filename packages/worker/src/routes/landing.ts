@@ -271,7 +271,8 @@ const html = `<!DOCTYPE html>
     <thead>
       <tr>
         <th>Tier</th>
-        <th>Max size</th>
+        <th>Max file</th>
+        <th>Storage</th>
         <th>Retention</th>
         <th>Rate limit</th>
         <th>Price</th>
@@ -281,6 +282,7 @@ const html = `<!DOCTYPE html>
       <tr>
         <td class="tier-name">Anonymous</td>
         <td>2 MB</td>
+        <td>\u2014</td>
         <td>48 hours</td>
         <td>10/hour</td>
         <td class="price-free">free</td>
@@ -288,12 +290,14 @@ const html = `<!DOCTYPE html>
       <tr>
         <td class="tier-name">Free</td>
         <td>50 MB</td>
+        <td>50 MB</td>
         <td>30 days</td>
         <td>50/hour</td>
         <td class="price-free">free</td>
       </tr>
       <tr class="tier-pro">
         <td class="tier-name">Pro</td>
+        <td>1 GB</td>
         <td>1 GB</td>
         <td>unlimited</td>
         <td>200/hour</td>

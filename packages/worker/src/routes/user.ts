@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type { Env, Upload } from '../types.js';
+import { TIER_LIMITS } from '../types.js';
 
 const user = new Hono<{ Bindings: Env }>();
 
@@ -21,6 +22,8 @@ user.get('/me', async (c) => {
     WHERE user_id = ? AND deleted_at IS NULL
   `).bind(currentUser.id).first<{ total_uploads: number; total_bytes: number }>();
 
+  const limits = TIER_LIMITS[currentUser.tier];
+
   return c.json({
     id: currentUser.id,
     username: currentUser.github_username,
@@ -30,6 +33,10 @@ user.get('/me', async (c) => {
     stats: {
       total_uploads: stats?.total_uploads || 0,
       total_bytes: stats?.total_bytes || 0,
+    },
+    limits: {
+      maxFileSize: limits.maxFileSize,
+      maxTotalStorage: limits.maxTotalStorage,
     },
   });
 });
