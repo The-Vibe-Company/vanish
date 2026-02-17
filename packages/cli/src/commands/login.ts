@@ -10,7 +10,7 @@ export async function loginCommand(): Promise<void> {
   }
 
   const sessionId = randomBytes(16).toString('hex');
-  const loginUrl = `${config.api_url.replace('/api.', '/').replace('api.', '')}/auth/github?cli=true&session=${sessionId}`;
+  const loginUrl = `${config.api_url}/auth/github?cli=true&session=${sessionId}`;
 
   console.log('Opening browser for GitHub login...');
   console.log(`If it doesn't open, visit: ${loginUrl}\n`);
