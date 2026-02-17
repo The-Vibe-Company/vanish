@@ -4,7 +4,7 @@ Upload files, get temporary public URLs. Dead simple.
 
 ```bash
 npx vanish-cli upload screenshot.png
-# https://api.vanish.sh/f/a1b2c3d4e5f6
+# https://vanish.sh/f/a1b2c3d4e5f6
 ```
 
 ## Why
@@ -36,7 +36,7 @@ npm install -g vanish-cli
 
 ```bash
 vanish upload screenshot.png
-# https://api.vanish.sh/f/a1b2c3d4e5f6
+# https://vanish.sh/f/a1b2c3d4e5f6
 ```
 
 ### Upload multiple files

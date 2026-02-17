@@ -18,7 +18,7 @@ database_id = "fc0f279b-39bb-4c69-99a2-ce237ce86a24"
 crons = ["0 * * * *"]  # Every hour
 
 [vars]
-BASE_URL = "https://api.vanish.sh"
+BASE_URL = "https://vanish.sh"
 SELF_HOSTED = "false"
 DEFAULT_TIER = "free"
 
