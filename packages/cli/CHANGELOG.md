@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/The-Vibe-Company/vanish/compare/vanish-cli-v0.1.3...vanish-cli-v0.1.4) (2026-02-17)
+
+
+### Features
+
+* add 'up' alias for upload command ([#9](https://github.com/The-Vibe-Company/vanish/issues/9)) ([f7ac82c](https://github.com/The-Vibe-Company/vanish/commit/f7ac82c5f9272fcabdd53517490af43be889a115))
+
 ## [0.1.3](https://github.com/The-Vibe-Company/vanish/compare/vanish-cli-v0.1.2...vanish-cli-v0.1.3) (2026-02-17)
 
 
