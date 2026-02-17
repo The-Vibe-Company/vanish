@@ -21,6 +21,7 @@ program
 
 program
   .command('upload')
+  .alias('up')
   .description('Upload file(s) and get temporary public URL(s)')
   .argument('<files...>', 'file(s) to upload')
   .option('--json', 'Output as JSON')
