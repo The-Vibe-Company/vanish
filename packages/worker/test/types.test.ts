@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { TIER_LIMITS, BLOCKED_EXTENSIONS } from '../src/types.js';
+import { TIER_LIMITS, BLOCKED_EXTENSIONS, ALLOWED_IMAGE_EXTENSIONS } from '../src/types.js';
 
 describe('TIER_LIMITS', () => {
-  it('anonymous tier allows 2MB', () => {
-    expect(TIER_LIMITS.anonymous.maxFileSize).toBe(2 * 1024 * 1024);
+  it('anonymous tier allows 5MB', () => {
+    expect(TIER_LIMITS.anonymous.maxFileSize).toBe(5 * 1024 * 1024);
   });
 
   it('free tier allows 50MB', () => {
@@ -26,16 +26,38 @@ describe('TIER_LIMITS', () => {
     expect(TIER_LIMITS.pro.maxTotalStorage).toBe(1024 * 1024 * 1024);
   });
 
-  it('anonymous tier expires in 48 hours', () => {
-    expect(TIER_LIMITS.anonymous.maxExpiryHours).toBe(48);
+  it('anonymous tier expires in 24 hours', () => {
+    expect(TIER_LIMITS.anonymous.maxExpiryHours).toBe(24);
   });
 
-  it('free tier expires in 30 days', () => {
-    expect(TIER_LIMITS.free.maxExpiryHours).toBe(30 * 24);
+  it('free tier expires in 48 hours', () => {
+    expect(TIER_LIMITS.free.maxExpiryHours).toBe(48);
   });
 
-  it('pro tier has unlimited expiry', () => {
-    expect(TIER_LIMITS.pro.maxExpiryHours).toBeNull();
+  it('pro tier expires in 30 days by default', () => {
+    expect(TIER_LIMITS.pro.maxExpiryHours).toBe(30 * 24);
+  });
+
+  it('anonymous tier is image-only', () => {
+    expect(TIER_LIMITS.anonymous.imageOnly).toBe(true);
+  });
+
+  it('free tier allows all files', () => {
+    expect(TIER_LIMITS.free.imageOnly).toBe(false);
+  });
+
+  it('pro tier allows all files', () => {
+    expect(TIER_LIMITS.pro.imageOnly).toBe(false);
+  });
+
+  it('only pro tier allows custom TTL', () => {
+    expect(TIER_LIMITS.anonymous.customTtl).toBe(false);
+    expect(TIER_LIMITS.free.customTtl).toBe(false);
+    expect(TIER_LIMITS.pro.customTtl).toBe(true);
+  });
+
+  it('pro tier max custom TTL is 365 days', () => {
+    expect(TIER_LIMITS.pro.maxCustomExpiryDays).toBe(365);
   });
 });
 
@@ -51,5 +73,25 @@ describe('BLOCKED_EXTENSIONS', () => {
     expect(BLOCKED_EXTENSIONS.has('.png')).toBe(false);
     expect(BLOCKED_EXTENSIONS.has('.jpg')).toBe(false);
     expect(BLOCKED_EXTENSIONS.has('.webp')).toBe(false);
+  });
+});
+
+describe('ALLOWED_IMAGE_EXTENSIONS', () => {
+  it('allows common image extensions', () => {
+    expect(ALLOWED_IMAGE_EXTENSIONS.has('.png')).toBe(true);
+    expect(ALLOWED_IMAGE_EXTENSIONS.has('.jpg')).toBe(true);
+    expect(ALLOWED_IMAGE_EXTENSIONS.has('.jpeg')).toBe(true);
+    expect(ALLOWED_IMAGE_EXTENSIONS.has('.gif')).toBe(true);
+    expect(ALLOWED_IMAGE_EXTENSIONS.has('.webp')).toBe(true);
+    expect(ALLOWED_IMAGE_EXTENSIONS.has('.svg')).toBe(true);
+    expect(ALLOWED_IMAGE_EXTENSIONS.has('.avif')).toBe(true);
+  });
+
+  it('does not allow non-image extensions', () => {
+    expect(ALLOWED_IMAGE_EXTENSIONS.has('.pdf')).toBe(false);
+    expect(ALLOWED_IMAGE_EXTENSIONS.has('.json')).toBe(false);
+    expect(ALLOWED_IMAGE_EXTENSIONS.has('.zip')).toBe(false);
+    expect(ALLOWED_IMAGE_EXTENSIONS.has('.txt')).toBe(false);
+    expect(ALLOWED_IMAGE_EXTENSIONS.has('.exe')).toBe(false);
   });
 });
