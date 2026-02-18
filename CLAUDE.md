@@ -56,15 +56,15 @@ The worker uses **Hono** as its web framework. Routes are registered in `index.t
 
 Uses **Commander** for argument parsing. Entry point is `index.ts`.
 
-- **`commands/`**: `upload.ts`, `login.ts` (OAuth polling flow), `ls.ts`, `rm.ts`
+- **`commands/`**: `upload.ts`, `login.ts` (OAuth polling flow), `ls.ts`, `rm.ts`, `status.ts`
 - **`lib/`**: `config.ts` (reads `~/.config/vanish/config.json`, env vars override file), `api-client.ts`, `clipboard.ts` (cross-platform), `progress.ts` (spinner)
 
 ### Tier System
 
 Three tiers with different limits defined in `TIER_LIMITS` (`packages/worker/src/types.ts`):
-- **anonymous**: 2MB max file, 48h retention, 10 uploads/hour
-- **free**: 50MB max file, 50MB total storage, 30-day retention, 50/hour
-- **pro**: 1GB max file, 1GB total storage, unlimited retention, 200/hour
+- **anonymous**: Images only, 5MB max file, 24h retention, 10 uploads/hour
+- **free**: All files, 50MB max file, 50MB total storage, 48h retention, 50/hour
+- **pro**: All files, 1GB max file, 1GB total storage, 30-day default retention (configurable up to 365 days via `--days`), 200/hour
 
 ### Key Patterns
 

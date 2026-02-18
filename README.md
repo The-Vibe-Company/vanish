@@ -16,9 +16,10 @@ You're using Claude Code and want screenshots in your PRs. Or you need to quickl
 | | Anonymous | Free | Pro |
 |---|---|---|---|
 | Account needed | No | GitHub login | GitHub login |
-| Max file size | 2 MB | 50 MB | 1 GB |
+| File types | Images only | All (except executables) | All (except executables) |
+| Max file size | 5 MB | 50 MB | 1 GB |
 | Total storage | — | 50 MB | 1 GB |
-| Retention | 48 hours | 30 days | Unlimited |
+| Retention | 24 hours | 48 hours | 30 days (up to 365 with `--days`) |
 | Rate limit | 10/hour | 50/hour | 200/hour |
 | Price | Free | Free | 2 EUR/month |
 
@@ -40,7 +41,7 @@ npx skills add the-vibe-company/vanish
 
 ## Usage
 
-### Upload a file (anonymous, 48h)
+### Upload an image (anonymous, 24h)
 
 ```bash
 vanish upload screenshot.png
@@ -53,7 +54,14 @@ vanish upload screenshot.png
 vanish upload *.png
 ```
 
-### Login for 30-day retention
+### Upload with custom retention (Pro)
+
+```bash
+vanish upload report.pdf --days 90
+# Expires in 90 days
+```
+
+### Login for 48h retention and all file types
 
 ```bash
 vanish login
@@ -72,6 +80,7 @@ vanish upgrade
 
 ```bash
 vanish whoami          # Show current user and tier
+vanish status          # Show storage usage and limits
 vanish logout          # Remove saved API key
 ```
 

@@ -382,6 +382,7 @@ const html = `<!DOCTYPE html>
     <thead>
       <tr>
         <th>Tier</th>
+        <th>File types</th>
         <th>Max file</th>
         <th>Storage</th>
         <th>Retention</th>
@@ -392,33 +393,36 @@ const html = `<!DOCTYPE html>
     <tbody>
       <tr>
         <td class="tier-name">Anonymous</td>
-        <td>2 MB</td>
+        <td>images only</td>
+        <td>5 MB</td>
         <td>\u2014</td>
-        <td>48 hours</td>
+        <td>24 hours</td>
         <td>10/hour</td>
         <td class="price-free">free</td>
       </tr>
       <tr>
         <td class="tier-name">Free</td>
+        <td>all</td>
         <td>50 MB</td>
         <td>50 MB</td>
-        <td>30 days</td>
+        <td>48 hours</td>
         <td>50/hour</td>
         <td class="price-free">free</td>
       </tr>
       <tr class="tier-pro">
         <td class="tier-name">Pro</td>
+        <td>all</td>
         <td>1 GB</td>
         <td>1 GB</td>
-        <td>unlimited</td>
+        <td>30 days <span style="color:var(--fg-dim)">(up to 365)</span></td>
         <td>200/hour</td>
         <td>2\u20AC/mo</td>
       </tr>
     </tbody>
   </table>
   <p style="margin-top: 0.8rem;">
-    No account needed for anonymous uploads.
-    <a href="/auth/github">Sign in with GitHub</a> for 30-day retention.
+    Anonymous uploads: images only, 24h.
+    <a href="/auth/github">Sign in with GitHub</a> for 48h retention and all file types.
   </p>
 </section>
 
@@ -431,7 +435,7 @@ const html = `<!DOCTYPE html>
   </div>
   <div class="cmd">
     <code><span class="prompt">$ </span>vanish upgrade
-<span class="comment"># upgrade to pro for unlimited retention</span></code>
+<span class="comment"># upgrade to pro for 30-day+ retention (up to 365 days)</span></code>
   </div>
 </section>
 
@@ -439,6 +443,7 @@ const html = `<!DOCTYPE html>
   <h2>More</h2>
   <div class="cmd">
     <code><span class="prompt">$ </span>vanish ls              <span class="comment"># list your uploads</span>
+<span class="prompt">$ </span>vanish status          <span class="comment"># show storage &amp; tier info</span>
 <span class="prompt">$ </span>vanish rm &lt;id&gt;         <span class="comment"># delete an upload</span>
 <span class="prompt">$ </span>vanish whoami          <span class="comment"># show current user &amp; tier</span></code>
   </div>
@@ -458,7 +463,7 @@ const html = `<!DOCTYPE html>
       { type: 'spinner', text: 'Uploading screenshot.png (1.2 MB)...', duration: 1800 },
       { type: 'output', text: '\u2713 https://vanish.sh/f/a7xK9mQ2.png', color: 'green' },
       { type: 'output', text: '  Copied to clipboard.', color: 'dim' },
-      { type: 'output', text: '  Expires in 48h. Login for 30-day retention: vanish login', color: 'dim' },
+      { type: 'output', text: '  Expires in 24h (images only). Login for 48h + all files: vanish login', color: 'dim' },
       { type: 'pause', duration: 2000 }
     ],
     [
@@ -467,16 +472,15 @@ const html = `<!DOCTYPE html>
       { type: 'output', text: '  Waiting for authentication...', color: 'dim', delay: 1000 },
       { type: 'pause', duration: 1500 },
       { type: 'output', text: '\u2713 Logged in as @johndoe. API key saved.', color: 'green' },
-      { type: 'output', text: '  Your uploads now have 30-day retention.', color: 'dim' },
+      { type: 'output', text: '  48h retention, all file types.', color: 'dim' },
       { type: 'pause', duration: 2000 }
     ],
     [
-      { type: 'cmd', text: 'vanish report.pdf design.fig' },
-      { type: 'spinner', text: 'Uploading report.pdf (4.8 MB) [1/2]...', duration: 1500 },
+      { type: 'cmd', text: 'vanish upload report.pdf --days 90' },
+      { type: 'spinner', text: 'Uploading report.pdf (4.8 MB)...', duration: 1500 },
       { type: 'output', text: '\u2713 https://vanish.sh/f/b3kL8nR4.pdf', color: 'green' },
-      { type: 'spinner', text: 'Uploading design.fig (12.3 MB) [2/2]...', duration: 2000 },
-      { type: 'output', text: '\u2713 https://vanish.sh/f/c2mP5vX8.fig', color: 'green' },
       { type: 'output', text: '  Copied to clipboard.', color: 'dim' },
+      { type: 'output', text: '  Expires in 90 days (Pro).', color: 'dim' },
       { type: 'pause', duration: 2000 }
     ],
     [
