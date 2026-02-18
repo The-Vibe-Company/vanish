@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
 import type { Env, Upload } from '../types.js';
-import { TIER_LIMITS, BLOCKED_EXTENSIONS } from '../types.js';
+import { TIER_LIMITS, BLOCKED_EXTENSIONS, ALLOWED_IMAGE_EXTENSIONS } from '../types.js';
 import { calculateExpiry } from '../lib/expiry.js';
 
 const upload = new Hono<{ Bindings: Env }>();
@@ -20,6 +20,15 @@ upload.post('/upload', async (c) => {
   const ext = filename.includes('.') ? '.' + filename.split('.').pop()!.toLowerCase() : '';
   if (BLOCKED_EXTENSIONS.has(ext)) {
     return c.json({ error: `File type ${ext} is not allowed` }, 400);
+  }
+
+  // Image-only restriction for anonymous tier
+  if (limits.imageOnly) {
+    if (!ext || !ALLOWED_IMAGE_EXTENSIONS.has(ext)) {
+      return c.json({
+        error: 'Anonymous uploads are limited to images only. Allowed: png, jpg, gif, webp, svg, avif, heic. Login for other file types: vanish login',
+      }, 400);
+    }
   }
 
   // Read body as ArrayBuffer
@@ -63,8 +72,37 @@ upload.post('/upload', async (c) => {
     ? guessContentType(filename)
     : c.req.header('Content-Type') || guessContentType(filename);
 
+  // Validate content type for image-only tiers
+  if (limits.imageOnly && !contentType.startsWith('image/')) {
+    return c.json({
+      error: `Anonymous uploads are limited to images only. Detected type: ${contentType}. Login to upload other files: vanish login`,
+    }, 400);
+  }
+
+  // Parse optional custom TTL (days) — pro tier only
+  const daysParam = c.req.header('X-Expires-Days') || c.req.query('days');
+  let customDays: number | undefined;
+  if (daysParam !== undefined && daysParam !== null) {
+    const parsed = parseInt(daysParam, 10);
+    if (isNaN(parsed) || parsed < 1) {
+      return c.json({ error: 'Invalid days parameter. Must be a positive integer.' }, 400);
+    }
+    if (!limits.customTtl) {
+      return c.json({
+        error: `Custom TTL is only available for Pro tier. Current tier: ${tier}.`,
+        hint: 'Upgrade with: vanish upgrade',
+      }, 403);
+    }
+    if (parsed > TIER_LIMITS.pro.maxCustomExpiryDays) {
+      return c.json({
+        error: `Maximum custom TTL is ${TIER_LIMITS.pro.maxCustomExpiryDays} days.`,
+      }, 400);
+    }
+    customDays = parsed;
+  }
+
   const id = nanoid(12);
-  const expiresAt = calculateExpiry(tier);
+  const expiresAt = calculateExpiry(tier, customDays);
 
   // Upload to R2
   await c.env.BUCKET.put(id, body, {

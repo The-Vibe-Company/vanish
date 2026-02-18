@@ -18,7 +18,7 @@ const app = new Hono<{ Bindings: Env }>();
 app.use('*', cors({
   origin: '*',
   allowMethods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Authorization', 'Content-Type', 'X-Filename'],
+  allowHeaders: ['Authorization', 'Content-Type', 'X-Filename', 'X-Expires-Days'],
 }));
 
 // Auth middleware for all routes

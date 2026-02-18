@@ -38,22 +38,29 @@ export interface Upload {
 
 export const TIER_LIMITS = {
   anonymous: {
-    maxFileSize: 2 * 1024 * 1024, // 2 MB
-    maxTotalStorage: null, // no total limit (ephemeral, 48h)
-    maxExpiryHours: 48,
+    maxFileSize: 5 * 1024 * 1024, // 5 MB
+    maxTotalStorage: null, // no total limit (ephemeral, 24h)
+    maxExpiryHours: 24,
     rateLimit: 10, // per hour
+    imageOnly: true,
+    customTtl: false,
   },
   free: {
     maxFileSize: 50 * 1024 * 1024, // 50 MB
     maxTotalStorage: 50 * 1024 * 1024, // 50 MB total
-    maxExpiryHours: 30 * 24, // 30 days
+    maxExpiryHours: 48,
     rateLimit: 50,
+    imageOnly: false,
+    customTtl: false,
   },
   pro: {
     maxFileSize: 1024 * 1024 * 1024, // 1 GB
     maxTotalStorage: 1024 * 1024 * 1024, // 1 GB total
-    maxExpiryHours: null, // unlimited
+    maxExpiryHours: 30 * 24, // 30 days default
+    maxCustomExpiryDays: 365,
     rateLimit: 200,
+    imageOnly: false,
+    customTtl: true,
   },
 } as const;
 
@@ -61,4 +68,10 @@ export const TIER_LIMITS = {
 export const BLOCKED_EXTENSIONS = new Set([
   '.exe', '.bat', '.cmd', '.com', '.msi', '.scr',
   '.sh', '.bash', '.ps1', '.psm1',
+]);
+
+// Allowed image extensions for anonymous tier
+export const ALLOWED_IMAGE_EXTENSIONS = new Set([
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg',
+  '.bmp', '.tiff', '.tif', '.avif', '.heic', '.heif', '.ico',
 ]);
