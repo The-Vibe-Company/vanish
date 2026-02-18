@@ -108,15 +108,113 @@ const html = `<!DOCTYPE html>
   .output { color: var(--green); }
   .comment { color: var(--fg-dim); font-style: italic; }
 
-  /* — Hero command — */
-  .hero-cmd {
+  /* — Terminal widget — */
+  .terminal {
     margin-top: 2rem;
-    padding: 1.4rem 1.6rem;
-    font-size: 1rem;
-    border-color: var(--accent-dim);
+    border: 1px solid var(--accent-dim);
+    border-radius: 6px;
     background: linear-gradient(135deg, #11100e 0%, #0f0e0c 100%);
     box-shadow: 0 0 40px rgba(212, 168, 80, 0.03);
+    overflow: hidden;
+    position: relative;
   }
+
+  .terminal-chrome {
+    display: flex;
+    align-items: center;
+    padding: 0.6rem 1rem;
+    background: #161514;
+    border-bottom: 1px solid var(--border);
+    user-select: none;
+  }
+
+  .terminal-dots {
+    display: flex;
+    gap: 6px;
+  }
+
+  .terminal-dots span {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .dot-red { background: #ff5f57; }
+  .dot-yellow { background: #febc2e; }
+  .dot-green { background: #28c840; }
+
+  .terminal-title {
+    flex: 1;
+    text-align: center;
+    font-size: 0.72rem;
+    color: var(--fg-dim);
+    letter-spacing: 0.02em;
+  }
+
+  .terminal-spacer {
+    width: 52px;
+  }
+
+  .terminal-body {
+    padding: 1rem 1.2rem;
+    min-height: 180px;
+    position: relative;
+    font-size: 0.88rem;
+    line-height: 1.6;
+    overflow-x: auto;
+    transition: opacity 0.3s ease;
+  }
+
+  .terminal-body.fading {
+    opacity: 0;
+  }
+
+  .term-line {
+    white-space: pre;
+    min-height: 1.6em;
+  }
+
+  .terminal-cursor {
+    display: inline-block;
+    width: 0.55em;
+    height: 1.15em;
+    background: var(--fg-bright);
+    vertical-align: text-bottom;
+    animation: blink 1s step-end infinite;
+  }
+
+  @keyframes blink {
+    0%, 50% { opacity: 1; }
+    50.01%, 100% { opacity: 0; }
+  }
+
+  .terminal-paused {
+    position: absolute;
+    top: 0.6rem;
+    right: 1rem;
+    font-size: 0.65rem;
+    color: var(--fg-dim);
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .terminal.paused .terminal-paused {
+    opacity: 1;
+  }
+
+  .terminal.paused .terminal-cursor {
+    animation: none;
+    opacity: 1;
+  }
+
+  .t-prompt { color: var(--accent); }
+  .t-green { color: var(--green); }
+  .t-dim { color: var(--fg-dim); }
+  .t-blue { color: var(--blue); }
+  .t-bright { color: var(--fg-bright); }
 
   /* — Tier table — */
   table {
@@ -204,7 +302,9 @@ const html = `<!DOCTYPE html>
   /* — Responsive — */
   @media (max-width: 500px) {
     body { padding: 2.5rem 1rem 2rem; }
-    .hero-cmd { font-size: 0.88rem; padding: 1rem 1.2rem; }
+    .terminal-body { padding: 0.8rem 1rem; font-size: 0.78rem; min-height: 150px; }
+    .terminal-chrome { padding: 0.5rem 0.8rem; }
+    .terminal-dots span { width: 8px; height: 8px; }
     table { font-size: 0.78rem; }
     th, td { padding: 0.5rem 0.5rem; }
     footer { flex-direction: column; align-items: flex-start; }
@@ -218,9 +318,20 @@ const html = `<!DOCTYPE html>
   <p class="tagline">upload files, get temporary public URLs. dead simple.</p>
 </header>
 
-<div class="cmd hero-cmd">
-  <code><span class="prompt">$ </span>vanish screenshot.png
-<span class="output">https://vanish.sh/f/a7xK9mQ2.png</span></code>
+<div class="terminal" id="terminal">
+  <div class="terminal-chrome">
+    <div class="terminal-dots">
+      <span class="dot-red"></span>
+      <span class="dot-yellow"></span>
+      <span class="dot-green"></span>
+    </div>
+    <div class="terminal-title">vanish \u2014 zsh</div>
+    <div class="terminal-spacer"></div>
+  </div>
+  <div class="terminal-body" id="terminal-body">
+    <div id="terminal-content"></div>
+  </div>
+  <div class="terminal-paused" id="terminal-paused">paused</div>
 </div>
 
 <section>
@@ -338,6 +449,209 @@ const html = `<!DOCTYPE html>
   <span>\u00A9 vanish.sh</span>
   <a href="https://github.com/The-Vibe-Company/vanish">github</a>
 </footer>
+
+<script>
+(function() {
+  var SCENARIOS = [
+    [
+      { type: 'cmd', text: 'vanish screenshot.png' },
+      { type: 'spinner', text: 'Uploading screenshot.png (1.2 MB)...', duration: 1800 },
+      { type: 'output', text: '\u2713 https://vanish.sh/f/a7xK9mQ2.png', color: 'green' },
+      { type: 'output', text: '  Copied to clipboard.', color: 'dim' },
+      { type: 'output', text: '  Expires in 48h. Login for 30-day retention: vanish login', color: 'dim' },
+      { type: 'pause', duration: 2000 }
+    ],
+    [
+      { type: 'cmd', text: 'vanish login' },
+      { type: 'output', text: '  Opening browser for GitHub login...', color: 'dim', delay: 300 },
+      { type: 'output', text: '  Waiting for authentication...', color: 'dim', delay: 1000 },
+      { type: 'pause', duration: 1500 },
+      { type: 'output', text: '\u2713 Logged in as @johndoe. API key saved.', color: 'green' },
+      { type: 'output', text: '  Your uploads now have 30-day retention.', color: 'dim' },
+      { type: 'pause', duration: 2000 }
+    ],
+    [
+      { type: 'cmd', text: 'vanish report.pdf design.fig' },
+      { type: 'spinner', text: 'Uploading report.pdf (4.8 MB) [1/2]...', duration: 1500 },
+      { type: 'output', text: '\u2713 https://vanish.sh/f/b3kL8nR4.pdf', color: 'green' },
+      { type: 'spinner', text: 'Uploading design.fig (12.3 MB) [2/2]...', duration: 2000 },
+      { type: 'output', text: '\u2713 https://vanish.sh/f/c2mP5vX8.fig', color: 'green' },
+      { type: 'output', text: '  Copied to clipboard.', color: 'dim' },
+      { type: 'pause', duration: 2000 }
+    ],
+    [
+      { type: 'cmd', text: 'vanish ls' },
+      { type: 'output', text: 'ID             FILENAME            SIZE     EXPIRES', color: 'bright', delay: 200 },
+      { type: 'output', text: '\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500', color: 'dim' },
+      { type: 'output', text: 'a7xK9mQ2       screenshot.png      1.2 MB   Feb 20, 2:30 PM', color: 'bright' },
+      { type: 'output', text: 'b3kL8nR4       report.pdf          4.8 MB   Mar 20, 2:30 PM', color: 'bright' },
+      { type: 'output', text: 'c2mP5vX8       design.fig          12.3 MB  Mar 20, 2:31 PM', color: 'bright' },
+      { type: 'output', text: '', color: 'bright' },
+      { type: 'output', text: '3 uploads', color: 'dim' },
+      { type: 'pause', duration: 1500 },
+      { type: 'cmd', text: 'vanish rm a7xK9mQ2' },
+      { type: 'output', text: '\u2713 Deleted: a7xK9mQ2', color: 'green', delay: 400 },
+      { type: 'pause', duration: 2500 }
+    ]
+  ];
+
+  var SPINNER_FRAMES = ['\u280b','\u2819','\u2839','\u2838','\u283c','\u2834','\u2826','\u2827','\u2807','\u280f'];
+
+  var contentEl = document.getElementById('terminal-content');
+  var bodyEl = document.getElementById('terminal-body');
+  var terminalEl = document.getElementById('terminal');
+  var paused = false;
+  var cursorEl = document.createElement('span');
+  cursorEl.className = 'terminal-cursor';
+
+  terminalEl.addEventListener('mouseenter', function() {
+    paused = true;
+    terminalEl.classList.add('paused');
+  });
+
+  terminalEl.addEventListener('mouseleave', function() {
+    paused = false;
+    terminalEl.classList.remove('paused');
+  });
+
+  function wait(ms) {
+    return new Promise(function(resolve) {
+      var remaining = ms;
+      var last = Date.now();
+      function tick() {
+        if (paused) {
+          last = Date.now();
+          setTimeout(tick, 50);
+          return;
+        }
+        var now = Date.now();
+        remaining -= (now - last);
+        last = now;
+        if (remaining <= 0) {
+          resolve();
+        } else {
+          setTimeout(tick, Math.min(remaining, 16));
+        }
+      }
+      tick();
+    });
+  }
+
+  function addLine(text, colorClass) {
+    var line = document.createElement('div');
+    line.className = 'term-line';
+    if (text) {
+      var span = document.createElement('span');
+      span.className = 't-' + colorClass;
+      span.textContent = text;
+      line.appendChild(span);
+    }
+    contentEl.appendChild(line);
+    bodyEl.scrollTop = bodyEl.scrollHeight;
+    return line;
+  }
+
+  function removeCursor() {
+    if (cursorEl.parentNode) cursorEl.parentNode.removeChild(cursorEl);
+  }
+
+  async function typeCommand(text) {
+    var line = document.createElement('div');
+    line.className = 'term-line';
+
+    var promptSpan = document.createElement('span');
+    promptSpan.className = 't-prompt';
+    promptSpan.textContent = '$ ';
+    line.appendChild(promptSpan);
+
+    var textSpan = document.createElement('span');
+    textSpan.className = 't-bright';
+    line.appendChild(textSpan);
+
+    line.appendChild(cursorEl);
+    contentEl.appendChild(line);
+    bodyEl.scrollTop = bodyEl.scrollHeight;
+
+    for (var i = 0; i < text.length; i++) {
+      await wait(40 + Math.random() * 40);
+      textSpan.textContent += text[i];
+      bodyEl.scrollTop = bodyEl.scrollHeight;
+    }
+
+    removeCursor();
+    await wait(300);
+  }
+
+  async function showSpinner(text, duration) {
+    var line = document.createElement('div');
+    line.className = 'term-line';
+
+    var spinSpan = document.createElement('span');
+    spinSpan.className = 't-green';
+    spinSpan.textContent = SPINNER_FRAMES[0];
+    line.appendChild(spinSpan);
+
+    var textSpan = document.createElement('span');
+    textSpan.className = 't-bright';
+    textSpan.textContent = ' ' + text;
+    line.appendChild(textSpan);
+
+    contentEl.appendChild(line);
+    bodyEl.scrollTop = bodyEl.scrollHeight;
+
+    var frameIndex = 0;
+    var interval = setInterval(function() {
+      if (!paused) {
+        frameIndex++;
+        spinSpan.textContent = SPINNER_FRAMES[frameIndex % SPINNER_FRAMES.length];
+      }
+    }, 80);
+
+    await wait(duration);
+
+    clearInterval(interval);
+    contentEl.removeChild(line);
+  }
+
+  async function showOutput(text, color, delay) {
+    if (delay) await wait(delay);
+    addLine(text, color);
+  }
+
+  async function clearWithFade() {
+    bodyEl.classList.add('fading');
+    await wait(300);
+    contentEl.innerHTML = '';
+    bodyEl.classList.remove('fading');
+  }
+
+  async function runScenario(steps) {
+    for (var i = 0; i < steps.length; i++) {
+      var s = steps[i];
+      if (s.type === 'cmd') {
+        await typeCommand(s.text);
+      } else if (s.type === 'spinner') {
+        await showSpinner(s.text, s.duration);
+      } else if (s.type === 'output') {
+        await showOutput(s.text, s.color, s.delay || 0);
+      } else if (s.type === 'pause') {
+        await wait(s.duration);
+      }
+    }
+  }
+
+  async function runLoop() {
+    var idx = 0;
+    while (true) {
+      await runScenario(SCENARIOS[idx]);
+      await clearWithFade();
+      idx = (idx + 1) % SCENARIOS.length;
+    }
+  }
+
+  runLoop();
+})();
+</script>
 
 </body>
 </html>`;
