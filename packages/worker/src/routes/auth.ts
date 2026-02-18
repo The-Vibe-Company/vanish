@@ -167,6 +167,16 @@ auth.get('/auth/callback', async (c) => {
 
   // If web redirect, redirect with success
   if (redirect) {
+    // For internal paths, pass the API key so the dashboard JS can store it
+    try {
+      const url = new URL(redirect, c.env.BASE_URL);
+      if (url.origin === new URL(c.env.BASE_URL).origin) {
+        url.searchParams.set('key', apiKey);
+        return c.redirect(url.pathname + url.search);
+      }
+    } catch {
+      // Invalid URL, fall through to default redirect
+    }
     return c.redirect(`${redirect}?success=true`);
   }
 
