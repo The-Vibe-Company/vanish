@@ -1,7 +1,23 @@
 {
+  "plugins": [
+    {
+      "type": "linked-versions",
+      "groupName": "vanish",
+      "components": ["vanish-cli", "@vanish/worker"]
+    }
+  ],
   "packages": {
     "packages/cli": {
       "package-name": "vanish-cli",
+      "component": "vanish-cli",
+      "release-type": "node",
+      "changelog-path": "CHANGELOG.md",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true
+    },
+    "packages/worker": {
+      "package-name": "@vanish/worker",
+      "component": "@vanish/worker",
       "release-type": "node",
       "changelog-path": "CHANGELOG.md",
       "bump-minor-pre-major": true,
