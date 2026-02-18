@@ -17,7 +17,10 @@ declare module 'hono' {
  */
 export const authMiddleware = createMiddleware<{ Bindings: Env }>(async (c, next) => {
   const authHeader = c.req.header('Authorization');
-  const queryKey = c.req.query('key');
+
+  // Only accept ?key= query param on routes that need browser navigation (billing)
+  const path = new URL(c.req.url).pathname;
+  const queryKey = path.startsWith('/billing/') ? c.req.query('key') : undefined;
 
   if ((!authHeader || !authHeader.startsWith('Bearer ')) && !queryKey) {
     c.set('user', null);
