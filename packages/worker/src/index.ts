@@ -10,6 +10,7 @@ import keysRoutes from './routes/keys.js';
 import userRoutes from './routes/user.js';
 import billingRoutes from './routes/billing.js';
 import landingRoutes from './routes/landing.js';
+import dashboardRoutes from './routes/dashboard.js';
 import { handleCleanup } from './cron/cleanup.js';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -32,6 +33,9 @@ app.get('/health', (c) => c.json({ status: 'ok', version: '0.1.0' }));
 
 // Landing page
 app.route('/', landingRoutes);
+
+// Dashboard
+app.route('/', dashboardRoutes);
 
 // Routes
 app.route('/', uploadRoutes);

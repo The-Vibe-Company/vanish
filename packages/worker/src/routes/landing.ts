@@ -365,7 +365,8 @@ const html = `<!DOCTYPE html>
 
   <p>With curl:</p>
   <div class="cmd">
-    <code><span class="prompt">$ </span>curl <span class="flag">-T</span> file.png <span class="url">https://vanish.sh/upload</span>
+    <code><span class="prompt">$ </span>curl <span class="flag">-X POST</span> <span class="flag">--data-binary</span> @file.png <span class="flag">\\
+  -H</span> <span class="url">"X-Filename: file.png"</span> <span class="url">https://vanish.sh/upload</span>
 <span class="output">{"url":"https://vanish.sh/f/e4rS7tU6.png"}</span></code>
   </div>
 
@@ -373,6 +374,58 @@ const html = `<!DOCTYPE html>
   <div class="cmd">
     <code><span class="prompt">$ </span>vanish <span class="flag">--json</span> file.png
 <span class="output">{"url":"...","id":"...","expires":"2026-02-19T..."}</span></code>
+  </div>
+</section>
+
+<section>
+  <h2>cURL / API</h2>
+
+  <p>Set your key once:</p>
+  <div class="cmd">
+    <code><span class="prompt">$ </span>export <span class="flag">VANISH_KEY</span>=<span class="url">"vnsh_your_key_here"</span></code>
+  </div>
+
+  <p>Upload (authenticated, all file types):</p>
+  <div class="cmd">
+    <code><span class="prompt">$ </span>curl <span class="flag">-X POST</span> <span class="flag">--data-binary</span> @report.pdf <span class="flag">\\
+  -H</span> <span class="url">"X-Filename: report.pdf"</span> <span class="flag">\\
+  -H</span> <span class="url">"Authorization: Bearer $VANISH_KEY"</span> <span class="flag">\\
+  </span><span class="url">https://vanish.sh/upload</span>
+<span class="output">{"url":"https://vanish.sh/f/b3kL8nR4.pdf","id":"b3kL8nR4",...}</span></code>
+  </div>
+
+  <p>Custom retention (Pro, up to 365 days):</p>
+  <div class="cmd">
+    <code><span class="prompt">$ </span>curl <span class="flag">-X POST</span> <span class="flag">--data-binary</span> @doc.pdf <span class="flag">\\
+  -H</span> <span class="url">"X-Filename: doc.pdf"</span> <span class="flag">\\
+  -H</span> <span class="url">"Authorization: Bearer $VANISH_KEY"</span> <span class="flag">\\
+  -H</span> <span class="url">"X-Expires-Days: 90"</span> <span class="flag">\\
+  </span><span class="url">https://vanish.sh/upload</span></code>
+  </div>
+
+  <p>Download:</p>
+  <div class="cmd">
+    <code><span class="prompt">$ </span>curl <span class="flag">-OJ</span> <span class="url">https://vanish.sh/f/b3kL8nR4.pdf</span></code>
+  </div>
+
+  <p>Delete:</p>
+  <div class="cmd">
+    <code><span class="prompt">$ </span>curl <span class="flag">-X DELETE</span> <span class="flag">\\
+  -H</span> <span class="url">"Authorization: Bearer $VANISH_KEY"</span> <span class="flag">\\
+  </span><span class="url">https://vanish.sh/f/b3kL8nR4.pdf</span>
+<span class="output">{"ok":true}</span></code>
+  </div>
+
+  <p>List uploads:</p>
+  <div class="cmd">
+    <code><span class="prompt">$ </span>curl <span class="flag">-H</span> <span class="url">"Authorization: Bearer $VANISH_KEY"</span> <span class="flag">\\
+  </span><span class="url">https://vanish.sh/uploads</span></code>
+  </div>
+
+  <p>Account info:</p>
+  <div class="cmd">
+    <code><span class="prompt">$ </span>curl <span class="flag">-H</span> <span class="url">"Authorization: Bearer $VANISH_KEY"</span> <span class="flag">\\
+  </span><span class="url">https://vanish.sh/me</span></code>
   </div>
 </section>
 
@@ -427,12 +480,31 @@ const html = `<!DOCTYPE html>
 </section>
 
 <section>
-  <h2>Auth</h2>
+  <h2>Auth &amp; API Keys</h2>
+
+  <p>Get your API key via CLI:</p>
   <div class="cmd">
     <code><span class="prompt">$ </span>vanish login
 <span class="comment"># opens GitHub OAuth in your browser</span>
-<span class="output">\u2713 logged in as @username</span></code>
+<span class="output">\u2713 logged in as @username</span>
+<span class="comment"># key saved to ~/.config/vanish/config.json</span></code>
   </div>
+
+  <p>Or <a href="/auth/github">sign in with GitHub</a> in your browser to get your key.</p>
+
+  <p>Create additional keys via API:</p>
+  <div class="cmd">
+    <code><span class="prompt">$ </span>curl <span class="flag">-X POST</span> <span class="flag">\\
+  -H</span> <span class="url">"Authorization: Bearer $VANISH_KEY"</span> <span class="flag">\\
+  -H</span> <span class="url">"Content-Type: application/json"</span> <span class="flag">\\
+  -d</span> <span class="url">'{"name":"ci-bot"}'</span> <span class="flag">\\
+  </span><span class="url">https://vanish.sh/keys</span>
+<span class="output">{"api_key":"vnsh_...","name":"ci-bot"}</span>
+<span class="comment"># key shown only once — save it</span></code>
+  </div>
+
+  <p>Manage your keys and uploads on the <a href="/dashboard">dashboard</a>.</p>
+
   <div class="cmd">
     <code><span class="prompt">$ </span>vanish upgrade
 <span class="comment"># upgrade to pro for 30-day+ retention (up to 365 days)</span></code>

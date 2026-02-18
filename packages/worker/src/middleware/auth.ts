@@ -18,13 +18,17 @@ declare module 'hono' {
 export const authMiddleware = createMiddleware<{ Bindings: Env }>(async (c, next) => {
   const authHeader = c.req.header('Authorization');
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  // Only accept ?key= query param on routes that need browser navigation (billing)
+  const path = new URL(c.req.url).pathname;
+  const queryKey = path.startsWith('/billing/') ? c.req.query('key') : undefined;
+
+  if ((!authHeader || !authHeader.startsWith('Bearer ')) && !queryKey) {
     c.set('user', null);
     c.set('tier', 'anonymous');
     return next();
   }
 
-  const apiKey = authHeader.slice(7);
+  const apiKey = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : (queryKey || '');
   if (!apiKey.startsWith('vnsh_')) {
     c.set('user', null);
     c.set('tier', 'anonymous');
