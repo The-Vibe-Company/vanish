@@ -9,6 +9,7 @@ export interface UploadOptions {
   json?: boolean;
   md?: boolean;
   clipboard?: boolean;
+  days?: number;
 }
 
 export async function uploadCommand(files: string[], options: UploadOptions): Promise<void> {
@@ -49,7 +50,7 @@ export async function uploadCommand(files: string[], options: UploadOptions): Pr
 
     try {
       spinner.start();
-      const result = await client.upload(file);
+      const result = await client.upload(file, { days: options.days });
       spinner.stop();
       results.push(result);
 
@@ -88,7 +89,7 @@ export async function uploadCommand(files: string[], options: UploadOptions): Pr
     const expiry = results[0]?.expires;
     if (expiry) {
       const hours = Math.round((new Date(expiry).getTime() - Date.now()) / (1000 * 60 * 60));
-      process.stderr.write(`Expires in ${hours}h. Login for 30-day retention: vanish login\n`);
+      process.stderr.write(`Expires in ${hours}h (images only). Login for 48h + all file types: vanish login\n`);
     }
   }
 }
