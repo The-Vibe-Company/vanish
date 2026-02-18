@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.7](https://github.com/The-Vibe-Company/vanish/compare/vanish-cli-v0.1.6...vanish-cli-v0.1.7) (2026-02-18)
+
+
+### Features
+
+* overhaul tier system with image-only anonymous, 48h free, and custom TTL for Pro ([#26](https://github.com/The-Vibe-Company/vanish/issues/26)) ([50a8102](https://github.com/The-Vibe-Company/vanish/commit/50a810276b57a6e64937b21ec5ce9e77bc265ac7))
+
 ## [0.1.6](https://github.com/The-Vibe-Company/vanish/compare/vanish-cli-v0.1.5...vanish-cli-v0.1.6) (2026-02-18)
 
 
