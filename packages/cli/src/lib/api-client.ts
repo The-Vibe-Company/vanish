@@ -15,6 +15,26 @@ export interface ApiError {
   maxBytes?: number;
 }
 
+export interface MeResult {
+  id: string;
+  username: string | null;
+  email: string | null;
+  tier: string;
+  created_at: string;
+  stats: {
+    total_uploads: number;
+    total_bytes: number;
+  };
+  limits: {
+    maxFileSize: number;
+    maxTotalStorage: number | null;
+    maxExpiryHours: number;
+    imageOnly: boolean;
+    customTtl: boolean;
+    rateLimit: number;
+  };
+}
+
 export class VanishClient {
   private apiUrl: string;
   private apiKey?: string;
@@ -24,7 +44,7 @@ export class VanishClient {
     this.apiKey = config.api_key;
   }
 
-  async upload(filePath: string): Promise<UploadResult> {
+  async upload(filePath: string, options?: { days?: number }): Promise<UploadResult> {
     const fileBuffer = readFileSync(filePath);
     const filename = basename(filePath);
 
@@ -35,6 +55,10 @@ export class VanishClient {
 
     if (this.apiKey) {
       headers['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+
+    if (options?.days) {
+      headers['X-Expires-Days'] = String(options.days);
     }
 
     const response = await fetch(`${this.apiUrl}/upload`, {
@@ -49,6 +73,23 @@ export class VanishClient {
     }
 
     return response.json() as Promise<UploadResult>;
+  }
+
+  async me(): Promise<MeResult> {
+    if (!this.apiKey) {
+      throw new Error('Authentication required. Use `vanish login` first.');
+    }
+
+    const response = await fetch(`${this.apiUrl}/me`, {
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
+
+    if (!response.ok) {
+      const error = await response.json() as ApiError;
+      throw new Error(error.error || `Failed to fetch user info (status ${response.status})`);
+    }
+
+    return response.json() as Promise<MeResult>;
   }
 
   async health(): Promise<{ status: string; version: string }> {

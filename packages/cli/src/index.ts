@@ -8,6 +8,7 @@ import { uploadCommand } from './commands/upload.js';
 import { loginCommand, logoutCommand } from './commands/login.js';
 import { lsCommand } from './commands/ls.js';
 import { rmCommand } from './commands/rm.js';
+import { statusCommand } from './commands/status.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'));
@@ -27,11 +28,12 @@ program
   .option('--json', 'Output as JSON')
   .option('--md', 'Output as Markdown image link')
   .option('--no-clipboard', 'Do not copy URL to clipboard')
+  .option('--days <days>', 'Custom retention in days (Pro only, 1-365)', parseInt)
   .action(uploadCommand);
 
 program
   .command('login')
-  .description('Login with GitHub to get 30-day retention')
+  .description('Login with GitHub for 48h retention and all file types')
   .action(loginCommand);
 
 program
@@ -41,7 +43,7 @@ program
 
 program
   .command('upgrade')
-  .description('Upgrade to Pro for 1GB uploads and unlimited retention (2 EUR/month)')
+  .description('Upgrade to Pro for 1GB uploads and up to 365-day retention (2 EUR/month)')
   .action(async () => {
     const { loadConfig } = await import('./lib/config.js');
     const config = loadConfig();
@@ -94,7 +96,7 @@ program
     const { loadConfig } = await import('./lib/config.js');
     const config = loadConfig();
     if (!config.api_key) {
-      console.log('Not logged in (anonymous tier, 48h retention)');
+      console.log('Not logged in (anonymous tier, 24h retention, images only)');
       console.log('Login: vanish login');
       return;
     }
@@ -126,9 +128,15 @@ program
   .argument('<ids...>', 'upload ID(s) to delete')
   .action(rmCommand);
 
+program
+  .command('status')
+  .description('Show storage usage and tier info')
+  .option('--json', 'Output as JSON')
+  .action(statusCommand);
+
 // Default: if first arg looks like a file path, treat as upload
 const args = process.argv.slice(2);
-if (args.length > 0 && !args[0].startsWith('-') && !['upload', 'login', 'logout', 'upgrade', 'whoami', 'ls', 'rm', 'help', 'mcp-serve'].includes(args[0])) {
+if (args.length > 0 && !args[0].startsWith('-') && !['upload', 'login', 'logout', 'upgrade', 'whoami', 'ls', 'rm', 'status', 'help', 'mcp-serve'].includes(args[0])) {
   // Shorthand: `vanish file.png` = `vanish upload file.png`
   process.argv.splice(2, 0, 'upload');
 }
