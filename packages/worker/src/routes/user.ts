@@ -37,6 +37,10 @@ user.get('/me', async (c) => {
     limits: {
       maxFileSize: limits.maxFileSize,
       maxTotalStorage: limits.maxTotalStorage,
+      maxExpiryHours: limits.maxExpiryHours,
+      imageOnly: limits.imageOnly,
+      customTtl: limits.customTtl,
+      rateLimit: limits.rateLimit,
     },
   });
 });
