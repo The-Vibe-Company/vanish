@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.8](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.7...@vanish/worker-v0.1.8) (2026-02-18)
+
+
+### Features
+
+* add curl/API docs, API key guide, and web dashboard ([#28](https://github.com/The-Vibe-Company/vanish/issues/28)) ([9cc85c8](https://github.com/The-Vibe-Company/vanish/commit/9cc85c868599b5f3af4ca22708a3aaeb682b5e60))
+
 ## [0.1.7](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.6...@vanish/worker-v0.1.7) (2026-02-18)
 
 
