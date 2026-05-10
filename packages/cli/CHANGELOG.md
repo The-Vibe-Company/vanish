@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.15](https://github.com/The-Vibe-Company/vanish/compare/vanish-cli-v0.1.14...vanish-cli-v0.1.15) (2026-05-10)
+
+
+### Miscellaneous Chores
+
+* **vanish-cli:** Synchronize vanish versions
+
 ## [0.1.14](https://github.com/The-Vibe-Company/vanish/compare/vanish-cli-v0.1.13...vanish-cli-v0.1.14) (2026-05-10)
 
 

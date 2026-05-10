@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.15](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.14...@vanish/worker-v0.1.15) (2026-05-10)
+
+
+### Features
+
+* **landing:** redesign / with hero terminal and v1 design system ([#46](https://github.com/The-Vibe-Company/vanish/issues/46)) ([d630c63](https://github.com/The-Vibe-Company/vanish/commit/d630c631b0b45b349a29cce9f48ab0068444efbd))
+* **site:** add vanish logo lockup ([#45](https://github.com/The-Vibe-Company/vanish/issues/45)) ([2f12eb6](https://github.com/The-Vibe-Company/vanish/commit/2f12eb6f73b642973b28835f61b5071c156f3d03))
+
 ## [0.1.14](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.13...@vanish/worker-v0.1.14) (2026-05-10)
 
 
