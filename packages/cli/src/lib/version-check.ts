@@ -99,7 +99,13 @@ function readVersionCache(cachePath: string): VersionCache | null {
     return null;
   }
 
-  const parsed = JSON.parse(readFileSync(cachePath, 'utf-8')) as Partial<VersionCache>;
+  let parsed: Partial<VersionCache>;
+  try {
+    parsed = JSON.parse(readFileSync(cachePath, 'utf-8')) as Partial<VersionCache>;
+  } catch {
+    return null;
+  }
+
   if (typeof parsed.checkedAt !== 'number' || typeof parsed.latestVersion !== 'string') {
     return null;
   }

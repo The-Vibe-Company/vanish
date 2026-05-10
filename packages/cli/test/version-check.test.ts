@@ -158,6 +158,44 @@ describe('version check', () => {
     }
   });
 
+  it('treats malformed cache JSON as a cache miss', async () => {
+    const { dir, path } = cachePath();
+    const fetchImpl = fetchJson({ version: '0.1.11' });
+    writeFileSync(path, '{bad json');
+
+    try {
+      const notice = await getVersionNotice('0.1.10', {
+        now: 1_000 + 60_000,
+        fetchImpl,
+        cachePath: path,
+      });
+
+      expect(fetchImpl).toHaveBeenCalledOnce();
+      expect(notice?.latestVersion).toBe('0.1.11');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('treats malformed cache shape as a cache miss', async () => {
+    const { dir, path } = cachePath();
+    const fetchImpl = fetchJson({ version: '0.1.11' });
+    writeFileSync(path, JSON.stringify({ checkedAt: 'yesterday' }));
+
+    try {
+      const notice = await getVersionNotice('0.1.10', {
+        now: 1_000 + 60_000,
+        fetchImpl,
+        cachePath: path,
+      });
+
+      expect(fetchImpl).toHaveBeenCalledOnce();
+      expect(notice?.latestVersion).toBe('0.1.11');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('refreshes a stale cache', async () => {
     const { dir, path } = cachePath();
     const fetchImpl = fetchJson({ version: '0.1.12' });
