@@ -397,7 +397,7 @@ function extractAssetPaths(html: string): Set<string> {
 
   while ((match = pattern.exec(html))) {
     const value = match[1];
-    if (!value || value.startsWith('http:') || value.startsWith('https:') || value.startsWith('data:') || value.startsWith('#')) {
+    if (!value || value.startsWith('http:') || value.startsWith('https:') || value.startsWith('//') || value.startsWith('data:') || value.startsWith('#')) {
       continue;
     }
 

@@ -109,3 +109,74 @@ export async function saveIdempotentResponse(
     VALUES (?, ?, ?, ?, ?, datetime('now', '+48 hours'))
   `).bind(scope, owner, key, status, JSON.stringify(body)).run();
 }
+
+export async function reserveIdempotencyKey(
+  env: Env,
+  scope: string,
+  owner: string,
+  key: string,
+): Promise<{ ok: true } | { ok: false; status: number; body: Record<string, unknown> }> {
+  await env.DB.prepare(`
+    DELETE FROM idempotency_keys
+    WHERE scope = ?
+      AND owner = ?
+      AND idempotency_key = ?
+      AND expires_at <= datetime('now')
+  `).bind(scope, owner, key).run();
+
+  const inProgressBody = structuredError(
+    'idempotency_in_progress',
+    'A request with this idempotency key is still processing. Retry shortly.',
+    409,
+    { retryable: true },
+  );
+
+  const inserted = await env.DB.prepare(`
+    INSERT OR IGNORE INTO idempotency_keys (scope, owner, idempotency_key, status, response_json, expires_at)
+    VALUES (?, ?, ?, ?, ?, datetime('now', '+10 minutes'))
+  `).bind(scope, owner, key, 409, JSON.stringify(inProgressBody)).run();
+
+  if ((inserted.meta?.changes || 0) > 0) {
+    return { ok: true };
+  }
+
+  const replay = await getIdempotentReplay(env, scope, owner, key);
+  return replay
+    ? { ok: false, status: replay.status, body: replay.body }
+    : { ok: false, status: 409, body: inProgressBody };
+}
+
+export async function completeIdempotentResponse(
+  env: Env,
+  scope: string,
+  owner: string,
+  key: string,
+  status: number,
+  body: Record<string, unknown>,
+): Promise<void> {
+  await env.DB.prepare(`
+    UPDATE idempotency_keys
+    SET status = ?,
+        response_json = ?,
+        expires_at = datetime('now', '+48 hours')
+    WHERE scope = ?
+      AND owner = ?
+      AND idempotency_key = ?
+      AND status = 409
+  `).bind(status, JSON.stringify(body), scope, owner, key).run();
+}
+
+export async function clearIdempotencyReservation(
+  env: Env,
+  scope: string,
+  owner: string,
+  key: string,
+): Promise<void> {
+  await env.DB.prepare(`
+    DELETE FROM idempotency_keys
+    WHERE scope = ?
+      AND owner = ?
+      AND idempotency_key = ?
+      AND status = 409
+  `).bind(scope, owner, key).run();
+}

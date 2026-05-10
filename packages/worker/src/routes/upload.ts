@@ -9,7 +9,9 @@ import {
   getIdempotencyKey,
   getIdempotencyOwner,
   getIdempotentReplay,
-  saveIdempotentResponse,
+  clearIdempotencyReservation,
+  completeIdempotentResponse,
+  reserveIdempotencyKey,
   structuredError,
 } from '../lib/api-response.js';
 
@@ -135,23 +137,38 @@ upload.post('/upload', async (c) => {
 
   const id = nanoid(12);
   const expiresAt = calculateExpiry(tier, customDays);
+  if (idempotencyKey) {
+    const reservation = await reserveIdempotencyKey(c.env, 'upload', idempotencyOwner, idempotencyKey);
+    if (!reservation.ok) {
+      return c.json(reservation.body, reservation.status as 200 | 201 | 409);
+    }
+  }
 
-  // Upload to R2
-  await c.env.BUCKET.put(id, body, {
-    httpMetadata: {
-      contentType: contentType,
-    },
-    customMetadata: {
-      filename,
-      uploadedBy: user?.id || 'anonymous',
-    },
-  });
+  try {
+    // Upload to R2
+    await c.env.BUCKET.put(id, body, {
+      httpMetadata: {
+        contentType: contentType,
+      },
+      customMetadata: {
+        filename,
+        uploadedBy: user?.id || 'anonymous',
+      },
+    });
 
-  // Record in D1
-  await c.env.DB.prepare(`
-    INSERT INTO uploads (id, user_id, filename, content_type, size_bytes, expires_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).bind(id, user?.id || null, filename, contentType, size, expiresAt).run();
+    // Record in D1
+    await c.env.DB.prepare(`
+      INSERT INTO uploads (id, user_id, filename, content_type, size_bytes, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).bind(id, user?.id || null, filename, contentType, size, expiresAt).run();
+  } catch (err) {
+    if (idempotencyKey) {
+      await clearIdempotencyReservation(c.env, 'upload', idempotencyOwner, idempotencyKey).catch(clearErr => {
+        console.error('Failed to clear upload idempotency reservation:', clearErr);
+      });
+    }
+    throw err;
+  }
 
   const fileExt = filename.includes('.') ? filename.split('.').pop()!.toLowerCase() : '';
   const url = fileExt ? `${c.env.BASE_URL}/f/${id}.${fileExt}` : `${c.env.BASE_URL}/f/${id}`;
@@ -168,7 +185,7 @@ upload.post('/upload', async (c) => {
 
   if (idempotencyKey) {
     try {
-      await saveIdempotentResponse(c.env, 'upload', idempotencyOwner, idempotencyKey, 201, result);
+      await completeIdempotentResponse(c.env, 'upload', idempotencyOwner, idempotencyKey, 201, result);
     } catch (err) {
       console.error('Failed to record upload idempotency response:', err);
     }

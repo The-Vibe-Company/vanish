@@ -13,7 +13,9 @@ import {
   getIdempotencyKey,
   getIdempotencyOwner,
   getIdempotentReplay,
-  saveIdempotentResponse,
+  clearIdempotencyReservation,
+  completeIdempotentResponse,
+  reserveIdempotencyKey,
   structuredError,
 } from '../lib/api-response.js';
 
@@ -108,11 +110,26 @@ bundles.post('/bundles', rateLimitMiddleware, async (c) => {
   const uploadToken = BUNDLE_TOKEN_PREFIX + nanoid(32);
   const expiresAt = calculateExpiry(tier, customDays);
   const name = sanitizeBundleName(payload.name || id);
+  if (idempotencyKey) {
+    const reservation = await reserveIdempotencyKey(c.env, 'bundle-create', idempotencyOwner, idempotencyKey);
+    if (!reservation.ok) {
+      return c.json(reservation.body, reservation.status as 201 | 409);
+    }
+  }
 
-  await c.env.DB.prepare(`
-    INSERT INTO bundles (id, user_id, name, upload_token, size_bytes, file_count, expected_file_count, expires_at)
-    VALUES (?, ?, ?, ?, 0, 0, ?, ?)
-  `).bind(id, user?.id || null, name, uploadToken, plannedFileCount, expiresAt).run();
+  try {
+    await c.env.DB.prepare(`
+      INSERT INTO bundles (id, user_id, name, upload_token, size_bytes, file_count, expected_file_count, expires_at)
+      VALUES (?, ?, ?, ?, 0, 0, ?, ?)
+    `).bind(id, user?.id || null, name, uploadToken, plannedFileCount, expiresAt).run();
+  } catch (err) {
+    if (idempotencyKey) {
+      await clearIdempotencyReservation(c.env, 'bundle-create', idempotencyOwner, idempotencyKey).catch(clearErr => {
+        console.error('Failed to clear bundle create idempotency reservation:', clearErr);
+      });
+    }
+    throw err;
+  }
 
   const result = {
     id,
@@ -127,7 +144,7 @@ bundles.post('/bundles', rateLimitMiddleware, async (c) => {
 
   if (idempotencyKey) {
     try {
-      await saveIdempotentResponse(c.env, 'bundle-create', idempotencyOwner, idempotencyKey, 201, result);
+      await completeIdempotentResponse(c.env, 'bundle-create', idempotencyOwner, idempotencyKey, 201, result);
     } catch (err) {
       console.error('Failed to record bundle create idempotency response:', err);
     }
