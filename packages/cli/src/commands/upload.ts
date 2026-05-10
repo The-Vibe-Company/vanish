@@ -4,31 +4,30 @@ import { loadConfig } from '../lib/config.js';
 import { VanishClient } from '../lib/api-client.js';
 import { copyToClipboard } from '../lib/clipboard.js';
 import { Spinner, formatBytes } from '../lib/progress.js';
+import { fail, failWithUnknownError } from '../lib/output.js';
 
 export interface UploadOptions {
   json?: boolean;
   md?: boolean;
   clipboard?: boolean;
   days?: number;
+  idempotencyKey?: string;
 }
 
 export async function uploadCommand(files: string[], options: UploadOptions): Promise<void> {
   if (files.length === 0) {
-    console.error('Error: No files specified');
-    process.exit(1);
+    fail('Error: No files specified', options, 'missing_files');
   }
 
   // Resolve and validate all files first
   const resolvedFiles = files.map(f => resolve(f));
   for (const file of resolvedFiles) {
     if (!existsSync(file)) {
-      console.error(`Error: File not found: ${file}`);
-      process.exit(1);
+      fail(`Error: File not found: ${file}`, options, 'file_not_found');
     }
     const stat = statSync(file);
     if (!stat.isFile()) {
-      console.error(`Error: Not a file: ${file}`);
-      process.exit(1);
+      fail(`Error: Not a file: ${file}`, options, 'not_a_file');
     }
   }
 
@@ -50,7 +49,12 @@ export async function uploadCommand(files: string[], options: UploadOptions): Pr
 
     try {
       spinner.start();
-      const result = await client.upload(file, { days: options.days });
+      const result = await client.upload(file, {
+        days: options.days,
+        idempotencyKey: options.idempotencyKey
+          ? buildScopedIdempotencyKey(options.idempotencyKey, i)
+          : undefined,
+      });
       spinner.stop();
       const canDelete = result.deletable ?? Boolean(config.api_key);
       const enriched = enrichUploadResult(result, canDelete);
@@ -66,9 +70,7 @@ export async function uploadCommand(files: string[], options: UploadOptions): Pr
       }
     } catch (err) {
       spinner.stop();
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(`Error uploading ${name}: ${message}`);
-      process.exit(1);
+      failWithUnknownError(err, options, `Error uploading ${name}`);
     }
   }
 
@@ -94,6 +96,10 @@ export async function uploadCommand(files: string[], options: UploadOptions): Pr
       process.stderr.write('Login for deletes, 48h retention, and all file types: vanish login\n');
     }
   }
+}
+
+function buildScopedIdempotencyKey(key: string, index: number): string {
+  return index === 0 ? key : `${key}:${index + 1}`;
 }
 
 function enrichUploadResult(result: Awaited<ReturnType<VanishClient['upload']>>, canDelete: boolean) {

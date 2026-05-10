@@ -18,7 +18,22 @@ export async function getActiveStorageBytes(env: Env, userId: string): Promise<n
       AND (expires_at IS NULL OR expires_at > datetime('now'))
   `).bind(userId).first<{ total_bytes: number }>();
 
-  return (uploads?.total_bytes || 0) + (sites?.total_bytes || 0);
+  let bundleBytes = 0;
+  try {
+    const bundles = await env.DB.prepare(`
+      SELECT COALESCE(SUM(size_bytes), 0) as total_bytes
+      FROM bundles
+      WHERE user_id = ?
+        AND deleted_at IS NULL
+        AND (expires_at IS NULL OR expires_at > datetime('now'))
+    `).bind(userId).first<{ total_bytes: number }>();
+    bundleBytes = bundles?.total_bytes || 0;
+  } catch {
+    // Older self-hosted schemas and lightweight tests may not have bundles yet.
+    bundleBytes = 0;
+  }
+
+  return (uploads?.total_bytes || 0) + (sites?.total_bytes || 0) + bundleBytes;
 }
 
 export async function ensureStorageAvailable(
@@ -26,7 +41,7 @@ export async function ensureStorageAvailable(
   tier: Tier,
   userId: string | null,
   incomingBytes: number,
-  options: { excludeSiteId?: string; excludeSiteIds?: string[] } = {},
+  options: { excludeSiteId?: string; excludeSiteIds?: string[]; excludeBundleId?: string; excludeBundleIds?: string[] } = {},
 ): Promise<{ ok: true } | { ok: false; error: string; maxTotalBytes?: number; usedBytes?: number }> {
   const limits = TIER_LIMITS[tier];
 
@@ -56,6 +71,24 @@ export async function ensureStorageAvailable(
       WHERE id = ? AND user_id = ? AND deleted_at IS NULL
     `).bind(siteId, userId).first<{ size_bytes: number }>();
     usedBytes -= currentSite?.size_bytes || 0;
+  }
+
+  const excludeBundleIds = new Set([
+    ...(options.excludeBundleIds || []),
+    ...(options.excludeBundleId ? [options.excludeBundleId] : []),
+  ]);
+
+  for (const bundleId of excludeBundleIds) {
+    try {
+      const currentBundle = await env.DB.prepare(`
+        SELECT COALESCE(size_bytes, 0) as size_bytes
+        FROM bundles
+        WHERE id = ? AND user_id = ? AND deleted_at IS NULL
+      `).bind(bundleId, userId).first<{ size_bytes: number }>();
+      usedBytes -= currentBundle?.size_bytes || 0;
+    } catch {
+      // See getActiveStorageBytes fallback.
+    }
   }
 
   if (usedBytes + incomingBytes > limits.maxTotalStorage) {

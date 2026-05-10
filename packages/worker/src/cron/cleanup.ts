@@ -9,6 +9,7 @@ const BATCH_SIZE = 100;
 export async function handleCleanup(env: Env): Promise<void> {
   let totalDeleted = 0;
   let totalSitesDeleted = 0;
+  let totalBundlesDeleted = 0;
   let totalPendingObjectsDeleted = 0;
 
   while (true) {
@@ -75,10 +76,52 @@ export async function handleCleanup(env: Env): Promise<void> {
     }
   }
 
+  try {
+    while (true) {
+      const expiredBundles = await env.DB.prepare(`
+        SELECT id FROM bundles
+        WHERE expires_at IS NOT NULL
+          AND expires_at < datetime('now')
+          AND deleted_at IS NULL
+        LIMIT ?
+      `).bind(BATCH_SIZE).all<{ id: string }>();
+
+      if (!expiredBundles.results || expiredBundles.results.length === 0) {
+        break;
+      }
+
+      const bundleIds = expiredBundles.results.map(r => r.id);
+      for (const bundleId of bundleIds) {
+        await deleteBundleFiles(env, bundleId);
+      }
+
+      const stmts = bundleIds.map(bundleId =>
+        env.DB.prepare('UPDATE bundles SET deleted_at = datetime(\'now\'), upload_token = NULL WHERE id = ?').bind(bundleId)
+      );
+      await env.DB.batch(stmts);
+
+      totalBundlesDeleted += bundleIds.length;
+
+      if (bundleIds.length < BATCH_SIZE) {
+        break;
+      }
+    }
+  } catch {
+    // Older self-hosted schemas may not have bundles yet.
+  }
+
   // Also clean up expired auth sessions
   await env.DB.prepare(`
     DELETE FROM auth_sessions WHERE expires_at < datetime('now')
   `).run();
+
+  try {
+    await env.DB.prepare(`
+      DELETE FROM idempotency_keys WHERE expires_at < datetime('now')
+    `).run();
+  } catch {
+    // Older self-hosted schemas may not have idempotency yet.
+  }
 
   // Clean up old rate limit records (2h retention, beyond the 1h window)
   await env.DB.prepare(`
@@ -109,7 +152,8 @@ export async function handleCleanup(env: Env): Promise<void> {
 
   console.log(
     `Cleanup complete: ${totalDeleted} expired uploads deleted, ` +
-    `${totalSitesDeleted} expired sites deleted, ${totalPendingObjectsDeleted} pending objects deleted`
+    `${totalSitesDeleted} expired sites deleted, ${totalBundlesDeleted} expired bundles deleted, ` +
+    `${totalPendingObjectsDeleted} pending objects deleted`
   );
 }
 
@@ -130,5 +174,25 @@ async function deleteSiteFiles(env: Env, siteId: string): Promise<void> {
     await env.DB.prepare(`
       DELETE FROM site_files WHERE site_id = ? AND r2_key IN (${placeholders})
     `).bind(siteId, ...keys.map(file => file.r2_key)).run();
+  }
+}
+
+async function deleteBundleFiles(env: Env, bundleId: string): Promise<void> {
+  while (true) {
+    const files = await env.DB.prepare(`
+      SELECT r2_key FROM bundle_files WHERE bundle_id = ? LIMIT ?
+    `).bind(bundleId, BATCH_SIZE).all<{ r2_key: string }>();
+
+    const keys = files.results || [];
+    if (keys.length === 0) {
+      break;
+    }
+
+    await Promise.all(keys.map(file => env.BUCKET.delete(file.r2_key)));
+
+    const placeholders = keys.map(() => '?').join(',');
+    await env.DB.prepare(`
+      DELETE FROM bundle_files WHERE bundle_id = ? AND r2_key IN (${placeholders})
+    `).bind(bundleId, ...keys.map(file => file.r2_key)).run();
   }
 }

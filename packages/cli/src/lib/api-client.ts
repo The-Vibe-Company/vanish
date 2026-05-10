@@ -49,6 +49,13 @@ export interface PublishSiteResult {
 
 export interface ApiError {
   error: string;
+  code?: string;
+  message?: string;
+  status?: number;
+  hint?: string;
+  retryable?: boolean;
+  limits?: Record<string, unknown>;
+  upgradeRequired?: boolean;
   maxBytes?: number;
   maxTotalBytes?: number;
   usedBytes?: number;
@@ -63,8 +70,10 @@ export interface MeResult {
   stats: {
     total_uploads: number;
     total_sites?: number;
+    total_bundles?: number;
     upload_bytes?: number;
     site_bytes?: number;
+    bundle_bytes?: number;
     total_bytes: number;
   };
   limits: {
@@ -79,6 +88,110 @@ export interface MeResult {
   };
 }
 
+export interface SiteInfo {
+  id: string;
+  name: string;
+  root_path: string;
+  slug: string | null;
+  size_bytes: number;
+  file_count: number;
+  expected_file_count: number;
+  url: string;
+  expires_at: string | null;
+  created_at: string;
+  published_at: string | null;
+  expired: boolean;
+  deleted: boolean;
+}
+
+export interface SiteFileInfo {
+  path: string;
+  content_type: string | null;
+  size_bytes: number;
+  created_at: string;
+}
+
+export interface KeyInfo {
+  prefix: string;
+  name: string;
+  created_at: string;
+  last_used_at: string | null;
+  revoked: boolean;
+}
+
+export interface CreateKeyResult {
+  api_key: string;
+  prefix: string;
+  name: string;
+  message: string;
+}
+
+export interface CreateBundleResult {
+  id: string;
+  token: string;
+  url: string;
+  name: string;
+  fileCount: number;
+  maxFiles: number;
+  maxBytes: number | null;
+  expires: string | null;
+}
+
+export interface PublishBundleResult {
+  ok: true;
+  id: string;
+  url: string;
+  size: number;
+  fileCount: number;
+  expectedFileCount?: number;
+  expires: string | null;
+}
+
+export interface BundleInfo {
+  id: string;
+  name: string;
+  url: string;
+  size_bytes: number;
+  file_count: number;
+  expected_file_count: number;
+  expires_at: string | null;
+  created_at: string;
+  published_at: string | null;
+  expired: boolean;
+  deleted: boolean;
+  files?: Array<{
+    path: string;
+    filename: string;
+    content_type: string | null;
+    size_bytes: number;
+    created_at: string;
+  }>;
+}
+
+interface RequestOptions {
+  idempotencyKey?: string;
+}
+
+export class VanishApiError extends Error {
+  code: string;
+  status: number;
+  hint?: string;
+  retryable: boolean;
+  limits?: Record<string, unknown>;
+  upgradeRequired?: boolean;
+
+  constructor(message: string, input: ApiError & { status?: number }) {
+    super(message);
+    this.name = 'VanishApiError';
+    this.code = input.code || 'api_error';
+    this.status = input.status || 0;
+    this.hint = input.hint;
+    this.retryable = input.retryable ?? false;
+    this.limits = input.limits;
+    this.upgradeRequired = input.upgradeRequired;
+  }
+}
+
 export class VanishClient {
   private apiUrl: string;
   private apiKey?: string;
@@ -88,7 +201,11 @@ export class VanishClient {
     this.apiKey = config.api_key;
   }
 
-  async upload(filePath: string, options?: { days?: number }): Promise<UploadResult> {
+  get baseUrl(): string {
+    return this.apiUrl;
+  }
+
+  async upload(filePath: string, options?: { days?: number; idempotencyKey?: string }): Promise<UploadResult> {
     const fileBuffer = readFileSync(filePath);
     const filename = basename(filePath);
 
@@ -104,6 +221,9 @@ export class VanishClient {
     if (options?.days) {
       headers['X-Expires-Days'] = String(options.days);
     }
+    if (options?.idempotencyKey) {
+      headers['Idempotency-Key'] = options.idempotencyKey;
+    }
 
     const response = await fetch(`${this.apiUrl}/upload`, {
       method: 'POST',
@@ -112,8 +232,7 @@ export class VanishClient {
     });
 
     if (!response.ok) {
-      const error = await response.json() as ApiError;
-      throw new Error(error.error || `Upload failed with status ${response.status}`);
+      await throwApiError(response, 'Upload failed');
     }
 
     return response.json() as Promise<UploadResult>;
@@ -126,10 +245,11 @@ export class VanishClient {
     totalBytes: number;
     slug?: string;
     days?: number;
-  }): Promise<CreateSiteResult> {
+    channel?: string;
+  }, options?: RequestOptions): Promise<CreateSiteResult> {
     const response = await fetch(`${this.apiUrl}/sites`, {
       method: 'POST',
-      headers: this.jsonHeaders(),
+      headers: this.jsonHeaders(options),
       body: JSON.stringify(input),
     });
 
@@ -147,10 +267,10 @@ export class VanishClient {
     totalBytes: number;
     slug?: string;
     days?: number;
-  }): Promise<CreateReplacementResult> {
+  }, options?: RequestOptions): Promise<CreateReplacementResult> {
     const response = await fetch(`${this.apiUrl}/sites/${encodeURIComponent(siteIdOrSlug)}/replacements`, {
       method: 'POST',
-      headers: this.jsonHeaders(),
+      headers: this.jsonHeaders(options),
       body: JSON.stringify(input),
     });
 
@@ -183,13 +303,16 @@ export class VanishClient {
     }
   }
 
-  async publishSite(siteId: string, token: string): Promise<PublishSiteResult> {
+  async publishSite(siteId: string, token: string, options?: RequestOptions): Promise<PublishSiteResult> {
     const headers: Record<string, string> = {
       'X-Site-Token': token,
     };
 
     if (this.apiKey) {
       headers['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+    if (options?.idempotencyKey) {
+      headers['Idempotency-Key'] = options.idempotencyKey;
     }
 
     const response = await fetch(`${this.apiUrl}/sites/${siteId}/publish`, {
@@ -209,9 +332,10 @@ export class VanishClient {
     draftId: string,
     token: string,
     options?: { slug?: string; days?: number },
+    requestOptions?: RequestOptions,
   ): Promise<PublishSiteResult> {
     const headers: Record<string, string> = {
-      ...this.jsonHeaders(),
+      ...this.jsonHeaders(requestOptions),
       'X-Site-Token': token,
     };
 
@@ -228,7 +352,63 @@ export class VanishClient {
     return response.json() as Promise<PublishSiteResult>;
   }
 
-  async patchSite(siteIdOrSlug: string, input: { rootPath?: string; slug?: string; days?: number }): Promise<unknown> {
+  async listSites(options: { active?: boolean; limit?: number; offset?: number } = {}): Promise<{ sites: SiteInfo[]; limit: number; offset: number }> {
+    const params = new URLSearchParams();
+    if (options.active !== undefined) params.set('active', String(options.active));
+    if (options.limit !== undefined) params.set('limit', String(options.limit));
+    if (options.offset !== undefined) params.set('offset', String(options.offset));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const response = await fetch(`${this.apiUrl}/sites${query}`, {
+      headers: this.authHeaders(),
+    });
+
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to list sites');
+    }
+
+    return response.json() as Promise<{ sites: SiteInfo[]; limit: number; offset: number }>;
+  }
+
+  async getSite(siteIdOrSlug: string): Promise<SiteInfo> {
+    const response = await fetch(`${this.apiUrl}/sites/${encodeURIComponent(siteIdOrSlug)}`, {
+      headers: this.authHeaders(),
+    });
+
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to get site');
+    }
+
+    return response.json() as Promise<SiteInfo>;
+  }
+
+  async getSiteFiles(siteIdOrSlug: string): Promise<{ site: SiteInfo; files: SiteFileInfo[] }> {
+    const response = await fetch(`${this.apiUrl}/sites/${encodeURIComponent(siteIdOrSlug)}/files`, {
+      headers: this.authHeaders(),
+    });
+
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to list site files');
+    }
+
+    return response.json() as Promise<{ site: SiteInfo; files: SiteFileInfo[] }>;
+  }
+
+  async getSiteChannel(channel: string): Promise<{ channel: string; site: SiteInfo } | null> {
+    const response = await fetch(`${this.apiUrl}/sites/channels/${encodeURIComponent(channel)}`, {
+      headers: this.authHeaders(),
+    });
+
+    if (response.status === 404) {
+      return null;
+    }
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to get site channel');
+    }
+
+    return response.json() as Promise<{ channel: string; site: SiteInfo }>;
+  }
+
+  async patchSite(siteIdOrSlug: string, input: { rootPath?: string; slug?: string; days?: number }): Promise<SiteInfo> {
     const response = await fetch(`${this.apiUrl}/sites/${encodeURIComponent(siteIdOrSlug)}`, {
       method: 'PATCH',
       headers: this.jsonHeaders(),
@@ -239,22 +419,175 @@ export class VanishClient {
       await throwApiError(response, 'Failed to update site');
     }
 
-    return response.json();
+    return response.json() as Promise<SiteInfo>;
   }
 
-  async deleteSite(siteId: string, token: string): Promise<void> {
+  async deleteSite(siteId: string, token?: string): Promise<void> {
+    const headers: Record<string, string> = {};
+
+    if (this.apiKey) {
+      headers['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+    if (token) {
+      headers['X-Site-Token'] = token;
+    }
+
+    const response = await fetch(`${this.apiUrl}/sites/${encodeURIComponent(siteId)}`, {
+      method: 'DELETE',
+      headers,
+    });
+
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to delete site');
+    }
+  }
+
+  async listKeys(): Promise<KeyInfo[]> {
+    const response = await fetch(`${this.apiUrl}/keys`, {
+      headers: this.authHeaders(),
+    });
+
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to list API keys');
+    }
+
+    const data = await response.json() as { keys: KeyInfo[] };
+    return data.keys;
+  }
+
+  async createKey(name?: string): Promise<CreateKeyResult> {
+    const response = await fetch(`${this.apiUrl}/keys`, {
+      method: 'POST',
+      headers: this.jsonHeaders(),
+      body: JSON.stringify(name ? { name } : {}),
+    });
+
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to create API key');
+    }
+
+    return response.json() as Promise<CreateKeyResult>;
+  }
+
+  async revokeKey(prefix: string): Promise<void> {
+    const response = await fetch(`${this.apiUrl}/keys/${encodeURIComponent(prefix)}`, {
+      method: 'DELETE',
+      headers: this.authHeaders(),
+    });
+
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to revoke API key');
+    }
+  }
+
+  async createBundle(input: {
+    name: string;
+    fileCount: number;
+    totalBytes: number;
+    days?: number;
+  }, options?: RequestOptions): Promise<CreateBundleResult> {
+    const response = await fetch(`${this.apiUrl}/bundles`, {
+      method: 'POST',
+      headers: this.jsonHeaders(options),
+      body: JSON.stringify(input),
+    });
+
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to create bundle');
+    }
+
+    return response.json() as Promise<CreateBundleResult>;
+  }
+
+  async uploadBundleFile(bundleId: string, token: string, filePath: string, bundlePath: string): Promise<void> {
+    const fileBuffer = readFileSync(filePath);
     const headers: Record<string, string> = {
-      'X-Site-Token': token,
+      'Content-Type': 'application/octet-stream',
+      'X-Bundle-Token': token,
     };
 
     if (this.apiKey) {
       headers['Authorization'] = `Bearer ${this.apiKey}`;
     }
 
-    await fetch(`${this.apiUrl}/sites/${siteId}`, {
+    const response = await fetch(`${this.apiUrl}/bundles/${bundleId}/files?path=${encodeURIComponent(bundlePath)}`, {
+      method: 'PUT',
+      headers,
+      body: fileBuffer,
+    });
+
+    if (!response.ok) {
+      await throwApiError(response, `Failed to upload ${bundlePath}`);
+    }
+  }
+
+  async publishBundle(bundleId: string, token: string): Promise<PublishBundleResult> {
+    const headers: Record<string, string> = {
+      'X-Bundle-Token': token,
+    };
+
+    if (this.apiKey) {
+      headers['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+
+    const response = await fetch(`${this.apiUrl}/bundles/${bundleId}/publish`, {
+      method: 'POST',
+      headers,
+    });
+
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to publish bundle');
+    }
+
+    return response.json() as Promise<PublishBundleResult>;
+  }
+
+  async deleteBundle(bundleId: string, token?: string): Promise<void> {
+    const headers: Record<string, string> = {};
+    if (this.apiKey) {
+      headers['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+    if (token) {
+      headers['X-Bundle-Token'] = token;
+    }
+
+    const response = await fetch(`${this.apiUrl}/bundles/${encodeURIComponent(bundleId)}`, {
       method: 'DELETE',
       headers,
     });
+
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to delete bundle');
+    }
+  }
+
+  async listBundles(options: { active?: boolean; limit?: number; offset?: number } = {}): Promise<{ bundles: BundleInfo[]; limit: number; offset: number }> {
+    const params = new URLSearchParams();
+    if (options.active !== undefined) params.set('active', String(options.active));
+    if (options.limit !== undefined) params.set('limit', String(options.limit));
+    if (options.offset !== undefined) params.set('offset', String(options.offset));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const response = await fetch(`${this.apiUrl}/bundles${query}`, {
+      headers: this.authHeaders(),
+    });
+
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to list bundles');
+    }
+
+    return response.json() as Promise<{ bundles: BundleInfo[]; limit: number; offset: number }>;
+  }
+
+  async getBundle(bundleId: string): Promise<BundleInfo> {
+    const response = await fetch(`${this.apiUrl}/bundles/${encodeURIComponent(bundleId)}`, {
+      headers: this.authHeaders(),
+    });
+
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to get bundle');
+    }
+
+    return response.json() as Promise<BundleInfo>;
   }
 
   async me(): Promise<MeResult> {
@@ -279,13 +612,24 @@ export class VanishClient {
     return response.json() as Promise<{ status: string; version: string }>;
   }
 
-  private jsonHeaders(): Record<string, string> {
+  private authHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {};
+    if (this.apiKey) {
+      headers['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+    return headers;
+  }
+
+  private jsonHeaders(options?: RequestOptions): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
 
     if (this.apiKey) {
       headers['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+    if (options?.idempotencyKey) {
+      headers['Idempotency-Key'] = options.idempotencyKey;
     }
 
     return headers;
@@ -294,11 +638,13 @@ export class VanishClient {
 
 async function throwApiError(response: Response, fallback: string): Promise<never> {
   let message = fallback;
+  let input: ApiError = { error: fallback, status: response.status };
   try {
     const error = await response.json() as ApiError;
-    message = error.error || message;
+    input = { ...error, status: error.status || response.status };
+    message = error.message || error.error || message;
   } catch {
     message = `${fallback} (status ${response.status})`;
   }
-  throw new Error(message);
+  throw new VanishApiError(message, input);
 }

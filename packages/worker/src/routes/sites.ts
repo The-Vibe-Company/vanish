@@ -11,6 +11,13 @@ import { buildSiteUrl, getSiteIdentifierFromHost, supportsPathSiteUrls } from '.
 import { getRateLimitIdentifier } from '../lib/rate-limit.js';
 import { hasProductEvent, logProductEvent, productEventsEnabled } from '../lib/events.js';
 import { rateLimitMiddleware } from '../middleware/rate-limit.js';
+import {
+  getIdempotencyKey,
+  getIdempotencyOwner,
+  getIdempotentReplay,
+  saveIdempotentResponse,
+  structuredError,
+} from '../lib/api-response.js';
 
 const SITE_ID = customAlphabet('0123456789abcdefghijklmnopqrstuvwxyz', 12);
 const SLUG_SUFFIX = customAlphabet('0123456789abcdefghijklmnopqrstuvwxyz', 2);
@@ -37,6 +44,7 @@ interface CreateSiteRequest {
   totalBytes?: number;
   slug?: string;
   days?: number;
+  channel?: string;
 }
 
 interface PatchSiteRequest {
@@ -62,15 +70,33 @@ sites.post('/sites', rateLimitMiddleware, async (c) => {
   const tier = c.get('tier');
   const user = c.get('user');
   const limits = TIER_LIMITS[tier];
+  const idempotencyKey = getIdempotencyKey(c.req.raw);
+  const idempotencyOwner = getIdempotencyOwner(
+    user,
+    c.req.header('CF-Connecting-IP') || null,
+    c.req.header('X-Forwarded-For') || null,
+  );
+
+  if ((c.req.header('Idempotency-Key') || c.req.header('X-Idempotency-Key')) && !idempotencyKey) {
+    return c.json(structuredError('invalid_idempotency_key', 'Invalid idempotency key', 400), 400);
+  }
+
+  if (idempotencyKey) {
+    const replay = await getIdempotentReplay(c.env, 'site-create', idempotencyOwner, idempotencyKey);
+    if (replay) {
+      return c.json(replay.body, replay.status as 201);
+    }
+  }
+
   const payload = await readJson<CreateSiteRequest>(c.req.raw);
 
   if (!payload) {
-    return c.json({ error: 'Invalid JSON body' }, 400);
+    return c.json(structuredError('invalid_json', 'Invalid JSON body', 400), 400);
   }
 
   const rootPath = payload.rootPath ? normalizeSitePath(payload.rootPath) : null;
   if (!rootPath) {
-    return c.json({ error: 'rootPath is required and must be a relative file path inside the site folder' }, 400);
+    return c.json(structuredError('invalid_root_path', 'rootPath is required and must be a relative file path inside the site folder', 400), 400);
   }
 
   const totalBytes = parsePositiveInteger(payload.totalBytes);
@@ -129,6 +155,31 @@ sites.post('/sites', rateLimitMiddleware, async (c) => {
     return c.json({ error: `Slug "${slug}" is already taken` }, 409);
   }
 
+  let channel: string | null = null;
+  if (payload.channel !== undefined) {
+    if (!user) {
+      return c.json(structuredError(
+        'channel_requires_auth',
+        'Channels require login because they update an owned URL.',
+        401,
+        { hint: 'Run: vanish login' },
+      ), 401);
+    }
+
+    channel = normalizeChannel(payload.channel);
+    if (!channel) {
+      return c.json(structuredError('invalid_channel', 'Invalid channel. Use 1-80 letters, numbers, dots, underscores, or hyphens.', 400), 400);
+    }
+
+    const existingChannelSite = await getSiteByChannel(c.env, user.id, channel);
+    if (existingChannelSite) {
+      return c.json({
+        ...structuredError('channel_already_exists', `Channel "${channel}" already points at a site. Update it instead.`, 409),
+        site: siteToJson(c.env.BASE_URL)(existingChannelSite),
+      }, 409);
+    }
+  }
+
   const quota = await ensureStorageAvailable(c.env, tier, user?.id || null, totalBytes);
   if (!quota.ok) {
     return c.json(quota, 413);
@@ -143,6 +194,13 @@ sites.post('/sites', rateLimitMiddleware, async (c) => {
     INSERT INTO sites (id, user_id, name, root_path, slug, upload_token, size_bytes, file_count, expected_file_count, expires_at)
     VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
   `).bind(id, user?.id || null, name, rootPath, slug, uploadToken, plannedFileCount, expiresAt).run();
+
+  if (user && channel) {
+    await c.env.DB.prepare(`
+      INSERT OR REPLACE INTO site_channels (user_id, channel, site_id, updated_at)
+      VALUES (?, ?, ?, datetime('now'))
+    `).bind(user.id, channel, id).run();
+  }
 
   await logProductEvent(c.env, {
     name: 'site_publish_started',
@@ -160,7 +218,7 @@ sites.post('/sites', rateLimitMiddleware, async (c) => {
 
   const identifier = slug || id;
 
-  return c.json({
+  const result = {
     id,
     token: uploadToken,
     url: buildSiteUrl(c.env.BASE_URL, identifier),
@@ -171,7 +229,12 @@ sites.post('/sites', rateLimitMiddleware, async (c) => {
     maxFiles: limits.maxSiteFiles,
     maxBytes: tier === 'anonymous' ? TIER_LIMITS.anonymous.maxSiteSize : limits.maxTotalStorage,
     expires: expiresAt,
-  }, 201);
+    ...(channel ? { channel } : {}),
+  };
+
+  await saveIdempotentResponse(c.env, 'site-create', idempotencyOwner, idempotencyKey, 201, result);
+
+  return c.json(result, 201);
 });
 
 sites.patch('/sites/:id', async (c) => {
@@ -628,9 +691,72 @@ sites.get('/sites', async (c) => {
   return c.json({ sites: listedSites, limit, offset });
 });
 
+sites.get('/sites/channels/:channel', async (c) => {
+  const user = c.get('user');
+  if (!user) {
+    return c.json(structuredError('auth_required', 'Authentication required', 401, { hint: 'Run: vanish login' }), 401);
+  }
+
+  const channel = normalizeChannel(c.req.param('channel'));
+  if (!channel) {
+    return c.json(structuredError('invalid_channel', 'Invalid channel', 400), 400);
+  }
+
+  const site = await getSiteByChannel(c.env, user.id, channel);
+  if (!site) {
+    return c.json(structuredError('channel_not_found', 'Channel not found', 404), 404);
+  }
+
+  return c.json({ channel, site: siteToJson(c.env.BASE_URL)(site) });
+});
+
+sites.get('/sites/:id/files', async (c) => {
+  const user = c.get('user');
+  if (!user) {
+    return c.json({ error: 'Authentication required' }, 401);
+  }
+
+  const site = await getSiteByIdentifier(c.env, c.req.param('id'));
+  if (!site) {
+    return c.json({ error: 'Site not found' }, 404);
+  }
+  if (site.user_id !== user.id) {
+    return c.json({ error: 'Not authorized' }, 403);
+  }
+
+  const result = await c.env.DB.prepare(`
+    SELECT path, content_type, size_bytes, created_at
+    FROM site_files
+    WHERE site_id = ?
+    ORDER BY path ASC
+  `).bind(site.id).all<{ path: string; content_type: string | null; size_bytes: number; created_at: string }>();
+
+  return c.json({
+    site: siteToJson(c.env.BASE_URL)(site),
+    files: result.results || [],
+  });
+});
+
+sites.get('/sites/:id', async (c) => {
+  const user = c.get('user');
+  if (!user) {
+    return c.json({ error: 'Authentication required' }, 401);
+  }
+
+  const site = await getSiteByIdentifier(c.env, c.req.param('id'));
+  if (!site) {
+    return c.json({ error: 'Site not found' }, 404);
+  }
+  if (site.user_id !== user.id) {
+    return c.json({ error: 'Not authorized' }, 403);
+  }
+
+  return c.json(siteToJson(c.env.BASE_URL)(site));
+});
+
 sites.delete('/sites/:id', async (c) => {
   const user = c.get('user');
-  const site = await getSite(c.env, c.req.param('id'));
+  const site = await getSiteByIdentifier(c.env, c.req.param('id'));
   if (!site) {
     return c.json({ error: 'Site not found' }, 404);
   }
@@ -647,6 +773,14 @@ sites.delete('/sites/:id', async (c) => {
   }
 
   await deleteSiteObjectsAndMarkDeleted(c.env, site.id);
+  if (site.user_id) {
+    try {
+      await c.env.DB.prepare('DELETE FROM site_channels WHERE site_id = ? AND user_id = ?')
+        .bind(site.id, site.user_id).run();
+    } catch {
+      // Older self-hosted schemas and tests may not have channels yet.
+    }
+  }
 
   return c.json({ ok: true });
 });
@@ -940,6 +1074,29 @@ async function validateSiteSlug(env: Env, input: string): Promise<string | null>
   }
 
   return slug;
+}
+
+function normalizeChannel(input: string): string | null {
+  const channel = input.trim().toLowerCase();
+  if (!/^[a-z0-9](?:[a-z0-9._-]{0,78}[a-z0-9])?$/.test(channel)) {
+    return null;
+  }
+
+  return channel;
+}
+
+async function getSiteByChannel(env: Env, userId: string, channel: string): Promise<Site | null> {
+  return env.DB.prepare(`
+    SELECT s.id, s.user_id, s.name, s.root_path, s.slug, s.upload_token, s.size_bytes,
+           s.file_count, s.expected_file_count, s.expires_at, s.published_at, s.created_at, s.deleted_at
+    FROM site_channels sc
+    JOIN sites s ON s.id = sc.site_id
+    WHERE sc.user_id = ?
+      AND sc.channel = ?
+      AND s.deleted_at IS NULL
+      AND (s.expires_at IS NULL OR s.expires_at > datetime('now'))
+    LIMIT 1
+  `).bind(userId, channel).first<Site>();
 }
 
 async function getSiteBySlug(env: Env, slug: string): Promise<Site | null> {

@@ -40,6 +40,24 @@ describe('upload and serve routes', () => {
     expect(served.headers.get('X-Content-Type-Options')).toBe('nosniff');
     expect(await served.text()).toBe('png');
   });
+
+  it('serves active content uploads as attachments', async () => {
+    const upload = await request(env, '/upload', {
+      method: 'POST',
+      headers: {
+        'X-Filename': 'vector.svg',
+        'Content-Type': 'application/octet-stream',
+      },
+      body: '<svg></svg>',
+    });
+    expect(upload.status).toBe(201);
+    const created = await upload.json() as { id: string };
+
+    const served = await request(env, `/f/${created.id}.svg`);
+
+    expect(served.status).toBe(200);
+    expect(served.headers.get('Content-Disposition')).toContain('attachment;');
+  });
 });
 
 function request(env: Env, path: string, init?: RequestInit) {

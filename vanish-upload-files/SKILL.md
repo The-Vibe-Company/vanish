@@ -26,6 +26,20 @@ npx vanish-cli upload <files...> --json --no-clipboard
 
 Return the URL, id, filename, size, expiry, and any delete command field from the JSON output.
 
+If the agent may retry after a network failure, include a stable key:
+
+```bash
+vanish upload <files...> --idempotency-key <stable-key> --json --no-clipboard
+```
+
+Structured JSON errors include `code`, `message`, `hint`, `retryable`, `status`, `limits`, and `upgradeRequired` when available.
+
+For multiple related files that should share one URL, use the bundle command:
+
+```bash
+vanish bundle report.pdf screenshot.png logs.txt --json --no-clipboard
+```
+
 ## Output Formats
 
 Use these only when they match the destination:
