@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.16](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.15...@vanish/worker-v0.1.16) (2026-05-10)
+
+
+### Features
+
+* **agent-ready:** harden handoff flows ([#48](https://github.com/The-Vibe-Company/vanish/issues/48)) ([f7bfe19](https://github.com/The-Vibe-Company/vanish/commit/f7bfe197f93f10eb04d362d452e5bb84505cc85e))
+* **auth:** rotate web api keys on login ([#49](https://github.com/The-Vibe-Company/vanish/issues/49)) ([0cdb8ab](https://github.com/The-Vibe-Company/vanish/commit/0cdb8abf3d0ee9d16eb4cd1b843f3baaa36f648f))
+* **landing:** improve agent-first landing page ([#51](https://github.com/The-Vibe-Company/vanish/issues/51)) ([17ff2f6](https://github.com/The-Vibe-Company/vanish/commit/17ff2f6e6e615781105443119eeb46426d5f751b))
+
 ## [0.1.15](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.14...@vanish/worker-v0.1.15) (2026-05-10)
 
 
