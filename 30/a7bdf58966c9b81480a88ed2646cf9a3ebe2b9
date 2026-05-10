@@ -1,0 +1,19 @@
+.gitignore
+  s_9107abf840b7a7::t_c1082ca915e406 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "30a7bdf58966c9b81480a88ed2646cf9a3ebe2b9",
+  "prompts": {},
+  "sessions": {
+    "s_9107abf840b7a7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d5abaa15-5185-40dd-a882-2236e71daddd",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
