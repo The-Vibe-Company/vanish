@@ -394,7 +394,7 @@ const html = `<!DOCTYPE html>
   -H</span> <span class="url">"Content-Type: application/json"</span> <span class="flag">\\
   -d</span> <span class="url">'{"name":"demo","rootPath":"index.html","fileCount":3,"totalBytes":8120}'</span> <span class="flag">\\
   </span><span class="url">https://vanish.sh/sites</span>
-<span class="output">{"id":"k8m2q9z4p1ad","token":"vnst_...","url":"https://k8m2q9z4p1ad.vanish.sh/"}</span></code>
+<span class="output">{"id":"k8m2q9z4p1ad","token":"vnst_...","url":"https://quiet-river-42.vanish.sh/"}</span></code>
   </div>
 
   <p>Upload site files and publish:</p>
@@ -421,6 +421,12 @@ const html = `<!DOCTYPE html>
   -H</span> <span class="url">"Authorization: Bearer $VANISH_KEY"</span> <span class="flag">\\
   -H</span> <span class="url">"X-Expires-Days: 90"</span> <span class="flag">\\
   </span><span class="url">https://vanish.sh/upload</span></code>
+  </div>
+
+  <p>Replace an existing mini-site (owner only):</p>
+  <div class="cmd">
+    <code><span class="prompt">$ </span>vanish site ./demo <span class="flag">--root</span> index.html <span class="flag">--update</span> quiet-river-42
+<span class="comment"># keeps the public URL and swaps in the local folder</span></code>
   </div>
 
   <p>Download:</p>
@@ -498,7 +504,7 @@ const html = `<!DOCTYPE html>
     </tbody>
   </table>
   <p style="margin-top: 0.8rem;">
-    Anonymous sites: 10 MB, 24h, random subdomain.
+    Anonymous sites: 10 MB, 24h, readable random subdomain.
     <a href="/auth/github">Sign in with GitHub</a> for 48h retention and 50 MB total storage.
   </p>
 </section>

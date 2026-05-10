@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { basename, extname, isAbsolute, relative, resolve } from 'node:path';
-import type { CreateSiteResult } from '../lib/api-client.js';
+import type { CreateReplacementResult, CreateSiteResult } from '../lib/api-client.js';
 import { loadConfig } from '../lib/config.js';
 import { VanishClient } from '../lib/api-client.js';
 import { copyToClipboard } from '../lib/clipboard.js';
@@ -18,6 +18,7 @@ export interface SiteOptions {
   json?: boolean;
   clipboard?: boolean;
   days?: number;
+  update?: string;
 }
 
 interface SiteFile {
@@ -73,8 +74,13 @@ export async function siteCommand(folder: string, options: SiteOptions): Promise
   const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
   const config = loadConfig();
   const client = new VanishClient(config);
+  const isUpdate = Boolean(options.update);
 
   if (!config.api_key) {
+    if (isUpdate) {
+      console.error('Error: --update requires login. Use: vanish login');
+      process.exit(1);
+    }
     if (options.slug) {
       console.error('Error: --slug requires a Pro account. Login and upgrade with: vanish login && vanish upgrade');
       process.exit(1);
@@ -99,7 +105,7 @@ export async function siteCommand(folder: string, options: SiteOptions): Promise
         console.error(`Error: ${options.slug ? '--slug' : '--days'} requires a Pro account. Current tier: ${me.tier}.`);
         process.exit(1);
       }
-      if (me.limits.maxTotalStorage && me.stats.total_bytes + totalBytes > me.limits.maxTotalStorage) {
+      if (!isUpdate && me.limits.maxTotalStorage && me.stats.total_bytes + totalBytes > me.limits.maxTotalStorage) {
         console.error(
           `Error: Storage quota exceeded. ${formatBytes(me.stats.total_bytes)} used of ${formatBytes(me.limits.maxTotalStorage)}; ` +
           `this site adds ${formatBytes(totalBytes)}.`,
@@ -107,27 +113,31 @@ export async function siteCommand(folder: string, options: SiteOptions): Promise
         process.exit(1);
       }
     } catch (err) {
-      if (options.slug || options.days || totalBytes > ANONYMOUS_SITE_MAX_BYTES) {
+      if (isUpdate || options.slug || options.days || totalBytes > ANONYMOUS_SITE_MAX_BYTES) {
         console.error(err instanceof Error ? err.message : String(err));
         process.exit(1);
       }
     }
   }
 
-  const spinner = new Spinner(`Creating site (${files.length} files, ${formatBytes(totalBytes)})`);
+  const spinner = new Spinner(`${isUpdate ? 'Updating' : 'Creating'} site (${files.length} files, ${formatBytes(totalBytes)})`);
   const shouldCopy = options.clipboard !== false;
-  let draft: CreateSiteResult | null = null;
+  let draft: CreateSiteResult | CreateReplacementResult | null = null;
 
   try {
     spinner.start();
-    draft = await client.createSite({
+    const draftInput = {
       name: basename(folderPath),
       rootPath,
       fileCount: files.length,
       totalBytes,
       slug: options.slug,
       days: options.days,
-    });
+    };
+
+    draft = isUpdate
+      ? await client.createSiteReplacement(options.update!, draftInput)
+      : await client.createSite(draftInput);
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -135,8 +145,13 @@ export async function siteCommand(folder: string, options: SiteOptions): Promise
       await client.uploadSiteFile(draft.id, draft.token, file.absPath, file.sitePath);
     }
 
-    spinner.update('Publishing site');
-    const published = await client.publishSite(draft.id, draft.token);
+    spinner.update(isUpdate ? 'Publishing update' : 'Publishing site');
+    const published = isUpdate
+      ? await client.publishSiteReplacement(options.update!, draft.id, draft.token, {
+        slug: options.slug,
+        days: options.days,
+      })
+      : await client.publishSite(draft.id, draft.token);
     spinner.stop();
 
     const result = {

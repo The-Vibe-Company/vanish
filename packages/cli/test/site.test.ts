@@ -9,8 +9,11 @@ const mocks = vi.hoisted(() => ({
   client: {
     me: vi.fn(),
     createSite: vi.fn(),
+    createSiteReplacement: vi.fn(),
     uploadSiteFile: vi.fn(),
     publishSite: vi.fn(),
+    publishSiteReplacement: vi.fn(),
+    patchSite: vi.fn(),
     deleteSite: vi.fn(),
   },
 }));
@@ -56,11 +59,30 @@ describe('siteCommand', () => {
       maxBytes: 10 * 1024 * 1024,
       expires: '2026-05-11T00:00:00.000Z',
     });
+    mocks.client.createSiteReplacement.mockResolvedValue({
+      id: 'draft456',
+      token: 'vnst_update',
+      targetId: 'site123',
+      rootPath: 'index.html',
+      fileCount: 2,
+      maxFiles: 500,
+      maxBytes: 50 * 1024 * 1024,
+      expires: '2026-05-11T00:00:00.000Z',
+    });
     mocks.client.uploadSiteFile.mockResolvedValue(undefined);
     mocks.client.publishSite.mockResolvedValue({
       ok: true,
       id: 'site123',
       url: 'https://site123.vanish.sh/',
+      rootPath: 'index.html',
+      size: 28,
+      fileCount: 2,
+      expires: '2026-05-11T00:00:00.000Z',
+    });
+    mocks.client.publishSiteReplacement.mockResolvedValue({
+      ok: true,
+      id: 'site123',
+      url: 'https://quiet-river-42.vanish.sh/',
       rootPath: 'index.html',
       size: 28,
       fileCount: 2,
@@ -130,5 +152,53 @@ describe('siteCommand', () => {
     await siteCommand(dir, { root: 'index.html', json: true, clipboard: false });
 
     expect(mocks.client.createSite).toHaveBeenCalled();
+  });
+
+  it('updates an existing site by uploading a replacement draft', async () => {
+    mocks.loadConfig.mockReturnValue({ api_url: 'https://vanish.test', api_key: 'vnsh_key' });
+    mocks.client.me.mockResolvedValue({
+      id: 'user1',
+      username: 'stan',
+      email: null,
+      tier: 'free',
+      created_at: '2026-05-10T00:00:00.000Z',
+      stats: { total_uploads: 0, total_sites: 1, total_bytes: 40 },
+      limits: {
+        maxFileSize: 50 * 1024 * 1024,
+        maxSiteSize: 50 * 1024 * 1024,
+        maxSiteFiles: 500,
+        maxTotalStorage: 50 * 1024 * 1024,
+        maxExpiryHours: 48,
+        imageOnly: false,
+        customTtl: false,
+        rateLimit: 50,
+      },
+    });
+
+    await siteCommand(dir, { root: 'index.html', update: 'site123', json: true, clipboard: false });
+
+    expect(mocks.client.createSiteReplacement).toHaveBeenCalledWith('site123', expect.objectContaining({
+      rootPath: 'index.html',
+      fileCount: 2,
+      totalBytes: expect.any(Number),
+    }));
+    expect(mocks.client.uploadSiteFile).toHaveBeenCalledTimes(2);
+    expect(mocks.client.publishSiteReplacement).toHaveBeenCalledWith('site123', 'draft456', 'vnst_update', {
+      slug: undefined,
+      days: undefined,
+    });
+    expect(JSON.parse(String(logSpy.mock.calls[0][0]))).toMatchObject({
+      url: 'https://quiet-river-42.vanish.sh/',
+      id: 'site123',
+      rootPath: 'index.html',
+      fileCount: 2,
+    });
+  });
+
+  it('requires login for site updates', async () => {
+    await expect(siteCommand(dir, { root: 'index.html', update: 'site123' })).rejects.toThrow('exit 1');
+
+    expect(mocks.client.createSiteReplacement).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith('Error: --update requires login. Use: vanish login');
   });
 });

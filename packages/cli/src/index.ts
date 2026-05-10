@@ -37,6 +37,7 @@ program
   .description('Upload a static folder as a temporary mini-site')
   .argument('<folder>', 'folder to publish')
   .requiredOption('--root <file>', 'Root file to serve at /, relative to the folder')
+  .option('--update <site>', 'Replace an existing owned site by ID or slug')
   .option('--slug <slug>', 'Custom vanish.sh subdomain slug (Pro only)')
   .option('--days <days>', 'Custom retention in days (Pro only, 1-365)', parseInt)
   .option('--json', 'Output as JSON')

@@ -9,6 +9,7 @@ const BATCH_SIZE = 100;
 export async function handleCleanup(env: Env): Promise<void> {
   let totalDeleted = 0;
   let totalSitesDeleted = 0;
+  let totalPendingObjectsDeleted = 0;
 
   while (true) {
     // Find expired uploads not yet cleaned up
@@ -84,7 +85,32 @@ export async function handleCleanup(env: Env): Promise<void> {
     DELETE FROM rate_limits WHERE created_at < datetime('now', '-2 hours')
   `).run();
 
-  console.log(`Cleanup complete: ${totalDeleted} expired uploads deleted, ${totalSitesDeleted} expired sites deleted`);
+  while (true) {
+    const pendingObjects = await env.DB.prepare(`
+      SELECT r2_key FROM pending_r2_deletions
+      LIMIT ?
+    `).bind(BATCH_SIZE).all<{ r2_key: string }>();
+
+    const keys = pendingObjects.results || [];
+    if (keys.length === 0) {
+      break;
+    }
+
+    for (const { r2_key: key } of keys) {
+      await env.BUCKET.delete(key);
+      await env.DB.prepare('DELETE FROM pending_r2_deletions WHERE r2_key = ?').bind(key).run();
+      totalPendingObjectsDeleted++;
+    }
+
+    if (keys.length < BATCH_SIZE) {
+      break;
+    }
+  }
+
+  console.log(
+    `Cleanup complete: ${totalDeleted} expired uploads deleted, ` +
+    `${totalSitesDeleted} expired sites deleted, ${totalPendingObjectsDeleted} pending objects deleted`
+  );
 }
 
 async function deleteSiteFiles(env: Env, siteId: string): Promise<void> {

@@ -22,6 +22,7 @@ npx vanish-cli site ./demo --root index.html
 - Anonymous sites expire in 24h and are limited to 10 MB and 100 files per site.
 - Logged-in free accounts expire in 48h and share the 50 MB total storage quota across files and sites, with 500 files per site.
 - Pro accounts get 30-day default retention, `--days` up to 365, 1 GB total storage, 1,000 files per site, and custom `*.vanish.sh` slugs.
+- Default site URLs use readable random subdomains such as `quiet-river-42.vanish.sh`.
 
 ## Mini-Site Options
 
@@ -30,10 +31,13 @@ vanish site ./demo --root index.html --json
 vanish site ./demo --root README.md
 vanish site ./demo --root index.html --slug agent-demo   # Pro only
 vanish site ./demo --root index.html --days 90           # Pro only
+vanish site ./demo --root index.html --update quiet-river-42
 vanish site ./demo --root index.html --no-clipboard
 ```
 
 Default output is the public URL, copied to clipboard.
+
+`--update` requires login and replaces the full site contents from the local folder. Free accounts can update content; Pro accounts can also combine `--update` with `--slug` or `--days`.
 
 `--json` returns:
 

@@ -23,6 +23,17 @@ export interface CreateSiteResult {
   expires: string | null;
 }
 
+export interface CreateReplacementResult {
+  id: string;
+  token: string;
+  targetId: string;
+  rootPath: string;
+  fileCount: number;
+  maxFiles: number;
+  maxBytes: number | null;
+  expires: string | null;
+}
+
 export interface PublishSiteResult {
   ok: true;
   id: string;
@@ -127,6 +138,27 @@ export class VanishClient {
     return response.json() as Promise<CreateSiteResult>;
   }
 
+  async createSiteReplacement(siteIdOrSlug: string, input: {
+    name: string;
+    rootPath: string;
+    fileCount: number;
+    totalBytes: number;
+    slug?: string;
+    days?: number;
+  }): Promise<CreateReplacementResult> {
+    const response = await fetch(`${this.apiUrl}/sites/${encodeURIComponent(siteIdOrSlug)}/replacements`, {
+      method: 'POST',
+      headers: this.jsonHeaders(),
+      body: JSON.stringify(input),
+    });
+
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to create site replacement');
+    }
+
+    return response.json() as Promise<CreateReplacementResult>;
+  }
+
   async uploadSiteFile(siteId: string, token: string, filePath: string, sitePath: string): Promise<void> {
     const fileBuffer = readFileSync(filePath);
     const headers: Record<string, string> = {
@@ -168,6 +200,44 @@ export class VanishClient {
     }
 
     return response.json() as Promise<PublishSiteResult>;
+  }
+
+  async publishSiteReplacement(
+    siteIdOrSlug: string,
+    draftId: string,
+    token: string,
+    options?: { slug?: string; days?: number },
+  ): Promise<PublishSiteResult> {
+    const headers: Record<string, string> = {
+      ...this.jsonHeaders(),
+      'X-Site-Token': token,
+    };
+
+    const response = await fetch(`${this.apiUrl}/sites/${encodeURIComponent(siteIdOrSlug)}/replacements/${draftId}/publish`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(options || {}),
+    });
+
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to publish site replacement');
+    }
+
+    return response.json() as Promise<PublishSiteResult>;
+  }
+
+  async patchSite(siteIdOrSlug: string, input: { rootPath?: string; slug?: string; days?: number }): Promise<unknown> {
+    const response = await fetch(`${this.apiUrl}/sites/${encodeURIComponent(siteIdOrSlug)}`, {
+      method: 'PATCH',
+      headers: this.jsonHeaders(),
+      body: JSON.stringify(input),
+    });
+
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to update site');
+    }
+
+    return response.json();
   }
 
   async deleteSite(siteId: string, token: string): Promise<void> {
