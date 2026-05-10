@@ -1,0 +1,19 @@
+packages/worker/test/sites-route.test.ts
+  s_19d5343fd2bf1b::t_27f41864ee0294 175,182-195,197
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "9ea3af3f37d320b47eba7c7d64d1d390a9571825",
+  "prompts": {},
+  "sessions": {
+    "s_19d5343fd2bf1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e1205-b12b-7f90-8ce7-f00853284c46",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
