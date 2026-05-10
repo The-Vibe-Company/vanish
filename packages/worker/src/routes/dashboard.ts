@@ -1975,6 +1975,7 @@ code { font-family: var(--mono); }
     if (!item.hasExpiry) return 'none';
     var remaining = item.expires - Date.now();
     if (remaining <= 0) return 'expired';
+    if (remaining < 30 * 60 * 1000) return 'critical';
     if (remaining < 6 * 3600 * 1000) return 'expiring';
     return 'live';
   }
