@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.14](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.13...@vanish/worker-v0.1.14) (2026-05-10)
+
+
+### Bug Fixes
+
+* **auth:** redirect sign-in to dashboard ([#43](https://github.com/The-Vibe-Company/vanish/issues/43)) ([cc11c8d](https://github.com/The-Vibe-Company/vanish/commit/cc11c8ddd0bd4406c85aae0dec9dc309ccde2f7b))
+* **dashboard:** stop mini-sites refresh loop ([#42](https://github.com/The-Vibe-Company/vanish/issues/42)) ([5df73e3](https://github.com/The-Vibe-Company/vanish/commit/5df73e3679b10fd50e73d8ab508a25079cdd475f))
+
 ## [0.1.13](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.12...@vanish/worker-v0.1.13) (2026-05-10)
 
 
