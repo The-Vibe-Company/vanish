@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.12](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.11...@vanish/worker-v0.1.12) (2026-05-10)
+
+
+### Features
+
+* **landing:** redesign as agent-first mini-site distribution channel ([#37](https://github.com/The-Vibe-Company/vanish/issues/37)) ([f5b74c9](https://github.com/The-Vibe-Company/vanish/commit/f5b74c906ad04dd70091415b2e79befce20748d5))
+
 ## [0.1.11](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.10...@vanish/worker-v0.1.11) (2026-05-10)
 
 
