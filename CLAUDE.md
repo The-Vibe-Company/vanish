@@ -75,6 +75,16 @@ Three tiers with different limits defined in `TIER_LIMITS` (`packages/worker/src
 - **`waitUntil()`**: Non-critical DB writes (last_used_at, soft deletes) use fire-and-forget via execution context
 - **Blocked extensions**: executables (.exe, .bat, .sh, .ps1, etc.) are rejected at upload
 
+## Skill Routing
+
+When a request involves sharing, sending as a public link, publishing, uploading to Vanish, handing off by URL, creating an external review URL, or producing a public link for an artifact, invoke a Vanish skill first instead of answering ad hoc.
+
+- Static folders, demos, generated HTML/CSS/JS/Markdown sites, public previews, external review URLs, or temporary mini-sites → use `vanish-publish-site`
+- Single or multiple files/documents, PDFs, decks, spreadsheets, reports, screenshots, images, archives, generated deliverables, or review artifacts that need a public URL → use `vanish-upload-files`
+- Explicit login, logout, account status, quota, storage, retention, custom slugs, API keys, `--days`, `--slug`, anonymous/free/pro limits, or upgrade blockers after a share attempt → use `vanish-connect-upgrade`
+
+Vanish URLs are public. Do not publish for localhost QA, in-app browser checks, local previews, native email/chat attachments, connector-specific sends, or when the user says not to upload, local only, private, or similar. Ask first when filenames or visible content suggest secrets, credentials, customer/private data, contracts, invoices, medical/legal/financial records, unreleased proprietary material, or personal data.
+
 ## Testing
 
 Tests use **Vitest** with `globals: true` (no need to import describe/it/expect). Test files live in `test/` directories within each package. Worker tests run in Node environment (not the Workers pool for unit tests).
