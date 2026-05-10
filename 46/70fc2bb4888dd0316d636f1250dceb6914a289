@@ -1,0 +1,31 @@
+packages/worker/src/routes/auth.ts
+  s_be5380f45316a9::t_99f8faa4e590c2 346-348
+packages/worker/test/dashboard-route.test.ts
+  s_be5380f45316a9::t_325153e999f7bc 1-25
+packages/worker/src/routes/landing.ts
+  s_be5380f45316a9::t_99f8faa4e590c2 502,531,685,701
+packages/worker/test/landing-route.test.ts
+  s_be5380f45316a9::t_325153e999f7bc 23
+  s_be5380f45316a9::t_008f7bd051b8af 24
+packages/worker/src/routes/dashboard.ts
+  s_be5380f45316a9::t_99f8faa4e590c2 761-770,772-777,779-780,1029-1044,1809-1814,2009-2014
+  s_be5380f45316a9::t_a846a99a090295 754,760,771,778,781
+packages/worker/test/auth-route.test.ts
+  s_be5380f45316a9::t_325153e999f7bc 99-120
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "4670fc2bb4888dd0316d636f1250dceb6914a289",
+  "prompts": {},
+  "sessions": {
+    "s_be5380f45316a9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e1267-77b0-7163-b080-c3ab44739d99",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
