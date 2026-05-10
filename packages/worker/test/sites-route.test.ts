@@ -172,14 +172,29 @@ describe('site routes', () => {
     expect(bucket.objects.size).toBe(0);
   });
 
-  it('records privacy-light publish and first-serve events without paths or tokens', async () => {
+  it('records privacy-light publish start events without paths or tokens', async () => {
     env.PRODUCT_EVENTS = 'true';
     const draft = await createSite(env, {
       rootPath: 'index.html',
       fileCount: 1,
       totalBytes: 12,
     });
+
+    expect(db.events.map(event => event.name)).toEqual(['site_publish_started']);
+    expect(db.events[0].site_id).toBe(draft.id);
+    expect(db.events[0].properties).not.toContain('index.html');
+    expect(db.events[0].properties).not.toContain('rootPath');
+    expect(db.events[0].properties).not.toContain('token');
+  });
+
+  it('records privacy-light publish success and first-serve events without paths or tokens', async () => {
+    const draft = await createSite(env, {
+      rootPath: 'index.html',
+      fileCount: 1,
+      totalBytes: 12,
+    });
     await uploadSiteFile(env, draft.id, draft.token, 'index.html', '<h1>ok</h1>');
+    env.PRODUCT_EVENTS = 'true';
 
     const publish = await request(env, `/sites/${draft.id}/publish`, {
       method: 'POST',
@@ -191,7 +206,6 @@ describe('site routes', () => {
     await request(env, `/s/${draft.id}/`);
 
     expect(db.events.map(event => event.name)).toEqual([
-      'site_publish_started',
       'site_publish_succeeded',
       'site_first_served',
     ]);
