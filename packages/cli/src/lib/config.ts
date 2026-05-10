@@ -9,7 +9,7 @@ export interface VanishConfig {
 
 const DEFAULT_API_URL = 'https://vanish.sh';
 
-function getConfigDir(): string {
+export function getConfigDir(): string {
   const dir = join(homedir(), '.config', 'vanish');
   return dir;
 }

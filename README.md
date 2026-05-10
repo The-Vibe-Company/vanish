@@ -131,6 +131,7 @@ vanish status      # show storage usage and limits
 vanish ls          # list file uploads
 vanish rm <id>     # delete a file upload
 vanish upgrade     # Pro slugs and longer retention
+vanish update      # update the CLI to the latest version
 ```
 
 ## Configuration

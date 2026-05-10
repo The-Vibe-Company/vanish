@@ -83,6 +83,7 @@ vanish whoami      # show username and tier
 vanish status      # show storage usage, tier, and limits
 vanish logout      # remove saved API key
 vanish upgrade     # Pro slugs and longer retention
+vanish update      # update the CLI to the latest version
 ```
 
 ## Upload Management
