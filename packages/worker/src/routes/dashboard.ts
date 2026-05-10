@@ -798,7 +798,8 @@ code { font-family: var(--mono); }
     filesFilter: 'all',
     filesQuery: '',
     filesView: 'list',
-    revealKey: null
+    revealKey: null,
+    timerBuckets: {}
   };
 
   var rootEl = document.getElementById('root');
@@ -841,6 +842,12 @@ code { font-family: var(--mono); }
       return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
     }
     return String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+  }
+  function countdownAttr(expires, mode, tone) {
+    if (!expires) return '';
+    var out = ' data-countdown-expires="' + attr(expires) + '" data-countdown-mode="' + attr(mode || 'until') + '"';
+    if (tone) out += ' data-countdown-tone="' + attr(tone) + '"';
+    return out;
   }
   function fmtAgo(ts) {
     if (ts == null) return 'never';
@@ -1000,6 +1007,7 @@ code { font-family: var(--mono); }
       state.sites = (rs[1].sites || []).map(normalizeSite);
       state.uploads = (rs[2].uploads || []).map(normalizeUpload);
       state.keys = (rs[3].keys || []);
+      refreshTimerBuckets();
       render();
     });
   }
@@ -1167,7 +1175,7 @@ code { font-family: var(--mono); }
           '<div class="er-mid">' + fmtBytes(item.bytes) + '</div>' +
           '<div class="er-time">' +
             '<span class="er-time-label">vanishes in</span>' +
-            '<span class="er-time-val">' + fmtTimeUntil(remaining) + '</span>' +
+            '<span class="er-time-val"' + countdownAttr(item.expires, 'until') + '>' + fmtTimeUntil(remaining) + '</span>' +
           '</div>' +
           '<div class="er-actions">' +
             '<button class="btn ghost btn-sm" data-action="copy" data-text="' + attr(item.url) + '" data-msg="URL copied">copy url</button>' +
@@ -1350,11 +1358,11 @@ code { font-family: var(--mono); }
     var pulse = status !== 'expired' ? ' dot-pulse' : '';
     var timeHtml;
     if (s.expired) {
-      timeHtml = '<div class="site-time-label">expired</div><div class="site-time-val expired">' + fmtAgo(s.expires) + '</div>';
+      timeHtml = '<div class="site-time-label">expired</div><div class="site-time-val expired"' + countdownAttr(s.expires, 'ago') + '>' + fmtAgo(s.expires) + '</div>';
     } else if (!s.hasExpiry) {
       timeHtml = '<div class="site-time-label">retention</div><div class="site-time-val">∞</div>';
     } else {
-      timeHtml = '<div class="site-time-label">vanishes in</div><div class="site-time-val ' + status + '">' + fmtTimeUntil(s.expires - Date.now()) + '</div>';
+      timeHtml = '<div class="site-time-label">vanishes in</div><div class="site-time-val ' + status + '"' + countdownAttr(s.expires, 'until', status) + '>' + fmtTimeUntil(s.expires - Date.now()) + '</div>';
     }
     var detail = '';
     if (open) {
@@ -1498,8 +1506,8 @@ code { font-family: var(--mono); }
     var remaining = f.expires - Date.now();
     var expired = f.expired;
     var soon = f.hasExpiry && !expired && remaining < 6 * 3600000;
-    var timeCell = expired ? '<span class="dim">expired</span>' :
-      (!f.hasExpiry ? '<span class="dim">∞</span>' : (soon ? '<span class="warn">' + fmtTimeUntil(remaining) + '</span>' : fmtTimeUntil(remaining)));
+    var timeCell = expired ? '<span class="dim"' + countdownAttr(f.expires, 'expired-label') + '>expired</span>' :
+      (!f.hasExpiry ? '<span class="dim">∞</span>' : '<span class="' + (soon ? 'warn' : '') + '"' + countdownAttr(f.expires, 'until', soon ? 'warn' : '') + '>' + fmtTimeUntil(remaining) + '</span>');
     var md = '![' + f.name + '](' + f.url + ')';
     return '<div class="file-row' + (expired ? ' expired' : '') + '">' +
       '<div class="file-name">' + fileIconSvg(f.kind) + '<span class="fn">' + escapeHtml(f.name) + '</span></div>' +
@@ -1528,7 +1536,7 @@ code { font-family: var(--mono); }
       '<div class="fc-name" title="' + attr(f.name) + '">' + escapeHtml(f.name) + '</div>' +
       '<div class="fc-meta">' +
         '<span>' + fmtBytes(f.bytes) + '</span><span class="fc-sep">·</span>' +
-        '<span class="' + (soon ? 'warn' : '') + '">' + timeCell + '</span>' +
+        '<span class="' + (soon ? 'warn' : '') + '"' + (f.hasExpiry ? countdownAttr(f.expires, expired ? 'expired-label' : 'until', soon ? 'warn' : '') : '') + '>' + timeCell + '</span>' +
       '</div>' +
       '<div class="fc-actions">' +
         '<button class="btn ghost btn-xs" data-action="copy" data-text="' + attr(f.url) + '" data-msg="URL copied">copy url</button>' +
@@ -1963,10 +1971,58 @@ code { font-family: var(--mono); }
   });
 
   // — Ticker (live countdowns) —
+  function timerBucket(item) {
+    if (!item.hasExpiry) return 'none';
+    var remaining = item.expires - Date.now();
+    if (remaining <= 0) return 'expired';
+    if (remaining < 6 * 3600 * 1000) return 'expiring';
+    return 'live';
+  }
+  function refreshTimerBuckets() {
+    var buckets = {};
+    state.sites.forEach(function(s) { buckets['site:' + s.id] = timerBucket(s); });
+    state.uploads.forEach(function(f) { buckets['file:' + f.id] = timerBucket(f); });
+    state.timerBuckets = buckets;
+  }
+  function hasTimerBoundaryChange() {
+    var changed = false;
+    state.sites.forEach(function(s) {
+      var key = 'site:' + s.id;
+      var next = timerBucket(s);
+      if (state.timerBuckets[key] && state.timerBuckets[key] !== next) changed = true;
+      s.expired = s.hasExpiry && s.expires <= Date.now();
+    });
+    state.uploads.forEach(function(f) {
+      var key = 'file:' + f.id;
+      var next = timerBucket(f);
+      if (state.timerBuckets[key] && state.timerBuckets[key] !== next) changed = true;
+      f.expired = f.hasExpiry && f.expires <= Date.now();
+    });
+    return changed;
+  }
+  function updateVisibleCountdowns() {
+    document.querySelectorAll('[data-countdown-expires]').forEach(function(el) {
+      var expires = Number(el.getAttribute('data-countdown-expires'));
+      if (!expires) return;
+      var mode = el.getAttribute('data-countdown-mode') || 'until';
+      if (mode === 'ago') {
+        el.textContent = fmtAgo(expires);
+      } else if (mode === 'expired-label') {
+        el.textContent = expires <= Date.now() ? 'expired' : fmtTimeUntil(expires - Date.now());
+      } else {
+        el.textContent = fmtTimeUntil(expires - Date.now());
+      }
+    });
+  }
   setInterval(function() {
     if (!state.me) return;
     if (state.section === 'overview' || state.section === 'sites' || state.section === 'files') {
-      rerenderMain();
+      if (hasTimerBoundaryChange()) {
+        refreshTimerBuckets();
+        rerenderMain();
+      } else {
+        updateVisibleCountdowns();
+      }
     }
   }, 1000);
 
