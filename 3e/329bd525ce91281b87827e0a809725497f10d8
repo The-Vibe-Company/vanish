@@ -1,0 +1,29 @@
+packages/worker/test/sites-route.test.ts
+  s_19d5343fd2bf1b::t_09773ccc80969d 406-411,414-415
+packages/cli/src/commands/login.ts
+  s_19d5343fd2bf1b::t_ba0f3182b6a38c 12-14,17-22,45
+packages/cli/test/login.test.ts
+  s_19d5343fd2bf1b::t_09773ccc80969d 22,32,69-80
+packages/worker/test/billing-route.test.ts
+  s_19d5343fd2bf1b::t_09773ccc80969d 93-100,178-180
+packages/worker/src/routes/sites.ts
+  s_19d5343fd2bf1b::t_ba0f3182b6a38c 709,831-832,836,840
+packages/worker/src/routes/billing.ts
+  s_19d5343fd2bf1b::t_ba0f3182b6a38c 183-195,203-213
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "3e329bd525ce91281b87827e0a809725497f10d8",
+  "prompts": {},
+  "sessions": {
+    "s_19d5343fd2bf1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e1205-b12b-7f90-8ce7-f00853284c46",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
