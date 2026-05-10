@@ -415,7 +415,7 @@ function isVerifiableAssetPath(path: string): boolean {
 }
 
 function normalizeAssetPath(value: string): string | null {
-  const raw = value.split(/[?#]/)[0];
+  const raw = value.split(/[?#]/)[0].replaceAll('\\', '/');
   const segments: string[] = [];
 
   for (const segment of raw.replace(/^\/+/, '').split('/')) {

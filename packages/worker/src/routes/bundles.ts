@@ -14,7 +14,6 @@ import {
   getIdempotencyOwner,
   getIdempotentReplay,
   clearIdempotencyReservation,
-  completeIdempotentResponse,
   reserveIdempotencyKey,
   structuredError,
 } from '../lib/api-response.js';
@@ -110,27 +109,6 @@ bundles.post('/bundles', rateLimitMiddleware, async (c) => {
   const uploadToken = BUNDLE_TOKEN_PREFIX + nanoid(32);
   const expiresAt = calculateExpiry(tier, customDays);
   const name = sanitizeBundleName(payload.name || id);
-  if (idempotencyKey) {
-    const reservation = await reserveIdempotencyKey(c.env, 'bundle-create', idempotencyOwner, idempotencyKey);
-    if (!reservation.ok) {
-      return c.json(reservation.body, reservation.status as 201 | 409);
-    }
-  }
-
-  try {
-    await c.env.DB.prepare(`
-      INSERT INTO bundles (id, user_id, name, upload_token, size_bytes, file_count, expected_file_count, expires_at)
-      VALUES (?, ?, ?, ?, 0, 0, ?, ?)
-    `).bind(id, user?.id || null, name, uploadToken, plannedFileCount, expiresAt).run();
-  } catch (err) {
-    if (idempotencyKey) {
-      await clearIdempotencyReservation(c.env, 'bundle-create', idempotencyOwner, idempotencyKey).catch(clearErr => {
-        console.error('Failed to clear bundle create idempotency reservation:', clearErr);
-      });
-    }
-    throw err;
-  }
-
   const result = {
     id,
     token: uploadToken,
@@ -143,11 +121,41 @@ bundles.post('/bundles', rateLimitMiddleware, async (c) => {
   };
 
   if (idempotencyKey) {
-    try {
-      await completeIdempotentResponse(c.env, 'bundle-create', idempotencyOwner, idempotencyKey, 201, result);
-    } catch (err) {
-      console.error('Failed to record bundle create idempotency response:', err);
+    const reservation = await reserveIdempotencyKey(c.env, 'bundle-create', idempotencyOwner, idempotencyKey);
+    if (!reservation.ok) {
+      return c.json(reservation.body, reservation.status as 201 | 409);
     }
+  }
+
+  try {
+    const statements: D1PreparedStatement[] = [
+      c.env.DB.prepare(`
+        INSERT INTO bundles (id, user_id, name, upload_token, size_bytes, file_count, expected_file_count, expires_at)
+        VALUES (?, ?, ?, ?, 0, 0, ?, ?)
+      `).bind(id, user?.id || null, name, uploadToken, plannedFileCount, expiresAt),
+    ];
+
+    if (idempotencyKey) {
+      statements.push(c.env.DB.prepare(`
+        UPDATE idempotency_keys
+        SET status = ?,
+            response_json = ?,
+            expires_at = datetime('now', '+48 hours')
+        WHERE scope = ?
+          AND owner = ?
+          AND idempotency_key = ?
+          AND status = 409
+      `).bind(201, JSON.stringify(result), 'bundle-create', idempotencyOwner, idempotencyKey));
+    }
+
+    await c.env.DB.batch(statements);
+  } catch (err) {
+    if (idempotencyKey) {
+      await clearIdempotencyReservation(c.env, 'bundle-create', idempotencyOwner, idempotencyKey).catch(clearErr => {
+        console.error('Failed to clear bundle create idempotency reservation:', clearErr);
+      });
+    }
+    throw err;
   }
 
   return c.json(result, 201);

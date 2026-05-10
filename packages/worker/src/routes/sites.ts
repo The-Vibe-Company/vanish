@@ -16,7 +16,6 @@ import {
   getIdempotencyOwner,
   getIdempotentReplay,
   clearIdempotencyReservation,
-  completeIdempotentResponse,
   reserveIdempotencyKey,
   structuredError,
 } from '../lib/api-response.js';
@@ -191,50 +190,7 @@ sites.post('/sites', rateLimitMiddleware, async (c) => {
   const uploadToken = SITE_TOKEN_PREFIX + nanoid(32);
   const expiresAt = calculateExpiry(tier, customDays);
   const name = sanitizeSiteName(payload.name || id);
-  if (idempotencyKey) {
-    const reservation = await reserveIdempotencyKey(c.env, 'site-create', idempotencyOwner, idempotencyKey);
-    if (!reservation.ok) {
-      return c.json(reservation.body, reservation.status as 201 | 409);
-    }
-  }
-
-  try {
-    await c.env.DB.prepare(`
-      INSERT INTO sites (id, user_id, name, root_path, slug, upload_token, size_bytes, file_count, expected_file_count, expires_at)
-      VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
-    `).bind(id, user?.id || null, name, rootPath, slug, uploadToken, plannedFileCount, expiresAt).run();
-
-    if (user && channel) {
-      await c.env.DB.prepare(`
-        INSERT OR REPLACE INTO site_channels (user_id, channel, site_id, updated_at)
-        VALUES (?, ?, ?, datetime('now'))
-      `).bind(user.id, channel, id).run();
-    }
-
-    await logProductEvent(c.env, {
-      name: 'site_publish_started',
-      userId: user?.id || null,
-      siteId: id,
-      properties: {
-        tier,
-        file_count: plannedFileCount,
-        total_bytes: totalBytes,
-        max_bytes: tier === 'anonymous' ? TIER_LIMITS.anonymous.maxSiteSize : limits.maxTotalStorage,
-        slug_requested: Boolean(payload.slug),
-        custom_ttl_requested: customDays !== undefined,
-      },
-    });
-  } catch (err) {
-    if (idempotencyKey) {
-      await clearIdempotencyReservation(c.env, 'site-create', idempotencyOwner, idempotencyKey).catch(clearErr => {
-        console.error('Failed to clear site create idempotency reservation:', clearErr);
-      });
-    }
-    throw err;
-  }
-
   const identifier = slug || id;
-
   const result = {
     id,
     token: uploadToken,
@@ -250,12 +206,63 @@ sites.post('/sites', rateLimitMiddleware, async (c) => {
   };
 
   if (idempotencyKey) {
-    try {
-      await completeIdempotentResponse(c.env, 'site-create', idempotencyOwner, idempotencyKey, 201, result);
-    } catch (err) {
-      console.error('Failed to record site create idempotency response:', err);
+    const reservation = await reserveIdempotencyKey(c.env, 'site-create', idempotencyOwner, idempotencyKey);
+    if (!reservation.ok) {
+      return c.json(reservation.body, reservation.status as 201 | 409);
     }
   }
+
+  try {
+    const statements: D1PreparedStatement[] = [
+      c.env.DB.prepare(`
+        INSERT INTO sites (id, user_id, name, root_path, slug, upload_token, size_bytes, file_count, expected_file_count, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
+      `).bind(id, user?.id || null, name, rootPath, slug, uploadToken, plannedFileCount, expiresAt),
+    ];
+
+    if (user && channel) {
+      statements.push(c.env.DB.prepare(`
+        INSERT OR REPLACE INTO site_channels (user_id, channel, site_id, updated_at)
+        VALUES (?, ?, ?, datetime('now'))
+      `).bind(user.id, channel, id));
+    }
+
+    if (idempotencyKey) {
+      statements.push(c.env.DB.prepare(`
+        UPDATE idempotency_keys
+        SET status = ?,
+            response_json = ?,
+            expires_at = datetime('now', '+48 hours')
+        WHERE scope = ?
+          AND owner = ?
+          AND idempotency_key = ?
+          AND status = 409
+      `).bind(201, JSON.stringify(result), 'site-create', idempotencyOwner, idempotencyKey));
+    }
+
+    await c.env.DB.batch(statements);
+  } catch (err) {
+    if (idempotencyKey) {
+      await clearIdempotencyReservation(c.env, 'site-create', idempotencyOwner, idempotencyKey).catch(clearErr => {
+        console.error('Failed to clear site create idempotency reservation:', clearErr);
+      });
+    }
+    throw err;
+  }
+
+  await logProductEvent(c.env, {
+    name: 'site_publish_started',
+    userId: user?.id || null,
+    siteId: id,
+    properties: {
+      tier,
+      file_count: plannedFileCount,
+      total_bytes: totalBytes,
+      max_bytes: tier === 'anonymous' ? TIER_LIMITS.anonymous.maxSiteSize : limits.maxTotalStorage,
+      slug_requested: Boolean(payload.slug),
+      custom_ttl_requested: customDays !== undefined,
+    },
+  });
 
   return c.json(result, 201);
 });
