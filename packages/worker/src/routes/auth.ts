@@ -280,11 +280,10 @@ auth.get('/auth/callback', async (c) => {
     `).bind(userId, ghUser.id, ghUser.login, email, tier).run();
   }
 
-  const apiKey = await createOAuthApiKey(c.env, userId, isCliLogin ? 'cli' : 'web');
-
   // If CLI session, store API key for polling
   if (isCliLogin) {
-    await c.env.DB.prepare(`
+    const apiKey = await createOAuthApiKey(c.env, userId, 'cli');
+    const sessionUpdate = await c.env.DB.prepare(`
       UPDATE auth_sessions
       SET api_key = ?, username = ?
       WHERE session_id = ? AND expires_at > datetime('now')
@@ -299,6 +298,13 @@ auth.get('/auth/callback', async (c) => {
       ghUser.login,
       session,
     ).run();
+    if (sessionUpdate.meta.changes === 0) {
+      await revokeApiKey(c.env, apiKey);
+      return c.html(cliConfirmPage({
+        title: 'CLI login expired',
+        body: 'Return to your terminal and run vanish login again.',
+      }), 410);
+    }
     await logProductEvent(c.env, {
       name: 'login_completed',
       userId,
@@ -316,6 +322,8 @@ auth.get('/auth/callback', async (c) => {
       retry: true,
     }));
   }
+
+  const apiKey = await createOAuthApiKey(c.env, userId, 'web');
 
   await logProductEvent(c.env, {
     name: 'login_completed',
@@ -403,6 +411,15 @@ async function insertApiKey(
     INSERT INTO api_keys (key_hash, user_id, key_prefix, name, source)
     VALUES (?, ?, ?, 'default', ?)
   `).bind(keyHash, input.userId, keyPrefix, input.source).run();
+}
+
+async function revokeApiKey(env: Env, apiKey: string): Promise<void> {
+  const keyHash = await hashApiKey(apiKey);
+  await env.DB.prepare(`
+    UPDATE api_keys
+    SET revoked_at = datetime('now')
+    WHERE key_hash = ? AND revoked_at IS NULL
+  `).bind(keyHash).run();
 }
 
 /**

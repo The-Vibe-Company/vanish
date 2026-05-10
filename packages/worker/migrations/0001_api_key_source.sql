@@ -1,4 +1,4 @@
-ALTER TABLE api_keys ADD COLUMN source TEXT NOT NULL DEFAULT 'manual';
+ALTER TABLE api_keys ADD COLUMN source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('web', 'cli', 'manual'));
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_active_web_user
   ON api_keys(user_id)

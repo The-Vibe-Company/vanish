@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   key_prefix TEXT NOT NULL DEFAULT '',
   name TEXT NOT NULL DEFAULT 'default',
-  source TEXT NOT NULL DEFAULT 'manual',
+  source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('web', 'cli', 'manual')),
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   last_used_at TEXT,
   revoked_at TEXT
