@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.11](https://github.com/The-Vibe-Company/vanish/compare/vanish-cli-v0.1.10...vanish-cli-v0.1.11) (2026-05-10)
+
+
+### Features
+
+* **cli:** add update command and version notice ([#35](https://github.com/The-Vibe-Company/vanish/issues/35)) ([c95b11f](https://github.com/The-Vibe-Company/vanish/commit/c95b11f43c17ba5f519d187ebe08796319f0bd62))
+
 ## [0.1.10](https://github.com/The-Vibe-Company/vanish/compare/vanish-cli-v0.1.9...vanish-cli-v0.1.10) (2026-05-10)
 
 

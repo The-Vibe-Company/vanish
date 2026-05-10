@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.11](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.10...@vanish/worker-v0.1.11) (2026-05-10)
+
+
+### Miscellaneous Chores
+
+* **@vanish/worker:** Synchronize vanish versions
+
 ## [0.1.10](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.9...@vanish/worker-v0.1.10) (2026-05-10)
 
 
