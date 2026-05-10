@@ -16,6 +16,7 @@ vanish status      # show storage usage, tier, and limits
 vanish status --json
 vanish logout      # remove saved API key
 vanish upgrade     # open Pro checkout
+vanish update      # update the CLI to the latest version
 ```
 
 If `vanish` is not installed, use `npx vanish-cli <command>`.

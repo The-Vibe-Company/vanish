@@ -10,6 +10,8 @@ import { loginCommand, logoutCommand } from './commands/login.js';
 import { lsCommand } from './commands/ls.js';
 import { rmCommand } from './commands/rm.js';
 import { statusCommand } from './commands/status.js';
+import { updateCommand } from './commands/update.js';
+import { printVersionNoticeIfNeeded } from './lib/version-check.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'));
@@ -147,11 +149,17 @@ program
   .option('--json', 'Output as JSON')
   .action(statusCommand);
 
+program
+  .command('update')
+  .description('Update vanish-cli to the latest version')
+  .action(updateCommand);
+
 // Default: if first arg looks like a file path, treat as upload
 const args = process.argv.slice(2);
-if (args.length > 0 && !args[0].startsWith('-') && !['upload', 'up', 'site', 'login', 'logout', 'upgrade', 'whoami', 'ls', 'rm', 'status', 'help', 'mcp-serve'].includes(args[0])) {
+if (args.length > 0 && !args[0].startsWith('-') && !['upload', 'up', 'site', 'login', 'logout', 'upgrade', 'whoami', 'ls', 'rm', 'status', 'update', 'help', 'mcp-serve'].includes(args[0])) {
   // Shorthand: `vanish file.png` = `vanish upload file.png`
   process.argv.splice(2, 0, 'upload');
 }
 
-program.parse();
+await printVersionNoticeIfNeeded(args, pkg.version);
+await program.parseAsync();
