@@ -435,10 +435,17 @@ dashboard.get('/dashboard', (c) => {
     body { padding: 1.5rem 1rem 2rem; }
     .header-right { gap: 0.5rem; }
     .account-grid { grid-template-columns: 1fr; }
-    table { font-size: 0.75rem; }
+    table {
+      display: block;
+      overflow-x: auto;
+      font-size: 0.75rem;
+      white-space: nowrap;
+    }
     th, td { padding: 0.4rem 0.3rem; }
     .url-cell { max-width: 100px; }
     .filename-cell { max-width: 90px; }
+    .btn-icon { min-width: 44px; min-height: 44px; }
+    .btn-more, .btn-create, .btn-logout, .btn-upgrade, .btn-github { min-height: 44px; }
   }
 </style>
 </head>
@@ -464,7 +471,9 @@ dashboard.get('/dashboard', (c) => {
   var toastEl = document.getElementById('toast');
   var toastTimer = null;
   var uploadsOffset = 0;
+  var sitesOffset = 0;
   var allUploads = [];
+  var allSites = [];
 
   // Check URL params for key (from OAuth redirect)
   var params = new URLSearchParams(window.location.search);
@@ -513,11 +522,15 @@ dashboard.get('/dashboard', (c) => {
     return d.innerHTML;
   }
 
+  function attr(s) {
+    return esc(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
   function showLogin() {
     appEl.innerHTML =
       '<div class="login-screen">' +
         '<div class="login-logo">vanish<span class="dot">.</span></div>' +
-        '<p class="login-msg">sign in to manage your uploads</p>' +
+        '<p class="login-msg">sign in to manage your uploads and mini-sites</p>' +
         '<a class="btn-github" href="/auth/github?redirect=/dashboard">Sign in with GitHub</a>' +
         '<p class="login-alt">or use the CLI: <code>vanish login</code></p>' +
       '</div>';
@@ -566,10 +579,15 @@ dashboard.get('/dashboard', (c) => {
         '<h2>Account</h2>' +
         '<div class="account-grid">' +
           '<div><div class="stat-label">uploads</div><div class="stat-value">' + me.stats.total_uploads + '</div></div>' +
+          '<div><div class="stat-label">sites</div><div class="stat-value">' + (me.stats.total_sites || 0) + '</div></div>' +
           '<div><div class="stat-label">retention</div><div class="stat-value">' + retention + '</div></div>' +
         '</div>' +
         storageHtml +
         upgradeHtml +
+      '</section>' +
+      '<section id="sites-section">' +
+        '<h2>Mini-sites</h2>' +
+        '<div id="sites-content"><div class="loading">loading...</div></div>' +
       '</section>' +
       '<section id="uploads-section">' +
         '<h2>Uploads</h2>' +
@@ -592,7 +610,7 @@ dashboard.get('/dashboard', (c) => {
       el.innerHTML =
         '<div class="empty">' +
           '<p>no uploads yet</p>' +
-          '<p style="margin-top:0.5rem">upload with <code>vanish file.png</code> or curl</p>' +
+          '<p style="margin-top:0.5rem">upload files with <code>vanish file.png</code></p>' +
         '</div>';
       return;
     }
@@ -605,13 +623,13 @@ dashboard.get('/dashboard', (c) => {
       var u = uploads[i];
       var exp = u.expired ? '<span style="color:var(--red)">expired</span>' : relTime(u.expires_at);
       html += '<tr>' +
-        '<td class="filename-cell" title="' + esc(u.filename) + '">' + esc(u.filename) + '</td>' +
+        '<td class="filename-cell" title="' + attr(u.filename) + '">' + esc(u.filename) + '</td>' +
         '<td>' + formatBytes(u.size_bytes) + '</td>' +
         '<td>' + exp + '</td>' +
         '<td class="url-cell"><a href="' + esc(u.url) + '" target="_blank">' + esc(u.url.replace(/^https?:\\/\\/[^/]+/, '')) + '</a></td>' +
         '<td style="white-space:nowrap">' +
-          '<button class="btn-icon" onclick="copyUrl(\\'' + esc(u.url) + '\\')" title="copy URL">cp</button>' +
-          (u.expired ? '' : '<button class="btn-icon danger" onclick="deleteUpload(\\'' + esc(u.id) + '\\')" title="delete">rm</button>') +
+          '<button class="btn-icon" onclick="copyUrl(\\'' + esc(u.url) + '\\')" title="copy URL" aria-label="Copy URL for ' + attr(u.filename) + '">cp</button>' +
+          (u.expired ? '' : '<button class="btn-icon danger" onclick="deleteUpload(\\'' + esc(u.id) + '\\')" title="delete" aria-label="Delete upload ' + attr(u.filename) + '">rm</button>') +
         '</td>' +
       '</tr>';
     }
@@ -620,6 +638,49 @@ dashboard.get('/dashboard', (c) => {
 
     if (hasMore) {
       html += '<button class="btn-more" onclick="loadMore()">load more</button>';
+    }
+
+    el.innerHTML = html;
+  }
+
+  function renderSites(sites, hasMore) {
+    var el = document.getElementById('sites-content');
+    if (!el) return;
+
+    if (sites.length === 0) {
+      el.innerHTML =
+        '<div class="empty">' +
+          '<p>no mini-sites yet</p>' +
+          '<p style="margin-top:0.5rem">publish a folder with <code>vanish site ./demo --root index.html</code></p>' +
+        '</div>';
+      return;
+    }
+
+    var html = '<table><thead><tr>' +
+      '<th>site</th><th>files</th><th>size</th><th>expires</th><th>url</th><th></th>' +
+      '</tr></thead><tbody>';
+
+    for (var i = 0; i < sites.length; i++) {
+      var s = sites[i];
+      var exp = s.expired ? '<span style="color:var(--red)">expired</span>' : relTime(s.expires_at);
+      var label = s.slug || s.name || s.id;
+      html += '<tr>' +
+        '<td class="filename-cell" title="' + attr(s.root_path) + '">' + esc(label) + '</td>' +
+        '<td>' + s.file_count + '</td>' +
+        '<td>' + formatBytes(s.size_bytes) + '</td>' +
+        '<td>' + exp + '</td>' +
+        '<td class="url-cell"><a href="' + esc(s.url) + '" target="_blank">' + esc(s.url.replace(/^https?:\\/\\//, '')) + '</a></td>' +
+        '<td style="white-space:nowrap">' +
+          '<button class="btn-icon" onclick="copyUrl(\\'' + esc(s.url) + '\\')" title="copy URL" aria-label="Copy URL for mini-site ' + attr(label) + '">cp</button>' +
+          (s.expired ? '' : '<button class="btn-icon danger" onclick="deleteSite(\\'' + esc(s.id) + '\\')" title="delete" aria-label="Delete mini-site ' + attr(label) + '">rm</button>') +
+        '</td>' +
+      '</tr>';
+    }
+
+    html += '</tbody></table>';
+
+    if (hasMore) {
+      html += '<button class="btn-more" onclick="loadMoreSites()">load more sites</button>';
     }
 
     el.innerHTML = html;
@@ -652,7 +713,7 @@ dashboard.get('/dashboard', (c) => {
         '<td style="color:var(--fg-bright);font-size:0.78rem">' + esc(k.prefix) + '...</td>' +
         '<td>' + esc(k.name) + '</td>' +
         '<td style="color:var(--fg-dim)">' + lastUsed + '</td>' +
-        '<td><button class="btn-icon danger" onclick="revokeKey(\\'' + esc(k.prefix) + '\\')" title="revoke">revoke</button></td>' +
+        '<td><button class="btn-icon danger" onclick="revokeKey(\\'' + esc(k.prefix) + '\\')" title="revoke" aria-label="Revoke API key">revoke</button></td>' +
       '</tr>';
     }
 
@@ -684,12 +745,35 @@ dashboard.get('/dashboard', (c) => {
     });
   };
 
+  window.deleteSite = function(id) {
+    if (!confirm('Delete this mini-site? This cannot be undone.')) return;
+    apiFetch('/sites/' + id, { method: 'DELETE' }).then(function(res) {
+      if (res.ok) {
+        toast('deleted');
+        allSites = allSites.filter(function(s) { return s.id !== id; });
+        renderSites(allSites, false);
+      } else {
+        toast('error: ' + (res.error || 'failed'));
+      }
+    });
+  };
+
   window.loadMore = function() {
     uploadsOffset += 50;
     apiFetch('/uploads?limit=50&offset=' + uploadsOffset + '&active=false').then(function(res) {
       if (res.uploads) {
         allUploads = allUploads.concat(res.uploads);
         renderUploads(allUploads, res.uploads.length === 50);
+      }
+    });
+  };
+
+  window.loadMoreSites = function() {
+    sitesOffset += 50;
+    apiFetch('/sites?limit=50&offset=' + sitesOffset + '&active=false').then(function(res) {
+      if (res.sites) {
+        allSites = allSites.concat(res.sites);
+        renderSites(allSites, res.sites.length === 50);
       }
     });
   };
@@ -709,7 +793,7 @@ dashboard.get('/dashboard', (c) => {
             '<div class="key-reveal">' +
               '<code>' + esc(res.api_key) + '</code>' +
               '<div class="warn">save this key — it will not be shown again</div>' +
-              '<button class="btn-icon" style="margin-top:0.5rem" onclick="navigator.clipboard.writeText(\\'' + esc(res.api_key) + '\\');toast(\\'copied\\')">copy</button>' +
+              '<button class="btn-icon" style="margin-top:0.5rem" onclick="navigator.clipboard.writeText(\\'' + esc(res.api_key) + '\\');toast(\\'copied\\')" aria-label="Copy API key">copy</button>' +
             '</div>';
         }
         loadKeys();
@@ -767,6 +851,17 @@ dashboard.get('/dashboard', (c) => {
     });
   }
 
+  function loadSites() {
+    sitesOffset = 0;
+    allSites = [];
+    apiFetch('/sites?limit=50&offset=0&active=false').then(function(res) {
+      if (res.sites) {
+        allSites = res.sites;
+        renderSites(allSites, res.sites.length === 50);
+      }
+    });
+  }
+
   function loadKeys() {
     apiFetch('/keys').then(function(res) {
       if (res.keys) renderKeys(res.keys);
@@ -786,6 +881,7 @@ dashboard.get('/dashboard', (c) => {
       }
       renderDashboard(me);
       renderCurlHint();
+      loadSites();
       loadUploads();
       loadKeys();
     }).catch(function() {

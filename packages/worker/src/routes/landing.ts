@@ -8,8 +8,8 @@ const html = `<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>vanish — temporary file uploads</title>
-<meta name="description" content="Upload files, get temporary public URLs. Dead simple.">
+<title>vanish — temporary mini-sites for AI agents</title>
+<meta name="description" content="Publish temporary HTML, Markdown, CSS, JS, and asset folders from Claude Code, Codex, or your terminal.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -305,7 +305,12 @@ const html = `<!DOCTYPE html>
     .terminal-body { padding: 0.8rem 1rem; font-size: 0.78rem; min-height: 150px; }
     .terminal-chrome { padding: 0.5rem 0.8rem; }
     .terminal-dots span { width: 8px; height: 8px; }
-    table { font-size: 0.78rem; }
+    table {
+      display: block;
+      overflow-x: auto;
+      font-size: 0.78rem;
+      white-space: nowrap;
+    }
     th, td { padding: 0.5rem 0.5rem; }
     footer { flex-direction: column; align-items: flex-start; }
   }
@@ -315,7 +320,7 @@ const html = `<!DOCTYPE html>
 
 <header>
   <div class="logo">vanish<span class="dot">.</span></div>
-  <p class="tagline">upload files, get temporary public URLs. dead simple.</p>
+  <p class="tagline">temporary mini-sites for Claude Code, Codex, and terminal workflows.</p>
 </header>
 
 <div class="terminal" id="terminal">
@@ -325,7 +330,7 @@ const html = `<!DOCTYPE html>
       <span class="dot-yellow"></span>
       <span class="dot-green"></span>
     </div>
-    <div class="terminal-title">vanish \u2014 zsh</div>
+    <div class="terminal-title">vanish site ./demo --root index.html</div>
     <div class="terminal-spacer"></div>
   </div>
   <div class="terminal-body" id="terminal-body">
@@ -341,39 +346,36 @@ const html = `<!DOCTYPE html>
   </div>
   <p>Or use directly with npx:</p>
   <div class="cmd">
-    <code><span class="prompt">$ </span>npx vanish-cli upload file.png</code>
+    <code><span class="prompt">$ </span>npx vanish-cli site ./demo <span class="flag">--root</span> index.html</code>
   </div>
 </section>
 
 <section>
   <h2>Usage</h2>
 
-  <p>Upload a file:</p>
+  <p>Publish a static folder:</p>
   <div class="cmd">
-    <code><span class="prompt">$ </span>vanish photo.jpg
-<span class="output">https://vanish.sh/f/b3kL8nR4.jpg</span>
+    <code><span class="prompt">$ </span>vanish site ./lesson-demo <span class="flag">--root</span> index.html
+<span class="output">https://k8m2q9z4p1ad.vanish.sh/</span>
 <span class="comment"># copied to clipboard</span></code>
   </div>
 
-  <p>Multiple files:</p>
+  <p>Choose any root file. Vanish serves it as-is:</p>
   <div class="cmd">
-    <code><span class="prompt">$ </span>vanish a.png b.png c.png
-<span class="output">https://vanish.sh/f/a7xK9mQ2.png</span>
-<span class="output">https://vanish.sh/f/c2mP5vX8.png</span>
-<span class="output">https://vanish.sh/f/d9nQ3wY1.png</span></code>
+    <code><span class="prompt">$ </span>vanish site ./notes <span class="flag">--root</span> README.md
+<span class="output">https://p4d8n2x7q0ab.vanish.sh/</span></code>
   </div>
 
-  <p>With curl:</p>
+  <p>Keep sharing single files and screenshots:</p>
   <div class="cmd">
-    <code><span class="prompt">$ </span>curl <span class="flag">-X POST</span> <span class="flag">--data-binary</span> @file.png <span class="flag">\\
-  -H</span> <span class="url">"X-Filename: file.png"</span> <span class="url">https://vanish.sh/upload</span>
-<span class="output">{"url":"https://vanish.sh/f/e4rS7tU6.png"}</span></code>
+    <code><span class="prompt">$ </span>vanish screenshot.png
+<span class="output">https://vanish.sh/f/a7xK9mQ2.png</span></code>
   </div>
 
   <p>JSON output:</p>
   <div class="cmd">
-    <code><span class="prompt">$ </span>vanish <span class="flag">--json</span> file.png
-<span class="output">{"url":"...","id":"...","expires":"2026-02-19T..."}</span></code>
+    <code><span class="prompt">$ </span>vanish site ./demo <span class="flag">--root</span> index.html <span class="flag">--json</span>
+<span class="output">{"url":"...","id":"...","rootPath":"index.html","fileCount":7}</span></code>
   </div>
 </section>
 
@@ -385,7 +387,25 @@ const html = `<!DOCTYPE html>
     <code><span class="prompt">$ </span>export <span class="flag">VANISH_KEY</span>=<span class="url">"vnsh_your_key_here"</span></code>
   </div>
 
-  <p>Upload (authenticated, all file types):</p>
+  <p>Create a mini-site draft:</p>
+  <div class="cmd">
+    <code><span class="prompt">$ </span>curl <span class="flag">-X POST</span> <span class="flag">\\
+  -H</span> <span class="url">"Authorization: Bearer $VANISH_KEY"</span> <span class="flag">\\
+  -H</span> <span class="url">"Content-Type: application/json"</span> <span class="flag">\\
+  -d</span> <span class="url">'{"name":"demo","rootPath":"index.html","fileCount":3,"totalBytes":8120}'</span> <span class="flag">\\
+  </span><span class="url">https://vanish.sh/sites</span>
+<span class="output">{"id":"k8m2q9z4p1ad","token":"vnst_...","url":"https://k8m2q9z4p1ad.vanish.sh/"}</span></code>
+  </div>
+
+  <p>Upload site files and publish:</p>
+  <div class="cmd">
+    <code><span class="prompt">$ </span>curl <span class="flag">-X PUT</span> <span class="flag">--data-binary</span> @index.html <span class="flag">\\
+  -H</span> <span class="url">"X-Site-Token: vnst_..."</span> <span class="flag">\\
+  </span><span class="url">"https://vanish.sh/sites/k8m2q9z4p1ad/files?path=index.html"</span>
+<span class="prompt">$ </span>curl <span class="flag">-X POST</span> <span class="flag">-H</span> <span class="url">"X-Site-Token: vnst_..."</span> <span class="url">https://vanish.sh/sites/k8m2q9z4p1ad/publish</span></code>
+  </div>
+
+  <p>Upload a single file (authenticated, all file types):</p>
   <div class="cmd">
     <code><span class="prompt">$ </span>curl <span class="flag">-X POST</span> <span class="flag">--data-binary</span> @report.pdf <span class="flag">\\
   -H</span> <span class="url">"X-Filename: report.pdf"</span> <span class="flag">\\
@@ -436,6 +456,7 @@ const html = `<!DOCTYPE html>
       <tr>
         <th>Tier</th>
         <th>File types</th>
+        <th>Sites</th>
         <th>Max file</th>
         <th>Storage</th>
         <th>Retention</th>
@@ -447,6 +468,7 @@ const html = `<!DOCTYPE html>
       <tr>
         <td class="tier-name">Anonymous</td>
         <td>images only</td>
+        <td>10 MB</td>
         <td>5 MB</td>
         <td>\u2014</td>
         <td>24 hours</td>
@@ -456,6 +478,7 @@ const html = `<!DOCTYPE html>
       <tr>
         <td class="tier-name">Free</td>
         <td>all</td>
+        <td>included</td>
         <td>50 MB</td>
         <td>50 MB</td>
         <td>48 hours</td>
@@ -465,6 +488,7 @@ const html = `<!DOCTYPE html>
       <tr class="tier-pro">
         <td class="tier-name">Pro</td>
         <td>all</td>
+        <td>custom slug</td>
         <td>1 GB</td>
         <td>1 GB</td>
         <td>30 days <span style="color:var(--fg-dim)">(up to 365)</span></td>
@@ -474,8 +498,8 @@ const html = `<!DOCTYPE html>
     </tbody>
   </table>
   <p style="margin-top: 0.8rem;">
-    Anonymous uploads: images only, 24h.
-    <a href="/auth/github">Sign in with GitHub</a> for 48h retention and all file types.
+    Anonymous sites: 10 MB, 24h, random subdomain.
+    <a href="/auth/github">Sign in with GitHub</a> for 48h retention and 50 MB total storage.
   </p>
 </section>
 
@@ -506,20 +530,21 @@ const html = `<!DOCTYPE html>
   <p>Manage your keys and uploads on the <a href="/dashboard">dashboard</a>.</p>
 
   <div class="cmd">
-    <code><span class="prompt">$ </span>vanish upgrade
-<span class="comment"># upgrade to pro for 30-day+ retention (up to 365 days)</span></code>
+    <code><span class="prompt">$ </span>vanish site ./demo <span class="flag">--root</span> index.html <span class="flag">--slug</span> agent-demo
+<span class="comment"># Pro: https://agent-demo.vanish.sh/</span></code>
   </div>
 </section>
 
 <section>
   <h2>More</h2>
   <div class="cmd">
-    <code><span class="prompt">$ </span>vanish ls              <span class="comment"># list your uploads</span>
-<span class="prompt">$ </span>vanish status          <span class="comment"># show storage &amp; tier info</span>
-<span class="prompt">$ </span>vanish rm &lt;id&gt;         <span class="comment"># delete an upload</span>
-<span class="prompt">$ </span>vanish whoami          <span class="comment"># show current user &amp; tier</span></code>
+    <code><span class="prompt">$ </span>vanish site ./demo --root index.html  <span class="comment"># publish a static folder</span>
+<span class="prompt">$ </span>vanish screenshot.png                 <span class="comment"># share a single file</span>
+<span class="prompt">$ </span>vanish ls                             <span class="comment"># list file uploads</span>
+<span class="prompt">$ </span>vanish status                         <span class="comment"># show storage &amp; tier info</span>
+<span class="prompt">$ </span>vanish upgrade                        <span class="comment"># Pro slugs + custom retention</span></code>
   </div>
-  <p>CORS-enabled \u2014 embed URLs directly in GitHub PRs and GitLab issues.</p>
+  <p>Static HTML/CSS/JS is served as-is. Markdown is served as Markdown, not transformed.</p>
 </section>
 
 <footer>
@@ -531,11 +556,11 @@ const html = `<!DOCTYPE html>
 (function() {
   var SCENARIOS = [
     [
-      { type: 'cmd', text: 'vanish screenshot.png' },
-      { type: 'spinner', text: 'Uploading screenshot.png (1.2 MB)...', duration: 1800 },
-      { type: 'output', text: '\u2713 https://vanish.sh/f/a7xK9mQ2.png', color: 'green' },
+      { type: 'cmd', text: 'vanish site ./lesson --root index.html' },
+      { type: 'spinner', text: 'Publishing lesson (7 files, 84 KB)...', duration: 1800 },
+      { type: 'output', text: '\u2713 https://k8m2q9z4p1ad.vanish.sh/', color: 'green' },
       { type: 'output', text: '  Copied to clipboard.', color: 'dim' },
-      { type: 'output', text: '  Expires in 24h (images only). Login for 48h + all files: vanish login', color: 'dim' },
+      { type: 'output', text: '  Expires in 24h. Anonymous mini-sites max out at 10 MB.', color: 'dim' },
       { type: 'pause', duration: 2000 }
     ],
     [
@@ -544,29 +569,22 @@ const html = `<!DOCTYPE html>
       { type: 'output', text: '  Waiting for authentication...', color: 'dim', delay: 1000 },
       { type: 'pause', duration: 1500 },
       { type: 'output', text: '\u2713 Logged in as @johndoe. API key saved.', color: 'green' },
-      { type: 'output', text: '  48h retention, all file types.', color: 'dim' },
+      { type: 'output', text: '  48h retention, all file types, 50 MB total storage.', color: 'dim' },
       { type: 'pause', duration: 2000 }
     ],
     [
-      { type: 'cmd', text: 'vanish upload report.pdf --days 90' },
-      { type: 'spinner', text: 'Uploading report.pdf (4.8 MB)...', duration: 1500 },
-      { type: 'output', text: '\u2713 https://vanish.sh/f/b3kL8nR4.pdf', color: 'green' },
+      { type: 'cmd', text: 'vanish site ./demo --root index.html --slug pitch-demo' },
+      { type: 'spinner', text: 'Publishing demo (18 files, 2.3 MB)...', duration: 1500 },
+      { type: 'output', text: '\u2713 https://pitch-demo.vanish.sh/', color: 'green' },
       { type: 'output', text: '  Copied to clipboard.', color: 'dim' },
-      { type: 'output', text: '  Expires in 90 days (Pro).', color: 'dim' },
+      { type: 'output', text: '  Pro slug. Default retention: 30 days.', color: 'dim' },
       { type: 'pause', duration: 2000 }
     ],
     [
-      { type: 'cmd', text: 'vanish ls' },
-      { type: 'output', text: 'ID             FILENAME            SIZE     EXPIRES', color: 'bright', delay: 200 },
-      { type: 'output', text: '\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500', color: 'dim' },
-      { type: 'output', text: 'a7xK9mQ2       screenshot.png      1.2 MB   Feb 20, 2:30 PM', color: 'bright' },
-      { type: 'output', text: 'b3kL8nR4       report.pdf          4.8 MB   Mar 20, 2:30 PM', color: 'bright' },
-      { type: 'output', text: 'c2mP5vX8       design.fig          12.3 MB  Mar 20, 2:31 PM', color: 'bright' },
-      { type: 'output', text: '', color: 'bright' },
-      { type: 'output', text: '3 uploads', color: 'dim' },
-      { type: 'pause', duration: 1500 },
-      { type: 'cmd', text: 'vanish rm a7xK9mQ2' },
-      { type: 'output', text: '\u2713 Deleted: a7xK9mQ2', color: 'green', delay: 400 },
+      { type: 'cmd', text: 'vanish screenshot.png' },
+      { type: 'spinner', text: 'Uploading screenshot.png (1.2 MB)...', duration: 1300 },
+      { type: 'output', text: '\u2713 https://vanish.sh/f/a7xK9mQ2.png', color: 'green' },
+      { type: 'output', text: '  Single-file sharing still works.', color: 'dim' },
       { type: 'pause', duration: 2500 }
     ]
   ];

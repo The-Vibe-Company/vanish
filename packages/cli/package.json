@@ -1,7 +1,7 @@
 {
   "name": "vanish-cli",
   "version": "0.1.8",
-  "description": "Upload files, get temporary public URLs. Dead simple.",
+  "description": "Publish temporary mini-sites and file URLs from your terminal.",
   "type": "module",
   "bin": {
     "vanish": "./dist/index.js"
@@ -26,6 +26,8 @@
   },
   "keywords": [
     "upload",
+    "html",
+    "static-site",
     "screenshot",
     "temporary",
     "url",

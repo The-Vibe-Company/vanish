@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Vanish is a temporary file sharing service. Users upload files via CLI and get public URLs that auto-expire. The project is an npm workspaces monorepo with two packages:
+Vanish is a temporary mini-site and file sharing service. Users publish static folders or upload files via CLI and get public URLs that auto-expire. The project is an npm workspaces monorepo with two packages:
 
 - **`packages/cli`** (`vanish-cli`): Node.js CLI published to npm
 - **`packages/worker`** (`@vanish/worker`): Cloudflare Worker backend (private, not published)
 
-Architecture: `CLI → HTTPS → Cloudflare Worker (Hono) → R2 (files) + D1 (metadata)`
+Architecture: `CLI → HTTPS → Cloudflare Worker (Hono) → R2 (files/site assets) + D1 (metadata)`
 
 ## Commands
 
@@ -45,10 +45,10 @@ npm run deploy --workspace=@vanish/worker
 
 The worker uses **Hono** as its web framework. Routes are registered in `index.ts`.
 
-- **`routes/`**: Each file exports a Hono route group — `upload.ts` (POST /upload), `serve.ts` (GET/DELETE /f/:id), `auth.ts` (GitHub OAuth flow), `user.ts` (GET /me, GET /uploads), `keys.ts` (API key CRUD), `billing.ts` (Stripe checkout/webhooks), `landing.ts` (HTML landing page)
+- **`routes/`**: Each file exports a Hono route group — `sites.ts` (site API and public mini-site serving), `upload.ts` (POST /upload), `serve.ts` (GET/DELETE /f/:id), `auth.ts` (GitHub OAuth flow), `user.ts` (GET /me, GET /uploads), `keys.ts` (API key CRUD), `billing.ts` (Stripe checkout/webhooks), `landing.ts` (HTML landing page)
 - **`middleware/`**: `auth.ts` extracts Bearer token, resolves user + tier (never rejects unauthenticated — sets tier to 'anonymous'). `rate-limit.ts` enforces per-user or per-IP rate limits.
-- **`cron/cleanup.ts`**: Hourly cleanup of expired uploads, stale auth sessions, and old rate limit records
-- **`db/schema.sql`**: D1 schema (tables: users, api_keys, uploads, auth_sessions, rate_limits)
+- **`cron/cleanup.ts`**: Hourly cleanup of expired uploads/sites, stale auth sessions, and old rate limit records
+- **`db/schema.sql`**: D1 schema (tables: users, api_keys, uploads, sites, site_files, auth_sessions, rate_limits)
 - **`types.ts`**: `Env` bindings interface, `TIER_LIMITS` constant defining per-tier limits (anonymous/free/pro)
 - **`lib/`**: Utilities — `api-key.ts` (generation + SHA-256 hashing), `expiry.ts` (tier-based TTL), `rate-limit.ts` (identifier extraction), `stripe.ts` (minimal Stripe client, no SDK)
 
@@ -56,20 +56,21 @@ The worker uses **Hono** as its web framework. Routes are registered in `index.t
 
 Uses **Commander** for argument parsing. Entry point is `index.ts`.
 
-- **`commands/`**: `upload.ts`, `login.ts` (OAuth polling flow), `ls.ts`, `rm.ts`, `status.ts`
+- **`commands/`**: `site.ts` (publish static folder), `upload.ts`, `login.ts` (OAuth polling flow), `ls.ts`, `rm.ts`, `status.ts`
 - **`lib/`**: `config.ts` (reads `~/.config/vanish/config.json`, env vars override file), `api-client.ts`, `clipboard.ts` (cross-platform), `progress.ts` (spinner)
 
 ### Tier System
 
 Three tiers with different limits defined in `TIER_LIMITS` (`packages/worker/src/types.ts`):
-- **anonymous**: Images only, 5MB max file, 24h retention, 10 uploads/hour
-- **free**: All files, 50MB max file, 50MB total storage, 48h retention, 50/hour
-- **pro**: All files, 1GB max file, 1GB total storage, 30-day default retention (configurable up to 365 days via `--days`), 200/hour
+- **anonymous**: Images only for file uploads, 5MB max file, static mini-sites up to 10MB, 24h retention, 10 uploads/hour
+- **free**: All files, 50MB max file, 50MB total storage shared across files and mini-sites, 48h retention, 50/hour
+- **pro**: All files, 1GB max file, 1GB total storage shared across files and mini-sites, 30-day default retention (configurable up to 365 days via `--days`), custom site slugs, 200/hour
 
 ### Key Patterns
 
 - **API keys** use `vnsh_` prefix, stored as SHA-256 hashes, 48 chars total
 - **File URLs** include extension: `/f/{nanoid}.{ext}` — the extension is stripped during lookup
+- **Site URLs** use DNS-safe IDs or Pro slugs: `https://{id-or-slug}.vanish.sh/`; local dev uses `/s/{id}/`
 - **Soft deletes**: uploads set `deleted_at` rather than hard-deleting
 - **`waitUntil()`**: Non-critical DB writes (last_used_at, soft deletes) use fire-and-forget via execution context
 - **Blocked extensions**: executables (.exe, .bat, .sh, .ps1, etc.) are rejected at upload

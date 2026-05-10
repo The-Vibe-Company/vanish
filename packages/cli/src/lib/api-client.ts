@@ -10,9 +10,35 @@ export interface UploadResult {
   expires: string | null;
 }
 
+export interface CreateSiteResult {
+  id: string;
+  token: string;
+  url: string;
+  name: string;
+  rootPath: string;
+  slug: string | null;
+  fileCount: number;
+  maxFiles: number;
+  maxBytes: number | null;
+  expires: string | null;
+}
+
+export interface PublishSiteResult {
+  ok: true;
+  id: string;
+  url: string;
+  rootPath: string;
+  size: number;
+  fileCount: number;
+  expectedFileCount?: number;
+  expires: string | null;
+}
+
 export interface ApiError {
   error: string;
   maxBytes?: number;
+  maxTotalBytes?: number;
+  usedBytes?: number;
 }
 
 export interface MeResult {
@@ -23,10 +49,15 @@ export interface MeResult {
   created_at: string;
   stats: {
     total_uploads: number;
+    total_sites?: number;
+    upload_bytes?: number;
+    site_bytes?: number;
     total_bytes: number;
   };
   limits: {
     maxFileSize: number;
+    maxSiteSize?: number;
+    maxSiteFiles?: number;
     maxTotalStorage: number | null;
     maxExpiryHours: number;
     imageOnly: boolean;
@@ -75,6 +106,85 @@ export class VanishClient {
     return response.json() as Promise<UploadResult>;
   }
 
+  async createSite(input: {
+    name: string;
+    rootPath: string;
+    fileCount: number;
+    totalBytes: number;
+    slug?: string;
+    days?: number;
+  }): Promise<CreateSiteResult> {
+    const response = await fetch(`${this.apiUrl}/sites`, {
+      method: 'POST',
+      headers: this.jsonHeaders(),
+      body: JSON.stringify(input),
+    });
+
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to create site');
+    }
+
+    return response.json() as Promise<CreateSiteResult>;
+  }
+
+  async uploadSiteFile(siteId: string, token: string, filePath: string, sitePath: string): Promise<void> {
+    const fileBuffer = readFileSync(filePath);
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/octet-stream',
+      'X-Site-Token': token,
+    };
+
+    if (this.apiKey) {
+      headers['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+
+    const response = await fetch(`${this.apiUrl}/sites/${siteId}/files?path=${encodeURIComponent(sitePath)}`, {
+      method: 'PUT',
+      headers,
+      body: fileBuffer,
+    });
+
+    if (!response.ok) {
+      await throwApiError(response, `Failed to upload ${sitePath}`);
+    }
+  }
+
+  async publishSite(siteId: string, token: string): Promise<PublishSiteResult> {
+    const headers: Record<string, string> = {
+      'X-Site-Token': token,
+    };
+
+    if (this.apiKey) {
+      headers['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+
+    const response = await fetch(`${this.apiUrl}/sites/${siteId}/publish`, {
+      method: 'POST',
+      headers,
+    });
+
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to publish site');
+    }
+
+    return response.json() as Promise<PublishSiteResult>;
+  }
+
+  async deleteSite(siteId: string, token: string): Promise<void> {
+    const headers: Record<string, string> = {
+      'X-Site-Token': token,
+    };
+
+    if (this.apiKey) {
+      headers['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+
+    await fetch(`${this.apiUrl}/sites/${siteId}`, {
+      method: 'DELETE',
+      headers,
+    });
+  }
+
   async me(): Promise<MeResult> {
     if (!this.apiKey) {
       throw new Error('Authentication required. Use `vanish login` first.');
@@ -96,4 +206,27 @@ export class VanishClient {
     const response = await fetch(`${this.apiUrl}/health`);
     return response.json() as Promise<{ status: string; version: string }>;
   }
+
+  private jsonHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (this.apiKey) {
+      headers['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+
+    return headers;
+  }
+}
+
+async function throwApiError(response: Response, fallback: string): Promise<never> {
+  let message = fallback;
+  try {
+    const error = await response.json() as ApiError;
+    message = error.error || message;
+  } catch {
+    message = `${fallback} (status ${response.status})`;
+  }
+  throw new Error(message);
 }

@@ -11,6 +11,7 @@ import userRoutes from './routes/user.js';
 import billingRoutes from './routes/billing.js';
 import landingRoutes from './routes/landing.js';
 import dashboardRoutes from './routes/dashboard.js';
+import siteRoutes from './routes/sites.js';
 import { handleCleanup } from './cron/cleanup.js';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -18,8 +19,8 @@ const app = new Hono<{ Bindings: Env }>();
 // CORS for all routes
 app.use('*', cors({
   origin: '*',
-  allowMethods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Authorization', 'Content-Type', 'X-Filename', 'X-Expires-Days'],
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Authorization', 'Content-Type', 'X-Filename', 'X-Expires-Days', 'X-Site-Token'],
 }));
 
 // Auth middleware for all routes
@@ -31,11 +32,14 @@ app.use('/upload', rateLimitMiddleware);
 // Health check
 app.get('/health', (c) => c.json({ status: 'ok', version: '0.1.0' }));
 
-// Landing page
-app.route('/', landingRoutes);
+// Sites need to run before the landing page so *.vanish.sh can serve /.
+app.route('/', siteRoutes);
 
 // Dashboard
 app.route('/', dashboardRoutes);
+
+// Landing page
+app.route('/', landingRoutes);
 
 // Routes
 app.route('/', uploadRoutes);

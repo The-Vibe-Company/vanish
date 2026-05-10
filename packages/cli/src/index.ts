@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Command } from 'commander';
 import { uploadCommand } from './commands/upload.js';
+import { siteCommand } from './commands/site.js';
 import { loginCommand, logoutCommand } from './commands/login.js';
 import { lsCommand } from './commands/ls.js';
 import { rmCommand } from './commands/rm.js';
@@ -17,7 +18,7 @@ const program = new Command();
 
 program
   .name('vanish')
-  .description('Upload files, get temporary public URLs. Dead simple.')
+  .description('Publish temporary mini-sites and file URLs.')
   .version(pkg.version);
 
 program
@@ -30,6 +31,17 @@ program
   .option('--no-clipboard', 'Do not copy URL to clipboard')
   .option('--days <days>', 'Custom retention in days (Pro only, 1-365)', parseInt)
   .action(uploadCommand);
+
+program
+  .command('site')
+  .description('Upload a static folder as a temporary mini-site')
+  .argument('<folder>', 'folder to publish')
+  .requiredOption('--root <file>', 'Root file to serve at /, relative to the folder')
+  .option('--slug <slug>', 'Custom vanish.sh subdomain slug (Pro only)')
+  .option('--days <days>', 'Custom retention in days (Pro only, 1-365)', parseInt)
+  .option('--json', 'Output as JSON')
+  .option('--no-clipboard', 'Do not copy URL to clipboard')
+  .action(siteCommand);
 
 program
   .command('login')
@@ -136,7 +148,7 @@ program
 
 // Default: if first arg looks like a file path, treat as upload
 const args = process.argv.slice(2);
-if (args.length > 0 && !args[0].startsWith('-') && !['upload', 'login', 'logout', 'upgrade', 'whoami', 'ls', 'rm', 'status', 'help', 'mcp-serve'].includes(args[0])) {
+if (args.length > 0 && !args[0].startsWith('-') && !['upload', 'up', 'site', 'login', 'logout', 'upgrade', 'whoami', 'ls', 'rm', 'status', 'help', 'mcp-serve'].includes(args[0])) {
   // Shorthand: `vanish file.png` = `vanish upload file.png`
   process.argv.splice(2, 0, 'upload');
 }

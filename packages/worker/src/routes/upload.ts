@@ -1,8 +1,10 @@
 import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
-import type { Env, Upload } from '../types.js';
+import type { Env } from '../types.js';
 import { TIER_LIMITS, BLOCKED_EXTENSIONS, ALLOWED_IMAGE_EXTENSIONS } from '../types.js';
 import { calculateExpiry } from '../lib/expiry.js';
+import { guessContentType } from '../lib/content-type.js';
+import { getActiveStorageBytes } from '../lib/storage.js';
 
 const upload = new Hono<{ Bindings: Env }>();
 
@@ -49,13 +51,7 @@ upload.post('/upload', async (c) => {
 
   // Check total storage quota
   if (limits.maxTotalStorage && user) {
-    const stats = await c.env.DB.prepare(`
-      SELECT COALESCE(SUM(size_bytes), 0) as total_bytes
-      FROM uploads
-      WHERE user_id = ? AND deleted_at IS NULL
-    `).bind(user.id).first<{ total_bytes: number }>();
-
-    const currentUsage = stats?.total_bytes || 0;
+    const currentUsage = await getActiveStorageBytes(c.env, user.id);
     if (currentUsage + size > limits.maxTotalStorage) {
       const maxMB = Math.round(limits.maxTotalStorage / (1024 * 1024));
       const usedMB = Math.round(currentUsage / (1024 * 1024));
@@ -132,33 +128,5 @@ upload.post('/upload', async (c) => {
     expires: expiresAt,
   }, 201);
 });
-
-function guessContentType(filename: string): string {
-  const ext = filename.split('.').pop()?.toLowerCase();
-  const types: Record<string, string> = {
-    png: 'image/png',
-    jpg: 'image/jpeg',
-    jpeg: 'image/jpeg',
-    gif: 'image/gif',
-    webp: 'image/webp',
-    svg: 'image/svg+xml',
-    pdf: 'application/pdf',
-    json: 'application/json',
-    txt: 'text/plain',
-    html: 'text/html',
-    css: 'text/css',
-    js: 'application/javascript',
-    mp4: 'video/mp4',
-    webm: 'video/webm',
-    zip: 'application/zip',
-    gz: 'application/gzip',
-    tar: 'application/x-tar',
-    md: 'text/markdown',
-    csv: 'text/csv',
-    xml: 'application/xml',
-    log: 'text/plain',
-  };
-  return types[ext || ''] || 'application/octet-stream';
-}
 
 export default upload;

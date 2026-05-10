@@ -6,6 +6,11 @@ describe('TIER_LIMITS', () => {
     expect(TIER_LIMITS.anonymous.maxFileSize).toBe(5 * 1024 * 1024);
   });
 
+  it('anonymous tier allows 10MB mini-sites', () => {
+    expect(TIER_LIMITS.anonymous.maxSiteSize).toBe(10 * 1024 * 1024);
+    expect(TIER_LIMITS.anonymous.maxSiteFiles).toBe(100);
+  });
+
   it('free tier allows 50MB', () => {
     expect(TIER_LIMITS.free.maxFileSize).toBe(50 * 1024 * 1024);
   });
@@ -20,10 +25,14 @@ describe('TIER_LIMITS', () => {
 
   it('free tier has 50MB total storage', () => {
     expect(TIER_LIMITS.free.maxTotalStorage).toBe(50 * 1024 * 1024);
+    expect(TIER_LIMITS.free.maxSiteSize).toBe(50 * 1024 * 1024);
+    expect(TIER_LIMITS.free.maxSiteFiles).toBe(500);
   });
 
   it('pro tier has 1GB total storage', () => {
     expect(TIER_LIMITS.pro.maxTotalStorage).toBe(1024 * 1024 * 1024);
+    expect(TIER_LIMITS.pro.maxSiteSize).toBe(1024 * 1024 * 1024);
+    expect(TIER_LIMITS.pro.maxSiteFiles).toBe(1000);
   });
 
   it('anonymous tier expires in 24 hours', () => {
