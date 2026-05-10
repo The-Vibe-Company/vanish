@@ -1,0 +1,29 @@
+packages/worker/src/routes/dashboard.ts
+  s_d040a676f815d8::t_b3a05dcd5953e3 292-293
+  s_d040a676f815d8::t_e12720ea803683 1157
+  s_d040a676f815d8::t_e333baa4a1c398 1182
+  s_d040a676f815d8::t_9e833ad5955880 17
+  s_d040a676f815d8::t_553c0c787e5391 1442
+  s_d040a676f815d8::t_a0ae994f7158a8 1313
+  s_d040a676f815d8::t_aee178ae6bffdf 1564
+  s_d040a676f815d8::t_aaaf59995ec715 1682
+  s_d040a676f815d8::t_341635ce021a74 1731
+  s_d040a676f815d8::t_dc3f7ec7b384b1 1551
+  s_d040a676f815d8::t_3d39c0ad779ab7 420
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "dd86611d326f7bf243e98e9812442efd500402d6",
+  "prompts": {},
+  "sessions": {
+    "s_d040a676f815d8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10702870-8d37-48e3-b1dd-965eeac0bd82",
+        "model": "unknown"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
