@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import { loadConfig, saveConfig } from '../lib/config.js';
 
 export async function loginCommand(): Promise<void> {
@@ -10,13 +9,16 @@ export async function loginCommand(): Promise<void> {
   }
 
   const session = await startCliAuth(config.api_url);
-  const sessionId = session?.session || randomBytes(16).toString('hex');
-  const loginUrl = session?.loginUrl || `${config.api_url}/auth/github?cli=true&session=${sessionId}`;
-
-  if (session?.userCode) {
-    console.log(`Confirm code: ${session.userCode}`);
-    console.log('The browser will ask for this code after GitHub login.\n');
+  if (!session) {
+    console.error('Unable to start CLI login. Please try again or check the vanish API URL.');
+    process.exit(1);
   }
+
+  const sessionId = session.session;
+  const loginUrl = session.loginUrl;
+
+  console.log(`Confirm code: ${session.userCode}`);
+  console.log('The browser will ask for this code after GitHub login.\n');
 
   console.log('Opening browser for GitHub login...');
   console.log(`If it doesn't open, visit: ${loginUrl}\n`);
@@ -40,7 +42,7 @@ export async function loginCommand(): Promise<void> {
 
     try {
       const response = await fetch(pollUrl, {
-        headers: session?.pollToken ? { 'X-Poll-Token': session.pollToken } : undefined,
+        headers: { 'X-Poll-Token': session.pollToken },
       });
       if (response.status === 200) {
         const data = await response.json() as { api_key: string; username: string };

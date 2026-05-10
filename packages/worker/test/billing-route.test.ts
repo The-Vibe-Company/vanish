@@ -90,6 +90,14 @@ describe('billing routes', () => {
     ]);
     expect(db.events[0].properties).not.toContain('cus_test');
     expect(db.events[0].properties).not.toContain('sub_test');
+
+    const retry = await request(env, '/webhooks/stripe', {
+      method: 'POST',
+      headers: { 'Stripe-Signature': signature },
+      body,
+    });
+    expect(retry.status).toBe(200);
+    expect(db.events).toHaveLength(1);
   });
 });
 
@@ -165,6 +173,11 @@ class BillingStatement {
     if (sql.includes('FROM api_keys ak JOIN users u')) {
       const [keyHash] = this.args as [string];
       return (this.db.apiKeys.get(keyHash) || null) as T | null;
+    }
+
+    if (sql.includes('SELECT tier, stripe_customer_id, stripe_subscription_id FROM users')) {
+      const [userId] = this.args as [string];
+      return (this.db.users.get(userId) || null) as T | null;
     }
 
     return null;

@@ -19,6 +19,7 @@ const { loginCommand } = await import('../src/commands/login.js');
 
 describe('loginCommand', () => {
   let logSpy: ReturnType<typeof vi.spyOn>;
+  let errorSpy: ReturnType<typeof vi.spyOn>;
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -28,7 +29,7 @@ describe('loginCommand', () => {
     mocks.open.mockReset();
     mocks.loadConfig.mockReturnValue({ api_url: 'https://vanish.test' });
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (url === 'https://vanish.test/auth/cli/start') {
         return Response.json({
@@ -64,5 +65,18 @@ describe('loginCommand', () => {
     expect(output).toContain('Confirm code: ABC123');
     expect(output).toContain('Logged in as @stan');
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining('token=poll-secret'), expect.anything());
+  });
+
+  it('fails fast when the API cannot create a secure CLI login session', async () => {
+    fetchMock.mockResolvedValueOnce(Response.json({ error: 'unavailable' }, { status: 503 }));
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('process.exit');
+    }) as never);
+
+    await expect(loginCommand()).rejects.toThrow('process.exit');
+
+    expect(errorSpy).toHaveBeenCalledWith('Unable to start CLI login. Please try again or check the vanish API URL.');
+    expect(mocks.open).not.toHaveBeenCalled();
+    expect(exitSpy).toHaveBeenCalledWith(1);
   });
 });

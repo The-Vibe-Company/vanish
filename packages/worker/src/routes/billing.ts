@@ -180,6 +180,19 @@ billing.post('/webhooks/stripe', async (c) => {
         break;
       }
 
+      const currentUser = await c.env.DB.prepare(`
+        SELECT tier, stripe_customer_id, stripe_subscription_id
+        FROM users
+        WHERE id = ?
+      `).bind(userId).first<{
+        tier: string;
+        stripe_customer_id: string | null;
+        stripe_subscription_id: string | null;
+      }>();
+      const alreadyRecorded = currentUser?.tier === 'pro' &&
+        currentUser.stripe_customer_id === customerId &&
+        currentUser.stripe_subscription_id === subscriptionId;
+
       // Link Stripe customer + subscription to user, upgrade to Pro
       await c.env.DB.prepare(`
         UPDATE users
@@ -187,15 +200,17 @@ billing.post('/webhooks/stripe', async (c) => {
         WHERE id = ?
       `).bind(customerId, subscriptionId, userId).run();
 
-      await logProductEvent(c.env, {
-        name: 'upgrade_completed',
-        userId,
-        properties: {
-          tier: 'pro',
-          checkout_provider: 'stripe',
-          subscription_status: 'active',
-        },
-      });
+      if (!alreadyRecorded) {
+        await logProductEvent(c.env, {
+          name: 'upgrade_completed',
+          userId,
+          properties: {
+            tier: 'pro',
+            checkout_provider: 'stripe',
+            subscription_status: 'active',
+          },
+        });
+      }
 
       console.log(`User ${userId} upgraded to Pro (customer: ${customerId})`);
       break;

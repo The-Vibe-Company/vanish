@@ -706,7 +706,7 @@ async function serveSite(c: AppContext, identifier: string, pathname: string): P
   headers.set('Access-Control-Allow-Origin', '*');
   headers.set('Link', '<mailto:abuse@vanish.sh>; rel="abuse"');
 
-  await logSiteFirstServed(c, site);
+  c.executionCtx.waitUntil(logSiteFirstServed(c.env, site));
 
   return new Response(object.body, { headers });
 }
@@ -828,16 +828,16 @@ async function logSitePublished(
   }
 }
 
-async function logSiteFirstServed(c: AppContext, site: Site): Promise<void> {
-  if (!productEventsEnabled(c.env)) {
+async function logSiteFirstServed(env: Env, site: Site): Promise<void> {
+  if (!productEventsEnabled(env)) {
     return;
   }
 
-  if (await hasProductEvent(c.env, 'site_first_served', site.id)) {
+  if (await hasProductEvent(env, 'site_first_served', site.id)) {
     return;
   }
 
-  await logProductEvent(c.env, {
+  await logProductEvent(env, {
     name: 'site_first_served',
     userId: site.user_id,
     siteId: site.id,

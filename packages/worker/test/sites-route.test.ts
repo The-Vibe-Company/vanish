@@ -403,11 +403,16 @@ function authHeaders(apiKey: string | undefined, headers: Record<string, string>
   return apiKey ? { ...headers, Authorization: `Bearer ${apiKey}` } : headers;
 }
 
-function request(env: Env, path: string, init?: RequestInit) {
-  return worker.fetch(new Request(`http://localhost:8787${path}`, init), env, {
-    waitUntil: () => undefined,
+async function request(env: Env, path: string, init?: RequestInit) {
+  const waitUntilPromises: Promise<unknown>[] = [];
+  const response = await worker.fetch(new Request(`http://localhost:8787${path}`, init), env, {
+    waitUntil: promise => {
+      waitUntilPromises.push(Promise.resolve(promise));
+    },
     passThroughOnException: () => undefined,
   } as unknown as ExecutionContext);
+  await Promise.all(waitUntilPromises);
+  return response;
 }
 
 class FakeBucket {
