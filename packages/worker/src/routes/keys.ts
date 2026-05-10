@@ -73,8 +73,8 @@ keys.post('/keys', async (c) => {
   const keyPrefix = getKeyPrefix(apiKey);
 
   await c.env.DB.prepare(`
-    INSERT INTO api_keys (key_hash, user_id, key_prefix, name)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO api_keys (key_hash, user_id, key_prefix, name, source)
+    VALUES (?, ?, ?, ?, 'manual')
   `).bind(keyHash, user.id, keyPrefix, name).run();
 
   return c.json({

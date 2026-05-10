@@ -17,12 +17,16 @@ CREATE TABLE IF NOT EXISTS api_keys (
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   key_prefix TEXT NOT NULL DEFAULT '',
   name TEXT NOT NULL DEFAULT 'default',
+  source TEXT NOT NULL DEFAULT 'manual',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   last_used_at TEXT,
   revoked_at TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_active_web_user
+  ON api_keys(user_id)
+  WHERE source = 'web' AND revoked_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS uploads (
   id TEXT PRIMARY KEY,

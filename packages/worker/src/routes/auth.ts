@@ -16,6 +16,8 @@ interface GitHubTokenResponse {
   scope: string;
 }
 
+type OAuthApiKeySource = 'cli' | 'web';
+
 type CliAuthSession =
   | {
       status: 'pending';
@@ -189,6 +191,15 @@ auth.get('/auth/callback', async (c) => {
     // Invalid state, continue without session/redirect
   }
 
+  const secureSession = session ? await readCliAuthSession(c.env, session) : null;
+  const isCliLogin = isPendingCliAuthSession(secureSession, nonce);
+  if (session && !isCliLogin) {
+    return c.html(cliConfirmPage({
+      title: 'CLI login expired',
+      body: 'Return to your terminal and run vanish login again.',
+    }), 410);
+  }
+
   // Exchange code for access token
   const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
     method: 'POST',
@@ -269,52 +280,41 @@ auth.get('/auth/callback', async (c) => {
     `).bind(userId, ghUser.id, ghUser.login, email, tier).run();
   }
 
-  // Generate API key
-  const apiKey = generateApiKey();
-  const keyHash = await hashApiKey(apiKey);
-  const keyPrefix = getKeyPrefix(apiKey);
-
-  await c.env.DB.prepare(`
-    INSERT INTO api_keys (key_hash, user_id, key_prefix, name)
-    VALUES (?, ?, ?, 'default')
-  `).bind(keyHash, userId, keyPrefix).run();
+  const apiKey = await createOAuthApiKey(c.env, userId, isCliLogin ? 'cli' : 'web');
 
   // If CLI session, store API key for polling
-  if (session) {
-    const secureSession = await readCliAuthSession(c.env, session);
-    if (secureSession?.status === 'pending' && secureSession.stateNonce === nonce) {
-      await c.env.DB.prepare(`
-        UPDATE auth_sessions
-        SET api_key = ?, username = ?
-        WHERE session_id = ? AND expires_at > datetime('now')
-      `).bind(
-        JSON.stringify({
-          status: 'authorized',
-          pollTokenHash: secureSession.pollTokenHash,
-          userCodeHash: secureSession.userCodeHash,
-          apiKey,
-          username: ghUser.login,
-        } satisfies CliAuthSession),
-        ghUser.login,
-        session,
-      ).run();
-      await logProductEvent(c.env, {
-        name: 'login_completed',
-        userId,
-        properties: {
-          tier,
-          has_cli_session: true,
-          has_redirect: Boolean(redirect),
-          secure_cli_flow: true,
-        },
-      });
-      return c.html(cliConfirmPage({
-        title: 'Confirm CLI login',
-        body: 'Enter the code shown in your terminal to finish login.',
-        sessionId: session,
-        retry: true,
-      }));
-    }
+  if (isCliLogin) {
+    await c.env.DB.prepare(`
+      UPDATE auth_sessions
+      SET api_key = ?, username = ?
+      WHERE session_id = ? AND expires_at > datetime('now')
+    `).bind(
+      JSON.stringify({
+        status: 'authorized',
+        pollTokenHash: secureSession.pollTokenHash,
+        userCodeHash: secureSession.userCodeHash,
+        apiKey,
+        username: ghUser.login,
+      } satisfies CliAuthSession),
+      ghUser.login,
+      session,
+    ).run();
+    await logProductEvent(c.env, {
+      name: 'login_completed',
+      userId,
+      properties: {
+        tier,
+        has_cli_session: true,
+        has_redirect: Boolean(redirect),
+        secure_cli_flow: true,
+      },
+    });
+    return c.html(cliConfirmPage({
+      title: 'Confirm CLI login',
+      body: 'Enter the code shown in your terminal to finish login.',
+      sessionId: session,
+      retry: true,
+    }));
   }
 
   await logProductEvent(c.env, {
@@ -347,6 +347,63 @@ auth.get('/auth/callback', async (c) => {
   dashboardUrl.hash = `key=${encodeURIComponent(apiKey)}`;
   return c.redirect(dashboardUrl.pathname + dashboardUrl.hash);
 });
+
+async function createOAuthApiKey(env: Env, userId: string, source: OAuthApiKeySource): Promise<string> {
+  if (source === 'web') {
+    return rotateWebApiKey(env, userId);
+  }
+
+  const apiKey = generateApiKey();
+  await insertApiKey(env, {
+    apiKey,
+    userId,
+    source,
+  });
+  return apiKey;
+}
+
+async function rotateWebApiKey(env: Env, userId: string): Promise<string> {
+  try {
+    return await rotateWebApiKeyOnce(env, userId);
+  } catch {
+    // A concurrent web login can win the unique active-web-key race. Retry once
+    // so the latest completed login still owns the single active browser key.
+    return rotateWebApiKeyOnce(env, userId);
+  }
+}
+
+async function rotateWebApiKeyOnce(env: Env, userId: string): Promise<string> {
+  const apiKey = generateApiKey();
+  const keyHash = await hashApiKey(apiKey);
+  const keyPrefix = getKeyPrefix(apiKey);
+
+  await env.DB.batch([
+    env.DB.prepare(`
+      UPDATE api_keys
+      SET revoked_at = datetime('now')
+      WHERE user_id = ? AND source = 'web' AND revoked_at IS NULL
+    `).bind(userId),
+    env.DB.prepare(`
+      INSERT INTO api_keys (key_hash, user_id, key_prefix, name, source)
+      VALUES (?, ?, ?, 'default', 'web')
+    `).bind(keyHash, userId, keyPrefix),
+  ]);
+
+  return apiKey;
+}
+
+async function insertApiKey(
+  env: Env,
+  input: { apiKey: string; userId: string; source: OAuthApiKeySource },
+): Promise<void> {
+  const keyHash = await hashApiKey(input.apiKey);
+  const keyPrefix = getKeyPrefix(input.apiKey);
+
+  await env.DB.prepare(`
+    INSERT INTO api_keys (key_hash, user_id, key_prefix, name, source)
+    VALUES (?, ?, ?, 'default', ?)
+  `).bind(keyHash, input.userId, keyPrefix, input.source).run();
+}
 
 /**
  * GET /auth/poll - CLI polls this to retrieve the API key after OAuth.
@@ -472,6 +529,13 @@ function cliConfirmPage(input: { title: string; body: string; sessionId?: string
   <p>${escapeHtml(input.body)}</p>
   ${form}
 </body></html>`;
+}
+
+function isPendingCliAuthSession(
+  session: CliAuthSession | null,
+  nonce: string,
+): session is Extract<CliAuthSession, { status: 'pending' }> {
+  return session?.status === 'pending' && session.stateNonce === nonce;
 }
 
 function generateUserCode(): string {
