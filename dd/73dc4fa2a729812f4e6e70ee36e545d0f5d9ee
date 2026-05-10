@@ -1,0 +1,20 @@
+packages/worker/src/routes/landing.ts
+  s_cdb13417960b49::t_93b512f1c99026 17,70-76,78-82,462-463
+  s_cdb13417960b49::t_c18d63941564c6 502-512,884-896
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "dd73dc4fa2a729812f4e6e70ee36e545d0f5d9ee",
+  "prompts": {},
+  "sessions": {
+    "s_cdb13417960b49": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e12f4-d132-7ba3-bc3f-878745073331",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
