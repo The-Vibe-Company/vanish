@@ -1,0 +1,36 @@
+packages/cli/test/update.test.ts
+  s_ea48e9dfff0c67::t_213a8aecf08684 1-64
+packages/cli/src/commands/update.ts
+  s_ea48e9dfff0c67::t_2e0f755003b9ea 1-9,14-18
+  s_ea48e9dfff0c67::t_9b9a9e1e2ea548 10-13
+packages/cli/src/lib/config.ts
+  s_ea48e9dfff0c67::t_62a21e92c0843b 12
+packages/cli/src/index.ts
+  s_ea48e9dfff0c67::t_919ebb264ac475 13-14,152-156,159,164-165
+packages/cli/src/lib/version-check.ts
+  s_ea48e9dfff0c67::t_c9bdf4b5ef24a8 38-39
+  s_ea48e9dfff0c67::t_e65fdb62dd9871 2,114
+  s_ea48e9dfff0c67::t_6ac7950604bdea 1,3-37,40-113,115-166
+README.md
+  s_ea48e9dfff0c67::t_ae31c44a7d2043 134
+packages/cli/test/version-check.test.ts
+  s_ea48e9dfff0c67::t_5d1196362c2409 1-122
+vanish/SKILL.md
+  s_ea48e9dfff0c67::t_dfdb265f178182 86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "85368ce34d1f6e10f579f55fa8af784c9ff5b61b",
+  "prompts": {},
+  "sessions": {
+    "s_ea48e9dfff0c67": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e1184-2c71-7532-bc1a-4970bdb63aa8",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
