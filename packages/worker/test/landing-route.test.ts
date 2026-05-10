@@ -20,7 +20,8 @@ describe('landing route', () => {
     expect(html).toContain('<title>vanish: public preview URLs for agent-made artifacts</title>');
     expect(html).toContain('npx vanish-cli site ./demo');
     expect(html).toContain('Agent handoff');
-    expect(html).toContain('href="/auth/github"');
+    expect(html).toContain('href="/auth/github?redirect=/dashboard"');
+    expect(html).not.toContain('href="/auth/github">');
     expect(html).toContain('href="/dashboard"');
     expect(html).toContain('mailto:abuse@vanish.sh');
   });

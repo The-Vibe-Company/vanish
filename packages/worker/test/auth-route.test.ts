@@ -96,6 +96,28 @@ describe('auth routes', () => {
     expect(response.status).toBe(202);
     expect(await response.json()).toEqual({ status: 'waiting' });
   });
+
+  it('redirects web GitHub login to the dashboard with a browser key', async () => {
+    const github = await request(env, '/auth/github?redirect=/dashboard');
+    const githubLocation = github.headers.get('Location');
+    expect(githubLocation).toBeTruthy();
+    const state = new URL(githubLocation!).searchParams.get('state');
+    expect(state).toBeTruthy();
+
+    const callback = await request(env, `/auth/callback?code=abc123&state=${encodeURIComponent(state!)}`);
+
+    expect(callback.status).toBe(302);
+    const location = callback.headers.get('Location');
+    expect(location).toMatch(/^\/dashboard#key=vnsh_/);
+  });
+
+  it('redirects default browser GitHub login to the dashboard instead of showing an API key page', async () => {
+    const callback = await request(env, '/auth/callback?code=abc123');
+
+    expect(callback.status).toBe(302);
+    const location = callback.headers.get('Location');
+    expect(location).toMatch(/^\/dashboard#key=vnsh_/);
+  });
 });
 
 function request(env: Env, path: string, init?: RequestInit) {
