@@ -1,0 +1,25 @@
+README.md
+  s_440e83c4ed37c9::t_a2c238eaa1ebad 214
+packages/worker/migrations/0000_initial_schema.sql
+  s_440e83c4ed37c9::t_a2c238eaa1ebad 1-161
+.github/workflows/release.yml
+  s_440e83c4ed37c9::t_8d5e44002f95c4 63
+packages/worker/package.json
+  s_440e83c4ed37c9::t_8d5e44002f95c4 11-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "5726b02523f73e5f083dfd114a8ca5dbef2733db",
+  "prompts": {},
+  "sessions": {
+    "s_440e83c4ed37c9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e136c-c3dd-79a3-be85-d7e408b488c8",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
