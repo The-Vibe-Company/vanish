@@ -1,0 +1,29 @@
+.release-please-manifest.json
+  s_19d5343fd2bf1b::t_5a7dacea6e365e 2-3
+packages/cli/CHANGELOG.md
+  s_19d5343fd2bf1b::t_5a7dacea6e365e 3-9
+packages/worker/CHANGELOG.md
+  s_19d5343fd2bf1b::t_5a7dacea6e365e 3-9
+.gitignore
+  s_19d5343fd2bf1b::t_5a7dacea6e365e 8
+packages/cli/package.json
+  s_19d5343fd2bf1b::t_5a7dacea6e365e 3
+packages/worker/package.json
+  s_19d5343fd2bf1b::t_5a7dacea6e365e 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "2fbb3b1e6009496bed1a79e7b12d15af9b2685eb",
+  "prompts": {},
+  "sessions": {
+    "s_19d5343fd2bf1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e1205-b12b-7f90-8ce7-f00853284c46",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
