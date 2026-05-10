@@ -14,6 +14,7 @@ const html = `<!doctype html>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2308090a'/%3E%3Cpath d='M14 16h28c6 0 10 4 10 10v12c0 6-4 10-10 10H14V16Z' fill='%23d4a850'/%3E%3Cpath d='M22 24h17c3 0 5 2 5 5v2H22v-7Zm0 12h22v2c0 3-2 5-5 5H22v-7Z' fill='%2308090a'/%3E%3Cpath d='M45 18h5v5h-5zM51 27h4v4h-4zM47 39h3v3h-3z' fill='%23d4a850'/%3E%3C/svg%3E" />
 
 <style>
   *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
@@ -66,9 +67,19 @@ const html = `<!doctype html>
     border-bottom:1px solid var(--hairline);
   }
   .topbar-inner{display:flex;align-items:center;gap:2rem;height:56px}
-  .brand{display:flex;align-items:baseline;gap:.05rem;font-weight:600;font-size:1rem;color:var(--fg-white);letter-spacing:-.02em}
+  .brand{display:flex;align-items:center;gap:.62rem;font-weight:600;font-size:1rem;color:var(--fg-white);letter-spacing:0}
+  .brand-lockup{display:inline-flex;align-items:center;gap:.5rem;min-width:0}
+  .brand-mark{
+    width:30px;height:30px;flex:0 0 auto;border-radius:7px;
+    box-shadow:0 0 0 1px rgba(212,168,80,.25),0 10px 22px -14px var(--accent);
+  }
+  .brand-word{display:inline-flex;align-items:baseline;white-space:nowrap}
   .brand .dot{color:var(--accent)}
-  .brand-meta{margin-left:.6rem;color:var(--fg-dim);font-size:.72rem;border-left:1px solid var(--hairline);padding-left:.6rem;letter-spacing:.04em}
+  .brand-meta{margin-left:.15rem;color:var(--fg-dim);font-size:.72rem;border-left:1px solid var(--hairline);padding-left:.7rem;letter-spacing:.04em}
+  .brand:hover .brand-mark .vanish-chip{animation:chipDrift 1.1s cubic-bezier(.16,1,.3,1) both}
+  .brand:hover .brand-mark .vanish-scan{transform:scaleX(.18);opacity:.35}
+  .vanish-scan{transform-origin:left;transition:transform .5s cubic-bezier(.16,1,.3,1),opacity .5s}
+  @keyframes chipDrift{to{transform:translateX(3px);opacity:.28}}
   .nav{display:flex;gap:1.4rem;margin-left:auto;align-items:center}
   .nav a{color:var(--fg);font-size:.82rem;letter-spacing:.02em;transition:color .15s}
   .nav a:hover{color:var(--fg-white)}
@@ -448,7 +459,8 @@ const html = `<!doctype html>
   .foot ul{list-style:none;display:flex;flex-direction:column;gap:.55rem}
   .foot a{font-size:.82rem;color:var(--fg);transition:color .15s}
   .foot a:hover{color:var(--accent)}
-  .foot .brand{font-size:1.3rem;margin-bottom:.7rem}
+  .foot .brand{font-size:1.15rem;margin-bottom:.7rem;display:inline-flex}
+  .foot .brand-mark{width:34px;height:34px;border-radius:8px}
   .foot .blurb{font-size:.78rem;color:var(--fg-dim);max-width:30ch;line-height:1.6}
   .foot-bottom{
     margin-top:2.4rem;padding-top:1.4rem;border-top:1px solid var(--hairline);
@@ -487,7 +499,17 @@ const html = `<!doctype html>
 <header class="topbar">
   <div class="wrap topbar-inner">
     <a href="/" class="brand" aria-label="vanish">
-      vanish<span class="dot">.</span>sh
+      <span class="brand-lockup">
+        <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
+          <rect width="64" height="64" rx="14" fill="var(--bg)" />
+          <path d="M13 16h29c6.1 0 10 3.9 10 10v12c0 6.1-3.9 10-10 10H13V16Z" fill="var(--accent)" />
+          <path class="vanish-scan" d="M22 24h17c3.1 0 5 1.9 5 5v2H22v-7Zm0 12h22v2c0 3.1-1.9 5-5 5H22v-7Z" fill="var(--bg)" />
+          <path class="vanish-chip" d="M45 18h5v5h-5z" fill="var(--accent)" />
+          <path class="vanish-chip" d="M51 27h4v4h-4z" fill="var(--accent)" style="animation-delay:.05s" />
+          <path class="vanish-chip" d="M47 39h3v3h-3z" fill="var(--accent)" style="animation-delay:.1s" />
+        </svg>
+        <span class="brand-word">vanish<span class="dot">.</span>sh</span>
+      </span>
       <span class="brand-meta">v0.1.12</span>
     </a>
     <nav class="nav" aria-label="primary">
@@ -859,7 +881,19 @@ r = requests.<span class="f">post</span>(
   <div class="wrap">
     <div class="foot">
       <div>
-        <div class="brand">vanish<span class="dot" style="color:var(--accent)">.</span>sh</div>
+        <div class="brand" aria-label="vanish">
+          <span class="brand-lockup">
+            <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
+              <rect width="64" height="64" rx="14" fill="var(--bg)" />
+              <path d="M13 16h29c6.1 0 10 3.9 10 10v12c0 6.1-3.9 10-10 10H13V16Z" fill="var(--accent)" />
+              <path class="vanish-scan" d="M22 24h17c3.1 0 5 1.9 5 5v2H22v-7Zm0 12h22v2c0 3.1-1.9 5-5 5H22v-7Z" fill="var(--bg)" />
+              <path class="vanish-chip" d="M45 18h5v5h-5z" fill="var(--accent)" />
+              <path class="vanish-chip" d="M51 27h4v4h-4z" fill="var(--accent)" style="animation-delay:.05s" />
+              <path class="vanish-chip" d="M47 39h3v3h-3z" fill="var(--accent)" style="animation-delay:.1s" />
+            </svg>
+            <span class="brand-word">vanish<span class="dot">.</span>sh</span>
+          </span>
+        </div>
         <p class="blurb">The distribution channel between your coding agent and the people who need to see what it made.</p>
       </div>
       <div>
