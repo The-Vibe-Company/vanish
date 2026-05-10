@@ -1,0 +1,34 @@
+vanish/agents/openai.yaml
+  s_ea48e9dfff0c67::t_92c5963fb39ab6 1-6
+vanish-publish-site/agents/openai.yaml
+  s_ea48e9dfff0c67::t_92c5963fb39ab6 1-6
+vanish-connect-upgrade/SKILL.md
+  s_ea48e9dfff0c67::t_92c5963fb39ab6 1-18,20-62
+  s_ea48e9dfff0c67::t_e97095f4590422 19
+vanish-upload-files/agents/openai.yaml
+  s_ea48e9dfff0c67::t_92c5963fb39ab6 1-6
+CLAUDE.md
+  s_ea48e9dfff0c67::t_92c5963fb39ab6 78-87
+vanish-publish-site/SKILL.md
+  s_ea48e9dfff0c67::t_92c5963fb39ab6 1-82
+vanish-connect-upgrade/agents/openai.yaml
+  s_ea48e9dfff0c67::t_92c5963fb39ab6 1-6
+vanish-upload-files/SKILL.md
+  s_ea48e9dfff0c67::t_92c5963fb39ab6 1-69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "1dee16aa6e8f516294949c12cf0ea7bffd4d795f",
+  "prompts": {},
+  "sessions": {
+    "s_ea48e9dfff0c67": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e1184-2c71-7532-bc1a-4970bdb63aa8",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
