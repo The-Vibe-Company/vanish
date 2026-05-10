@@ -1,0 +1,103 @@
+packages/worker/src/lib/storage.ts
+  s_cbc124db960f11::t_26853faf6101e4 1-73
+CLAUDE.md
+  s_cbc124db960f11::t_3392f346b47e25 7,12,48,50-51,59,65-67,73
+vanish/SKILL.md
+  s_cbc124db960f11::t_1e7c81b3638abc 22-24,68-70
+  s_cbc124db960f11::t_365613a8c7055f 3,8,10-12,15-21,25-48,51,53-62,66-67,72,77,81,84,87-89,92-93,96
+packages/cli/src/lib/api-client.ts
+  s_cbc124db960f11::t_277594b42ed1e5 60
+  s_cbc124db960f11::t_abe140bfd37062 21,33,171-185
+  s_cbc124db960f11::t_06440f9f8dbbe9 13-20,22-32,34-36,40-41,52-54,59,109-170,209-231
+packages/worker/src/routes/landing.ts
+  s_cbc124db960f11::t_b8cce3a7bffe6a 459,471,481,491,501-502
+  s_cbc124db960f11::t_52437aea10b65c 390-408
+  s_cbc124db960f11::t_7534b1d9b06fc2 533-534,541-545,547
+  s_cbc124db960f11::t_7e14f6bf76e71a 11-12,323,333,349,356,358-359,363,365-366,369,371-372,377-378
+  s_cbc124db960f11::t_d851ae7d62311d 308-313
+  s_cbc124db960f11::t_9b5acdbec8ce99 559-561,563,572,576-578,580,584-587
+packages/worker/src/lib/content-type.ts
+  s_cbc124db960f11::t_a72f3aeee261fa 1-42
+packages/worker/src/index.ts
+  s_cbc124db960f11::t_368bc68ea54808 14,22-23,35-36,41-42
+packages/cli/package.json
+  s_cbc124db960f11::t_c6d701f03e4fee 4,29-30
+README.md
+  s_cbc124db960f11::t_bcea86787c56dd 3,6-7,12-14,21-22,24,26-27,37,40,43,45,48-49,52-54,57-58,61,64-65,68,71-72,75,78,81-94,97-109,112,115-120,125,132,148-150,154-158
+  s_cbc124db960f11::t_4b570559da83fe 23
+packages/worker/src/lib/site-url.ts
+  s_cbc124db960f11::t_03e51343407f22 1-53
+packages/worker/test/site-path.test.ts
+  s_cbc124db960f11::t_71d1a7cefafa97 1-14,17-34
+  s_cbc124db960f11::t_12d009c24dc4df 15-16
+packages/worker/test/site-url.test.ts
+  s_cbc124db960f11::t_283daf637b10ac 1-31
+packages/worker/src/cron/cleanup.ts
+  s_cbc124db960f11::t_cd5b5066c5d48e 11,47-60,64,67-76,87
+  s_cbc124db960f11::t_790a18e66cc0dc 61-63,65-66,88-107
+packages/worker/src/lib/site-path.ts
+  s_cbc124db960f11::t_7f72e9534c2fe1 1-18,20-43
+  s_cbc124db960f11::t_586e6fa234272e 19
+packages/worker/test/sites-route.test.ts
+  s_cbc124db960f11::t_fb2866d7f0a2fc 1-346
+packages/worker/src/routes/dashboard.ts
+  s_cbc124db960f11::t_f77f8fe7facdff 525-528,626,631-632,668,674-675
+  s_cbc124db960f11::t_1d035a8976d4d7 438-443,447-448,716,796
+  s_cbc124db960f11::t_fb2a7cce8ed3b1 474,476,533,582,588-591,613,646-667,669-673,676-683,748-760,771-776,854-864,884
+packages/worker/test/types.test.ts
+  s_cbc124db960f11::t_7aff44a2ac2fa5 11,29,35
+  s_cbc124db960f11::t_bfa79a3eb4a430 9-10,12-13,28,34
+packages/worker/src/types.ts
+  s_cbc124db960f11::t_c7f5f4eec935d1 39-47,49-63,67,77,87
+  s_cbc124db960f11::t_b1c355ed7bb554 48,68,78,88
+packages/worker/src/routes/sites.ts
+  s_cbc124db960f11::t_8f6aed0f267c7d 344-347,349,444-482,522-539,570-574
+  s_cbc124db960f11::t_3934a7b7f3dff4 5,11,66-71,124-126,138,144,162-166,174-178,187-193,242,256-260,275-279,303,319,341-343,369,495,508
+  s_cbc124db960f11::t_8418bcc133fa78 2,18,367,423
+  s_cbc124db960f11::t_6dea903324d15c 155,249,353,383,519-521,540
+  s_cbc124db960f11::t_7f00867b3b8adc 358,363-364
+  s_cbc124db960f11::t_db147673c1e6d1 416,575-578
+  s_cbc124db960f11::t_60c2511efe1d36 1,3-4,6-10,12-17,19-65,72-123,127-137,139-143,145-154,156-161,167-173,179-186,194-241,243-248,250-255,261-274,280-302,304-318,320-340,348,350-352,354-357,359-362,365-366,368,370-382,384-415,417-422,424-443,483-494,496-507,509-518,541-569,579-581
+packages/cli/src/commands/login.ts
+  s_cbc124db960f11::t_510002ffde613c 41-42,61
+packages/worker/src/routes/upload.ts
+  s_cbc124db960f11::t_b9f31ff38f2a16 3
+  s_cbc124db960f11::t_16c0a81438d981 6-7,54
+packages/worker/package.json
+  s_cbc124db960f11::t_ed070745b086fb 7
+packages/worker/src/db/schema.sql
+  s_cbc124db960f11::t_a2fbc740f00597 46,50,58-60
+  s_cbc124db960f11::t_aaa7c9c8511504 41-45,47-49,51-57,61-72
+packages/cli/src/commands/site.ts
+  s_cbc124db960f11::t_e1d6ade37c2dd6 2-3,10-13,110-113,119,123,170-176,204-208
+  s_cbc124db960f11::t_3a2de9cb9c315e 1,4-9,14-109,114-118,120-122,124-169,177-203,209-250
+packages/cli/src/commands/status.ts
+  s_cbc124db960f11::t_a4f34de5f73055 40-42
+  s_cbc124db960f11::t_3a492c1068a150 35,37-39
+packages/cli/src/index.ts
+  s_cbc124db960f11::t_2411f4a269e3e8 8,36-45,151
+  s_cbc124db960f11::t_1513171413b617 21
+packages/cli/test/site.test.ts
+  s_cbc124db960f11::t_9dbde4fb416d46 1-134
+packages/worker/test/storage.test.ts
+  s_cbc124db960f11::t_4b4e870208ae33 1-127
+packages/worker/src/routes/user.ts
+  s_cbc124db960f11::t_185e9dba863027 16-17,22-24,27-36,38-39,48-52,56
+  s_cbc124db960f11::t_252aefd1e252c4 57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "9ec060e717c9702d0948f1e6f42d6f8ea54a6cbe",
+  "prompts": {},
+  "sessions": {
+    "s_cbc124db960f11": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e1084-f05e-7232-a069-588c20547ee9",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
