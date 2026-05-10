@@ -246,51 +246,57 @@ bundles.put('/bundles/:id/files', async (c) => {
     },
   });
 
-  const [inserted] = await c.env.DB.batch([
-    c.env.DB.prepare(`
-      INSERT OR REPLACE INTO bundle_files (bundle_id, path, filename, content_type, size_bytes, r2_key)
-      SELECT ?, ?, ?, ?, ?, ?
-      WHERE EXISTS (
-        SELECT 1 FROM bundles
-        WHERE id = ?
-          AND deleted_at IS NULL
-          AND published_at IS NULL
-      )
-      AND (
-        EXISTS (
-          SELECT 1 FROM bundle_files
-          WHERE bundle_id = ? AND path = ?
+  let inserted: D1Result | undefined;
+  try {
+    [inserted] = await c.env.DB.batch([
+      c.env.DB.prepare(`
+        INSERT OR REPLACE INTO bundle_files (bundle_id, path, filename, content_type, size_bytes, r2_key)
+        SELECT ?, ?, ?, ?, ?, ?
+        WHERE EXISTS (
+          SELECT 1 FROM bundles
+          WHERE id = ?
+            AND deleted_at IS NULL
+            AND published_at IS NULL
         )
-        OR (
-          SELECT COUNT(*) FROM bundle_files WHERE bundle_id = ?
-        ) < (
-          SELECT expected_file_count FROM bundles WHERE id = ?
+        AND (
+          EXISTS (
+            SELECT 1 FROM bundle_files
+            WHERE bundle_id = ? AND path = ?
+          )
+          OR (
+            SELECT COUNT(*) FROM bundle_files WHERE bundle_id = ?
+          ) < (
+            SELECT expected_file_count FROM bundles WHERE id = ?
+          )
         )
-      )
-    `).bind(
-      bundle.id,
-      path,
-      path.split('/').pop() || path,
-      contentType,
-      body.byteLength,
-      r2Key,
-      bundle.id,
-      bundle.id,
-      path,
-      bundle.id,
-      bundle.id,
-    ),
-    c.env.DB.prepare(`
-      UPDATE bundles
-      SET size_bytes = (
-        SELECT COALESCE(SUM(size_bytes), 0) FROM bundle_files WHERE bundle_id = ?
+      `).bind(
+        bundle.id,
+        path,
+        path.split('/').pop() || path,
+        contentType,
+        body.byteLength,
+        r2Key,
+        bundle.id,
+        bundle.id,
+        path,
+        bundle.id,
+        bundle.id,
       ),
-      file_count = (
-        SELECT COUNT(*) FROM bundle_files WHERE bundle_id = ?
-      )
-      WHERE id = ?
-    `).bind(bundle.id, bundle.id, bundle.id),
-  ]);
+      c.env.DB.prepare(`
+        UPDATE bundles
+        SET size_bytes = (
+          SELECT COALESCE(SUM(size_bytes), 0) FROM bundle_files WHERE bundle_id = ?
+        ),
+        file_count = (
+          SELECT COUNT(*) FROM bundle_files WHERE bundle_id = ?
+        )
+        WHERE id = ?
+      `).bind(bundle.id, bundle.id, bundle.id),
+    ]);
+  } catch (err) {
+    cleanupRejectedBundleObject(c, r2Key);
+    throw err;
+  }
 
   if ((inserted.meta?.changes || 0) === 0) {
     cleanupRejectedBundleObject(c, r2Key);

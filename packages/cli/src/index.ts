@@ -15,6 +15,7 @@ import { sitesListCommand, siteInfoCommand, siteRmCommand, siteExtendCommand, si
 import { keysCreateCommand, keysListCommand, keysRevokeCommand } from './commands/keys.js';
 import { bundleCommand } from './commands/bundle.js';
 import { printVersionNoticeIfNeeded } from './lib/version-check.js';
+import { CliExit } from './lib/output.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'));
@@ -259,8 +260,16 @@ if (args.length > 0 && !args[0].startsWith('-') && !['upload', 'up', 'site', 'si
   process.argv.splice(2, 0, 'upload');
 }
 
-await printVersionNoticeIfNeeded(args, pkg.version);
-await program.parseAsync();
+try {
+  await printVersionNoticeIfNeeded(args, pkg.version);
+  await program.parseAsync();
+} catch (err) {
+  if (err instanceof CliExit) {
+    process.exitCode = err.code;
+  } else {
+    throw err;
+  }
+}
 
 function hasLifecycleTargetArg(argv: string[]): boolean {
   for (let i = 2; i < argv.length; i++) {

@@ -192,7 +192,7 @@ function extractAssetPaths(html: string): Set<string> {
     if (!value || value.startsWith('http:') || value.startsWith('https:') || value.startsWith('//') || value.startsWith('data:') || value.startsWith('#')) {
       continue;
     }
-    const path = value.split(/[?#]/)[0].replace(/^\.\//, '').replace(/^\/+/, '');
+    const path = normalizeAssetPath(value);
     if (path && isVerifiableAssetPath(path)) {
       paths.add(path);
     }
@@ -203,6 +203,26 @@ function extractAssetPaths(html: string): Set<string> {
 
 function isVerifiableAssetPath(path: string): boolean {
   return STATIC_ASSET_EXTENSIONS.has(extname(path).toLowerCase());
+}
+
+function normalizeAssetPath(value: string): string | null {
+  const raw = value.split(/[?#]/)[0];
+  const segments: string[] = [];
+
+  for (const segment of raw.replace(/^\/+/, '').split('/')) {
+    if (!segment || segment === '.') {
+      continue;
+    }
+    if (segment === '..') {
+      if (segments.length > 0) {
+        segments.pop();
+      }
+      continue;
+    }
+    segments.push(segment);
+  }
+
+  return segments.length > 0 ? segments.join('/') : null;
 }
 
 const STATIC_ASSET_EXTENSIONS = new Set([

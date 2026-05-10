@@ -401,7 +401,7 @@ function extractAssetPaths(html: string): Set<string> {
       continue;
     }
 
-    const normalized = normalizeCliPath(value.split(/[?#]/)[0].replace(/^\/+/, ''));
+    const normalized = normalizeAssetPath(value);
     if (normalized && isVerifiableAssetPath(normalized)) {
       paths.add(normalized);
     }
@@ -412,6 +412,26 @@ function extractAssetPaths(html: string): Set<string> {
 
 function isVerifiableAssetPath(path: string): boolean {
   return STATIC_ASSET_EXTENSIONS.has(extname(path).toLowerCase());
+}
+
+function normalizeAssetPath(value: string): string | null {
+  const raw = value.split(/[?#]/)[0];
+  const segments: string[] = [];
+
+  for (const segment of raw.replace(/^\/+/, '').split('/')) {
+    if (!segment || segment === '.') {
+      continue;
+    }
+    if (segment === '..') {
+      if (segments.length > 0) {
+        segments.pop();
+      }
+      continue;
+    }
+    segments.push(segment);
+  }
+
+  return segments.length > 0 ? segments.join('/') : null;
 }
 
 const STATIC_ASSET_EXTENSIONS = new Set([

@@ -2,6 +2,13 @@ export interface JsonErrorOptions {
   json?: boolean;
 }
 
+export class CliExit extends Error {
+  constructor(public code: number) {
+    super(`exit ${code}`);
+    this.name = 'CliExit';
+  }
+}
+
 export function fail(message: string, options: JsonErrorOptions = {}, code = 'cli_error'): never {
   if (options.json) {
     console.log(JSON.stringify({
@@ -15,7 +22,8 @@ export function fail(message: string, options: JsonErrorOptions = {}, code = 'cl
     console.error(message);
   }
 
-  process.exit(1);
+  process.exitCode = 1;
+  throw new CliExit(1);
 }
 
 export function failWithUnknownError(err: unknown, options: JsonErrorOptions = {}, fallback = 'Command failed'): never {
@@ -41,7 +49,8 @@ export function failWithUnknownError(err: unknown, options: JsonErrorOptions = {
         console.error(err.hint);
       }
     }
-    process.exit(1);
+    process.exitCode = 1;
+    throw new CliExit(1);
   }
 
   fail(err instanceof Error ? withContext(err.message) : fallback, options);

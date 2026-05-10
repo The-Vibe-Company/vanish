@@ -66,6 +66,7 @@ export async function bundleCommand(files: string[], options: BundleOptions): Pr
   const client = new VanishClient(config);
   const spinner = new Spinner(`Creating bundle (${bundleFiles.length} files, ${formatBytes(totalBytes)})`);
   let draft: CreateBundleResult | null = null;
+  let publishAttempted = false;
 
   try {
     spinner.start();
@@ -85,6 +86,7 @@ export async function bundleCommand(files: string[], options: BundleOptions): Pr
     }
 
     spinner.update('Publishing bundle');
+    publishAttempted = true;
     const published = await client.publishBundle(draft.id, draft.token, options.idempotencyKey
       ? { idempotencyKey: `${options.idempotencyKey}:publish` }
       : undefined);
@@ -114,7 +116,7 @@ export async function bundleCommand(files: string[], options: BundleOptions): Pr
     }
   } catch (err) {
     spinner.stop();
-    if (draft) {
+    if (draft && !publishAttempted) {
       try {
         await client.deleteBundle(draft.id, draft.token);
       } catch {
