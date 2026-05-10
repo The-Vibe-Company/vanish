@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.9](https://github.com/The-Vibe-Company/vanish/compare/vanish-cli-v0.1.8...vanish-cli-v0.1.9) (2026-05-10)
+
+
+### Features
+
+* **sites:** add temporary static mini-sites ([#30](https://github.com/The-Vibe-Company/vanish/issues/30)) ([076c3e4](https://github.com/The-Vibe-Company/vanish/commit/076c3e403bf7a141343ee48fbb503d45b3d928c1))
+
 ## [0.1.8](https://github.com/The-Vibe-Company/vanish/compare/vanish-cli-v0.1.7...vanish-cli-v0.1.8) (2026-02-18)
 
 
