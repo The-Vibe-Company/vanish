@@ -43,9 +43,12 @@ user.get('/me', async (c) => {
       FROM bundles
       WHERE user_id = ?
         AND deleted_at IS NULL
-        AND (expires_at IS NULL OR expires_at > datetime('now'))
+        AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))
     `).bind(currentUser.id).first<{ total_bundles: number; total_bytes: number }>();
-  } catch {
+  } catch (err) {
+    if (!isMissingTableError(err, 'bundles')) {
+      throw err;
+    }
     bundleStats = null;
   }
 
@@ -129,3 +132,8 @@ user.get('/uploads', async (c) => {
 });
 
 export default user;
+
+function isMissingTableError(err: unknown, table: string): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.includes('no such table') && message.includes(table);
+}

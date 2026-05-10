@@ -1,3 +1,4 @@
+import { extname } from 'node:path';
 import { loadConfig } from '../lib/config.js';
 import { VanishClient } from '../lib/api-client.js';
 import { formatBytes } from '../lib/progress.js';
@@ -139,11 +140,6 @@ async function verifySite(url: string, rootPath: string, files: string[]) {
       message: `Root responded ${root.status}`,
     });
 
-    const rootText = root.ok ? await root.text() : '';
-    const assets = Array.from(extractAssetPaths(rootText))
-      .filter(path => files.includes(path))
-      .slice(0, 10);
-
     if (!files.includes(rootPath)) {
       checks.push({
         name: 'manifest-root',
@@ -152,7 +148,19 @@ async function verifySite(url: string, rootPath: string, files: string[]) {
       });
     }
 
+    const rootText = root.ok ? await root.text() : '';
+    const assets = Array.from(extractAssetPaths(rootText)).slice(0, 10);
+
     for (const asset of assets) {
+      if (!files.includes(asset)) {
+        checks.push({
+          name: `manifest:${asset}`,
+          ok: false,
+          message: `${asset} is referenced by the root document but is not in the uploaded manifest`,
+        });
+        continue;
+      }
+
       const response = await fetch(new URL(asset, url), { redirect: 'follow' });
       checks.push({
         name: `asset:${asset}`,
@@ -185,10 +193,20 @@ function extractAssetPaths(html: string): Set<string> {
       continue;
     }
     const path = value.split(/[?#]/)[0].replace(/^\.\//, '').replace(/^\/+/, '');
-    if (path) {
+    if (path && isVerifiableAssetPath(path)) {
       paths.add(path);
     }
   }
 
   return paths;
 }
+
+function isVerifiableAssetPath(path: string): boolean {
+  return STATIC_ASSET_EXTENSIONS.has(extname(path).toLowerCase());
+}
+
+const STATIC_ASSET_EXTENSIONS = new Set([
+  '.avif', '.bmp', '.css', '.gif', '.heic', '.heif', '.ico', '.jpeg', '.jpg',
+  '.js', '.json', '.map', '.mjs', '.otf', '.png', '.svg', '.tif', '.tiff',
+  '.ttf', '.wasm', '.webp', '.woff', '.woff2',
+]);

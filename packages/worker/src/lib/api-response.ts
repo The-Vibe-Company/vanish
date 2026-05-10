@@ -97,7 +97,15 @@ export async function saveIdempotentResponse(
   }
 
   await env.DB.prepare(`
-    INSERT OR REPLACE INTO idempotency_keys (scope, owner, idempotency_key, status, response_json, expires_at)
+    DELETE FROM idempotency_keys
+    WHERE scope = ?
+      AND owner = ?
+      AND idempotency_key = ?
+      AND expires_at <= datetime('now')
+  `).bind(scope, owner, key).run();
+
+  await env.DB.prepare(`
+    INSERT OR IGNORE INTO idempotency_keys (scope, owner, idempotency_key, status, response_json, expires_at)
     VALUES (?, ?, ?, ?, ?, datetime('now', '+48 hours'))
   `).bind(scope, owner, key, status, JSON.stringify(body)).run();
 }

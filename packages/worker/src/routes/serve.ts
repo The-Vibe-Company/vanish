@@ -91,9 +91,11 @@ function isActiveContent(contentType: string | null, filename: string): boolean 
 
   return normalized.includes('text/html')
     || normalized.includes('image/svg+xml')
+    || normalized.includes('application/xhtml+xml')
     || normalized.includes('javascript')
     || lowerName.endsWith('.html')
     || lowerName.endsWith('.htm')
+    || lowerName.endsWith('.xhtml')
     || lowerName.endsWith('.svg')
     || lowerName.endsWith('.js')
     || lowerName.endsWith('.mjs');

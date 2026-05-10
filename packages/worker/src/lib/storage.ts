@@ -25,11 +25,13 @@ export async function getActiveStorageBytes(env: Env, userId: string): Promise<n
       FROM bundles
       WHERE user_id = ?
         AND deleted_at IS NULL
-        AND (expires_at IS NULL OR expires_at > datetime('now'))
+        AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))
     `).bind(userId).first<{ total_bytes: number }>();
     bundleBytes = bundles?.total_bytes || 0;
-  } catch {
-    // Older self-hosted schemas and lightweight tests may not have bundles yet.
+  } catch (err) {
+    if (!isMissingTableError(err, 'bundles')) {
+      throw err;
+    }
     bundleBytes = 0;
   }
 
@@ -86,8 +88,10 @@ export async function ensureStorageAvailable(
         WHERE id = ? AND user_id = ? AND deleted_at IS NULL
       `).bind(bundleId, userId).first<{ size_bytes: number }>();
       usedBytes -= currentBundle?.size_bytes || 0;
-    } catch {
-      // See getActiveStorageBytes fallback.
+    } catch (err) {
+      if (!isMissingTableError(err, 'bundles')) {
+        throw err;
+      }
     }
   }
 
@@ -108,4 +112,9 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`;
   if (bytes < 1024 * 1024 * 1024) return `${Math.round(bytes / (1024 * 1024))}MB`;
   return `${Math.round(bytes / (1024 * 1024 * 1024))}GB`;
+}
+
+function isMissingTableError(err: unknown, table: string): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.includes('no such table') && message.includes(table);
 }

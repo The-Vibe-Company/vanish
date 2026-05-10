@@ -166,7 +166,13 @@ upload.post('/upload', async (c) => {
     deletable: Boolean(user),
   };
 
-  await saveIdempotentResponse(c.env, 'upload', idempotencyOwner, idempotencyKey, 201, result);
+  if (idempotencyKey) {
+    try {
+      await saveIdempotentResponse(c.env, 'upload', idempotencyOwner, idempotencyKey, 201, result);
+    } catch (err) {
+      console.error('Failed to record upload idempotency response:', err);
+    }
+  }
 
   return c.json(result, 201);
 });

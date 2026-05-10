@@ -346,12 +346,28 @@ async function verifyPublishedSite(url: string, rootPath: string, files: SiteFil
       });
     }
 
+    const uploadedPaths = new Set(files.map(file => file.sitePath));
+    if (!uploadedPaths.has(rootPath)) {
+      checks.push({
+        name: 'manifest-root',
+        ok: false,
+        message: `Root path ${rootPath} is missing from uploaded files`,
+      });
+    }
+
     const rootText = root.ok ? await root.text() : '';
-    const assetPaths = Array.from(extractAssetPaths(rootText))
-      .filter(path => files.some(file => file.sitePath === path))
-      .slice(0, 10);
+    const assetPaths = Array.from(extractAssetPaths(rootText)).slice(0, 10);
 
     for (const assetPath of assetPaths) {
+      if (!uploadedPaths.has(assetPath)) {
+        checks.push({
+          name: `manifest:${assetPath}`,
+          ok: false,
+          message: `${assetPath} is referenced by the root document but is not in the uploaded manifest`,
+        });
+        continue;
+      }
+
       const assetUrl = new URL(assetPath, url).toString();
       const asset = await fetch(assetUrl, { redirect: 'follow' });
       checks.push({
@@ -386,13 +402,23 @@ function extractAssetPaths(html: string): Set<string> {
     }
 
     const normalized = normalizeCliPath(value.split(/[?#]/)[0].replace(/^\/+/, ''));
-    if (normalized) {
+    if (normalized && isVerifiableAssetPath(normalized)) {
       paths.add(normalized);
     }
   }
 
   return paths;
 }
+
+function isVerifiableAssetPath(path: string): boolean {
+  return STATIC_ASSET_EXTENSIONS.has(extname(path).toLowerCase());
+}
+
+const STATIC_ASSET_EXTENSIONS = new Set([
+  '.avif', '.bmp', '.css', '.gif', '.heic', '.heif', '.ico', '.jpeg', '.jpg',
+  '.js', '.json', '.map', '.mjs', '.otf', '.png', '.svg', '.tif', '.tiff',
+  '.ttf', '.wasm', '.webp', '.woff', '.woff2',
+]);
 
 function guessContentType(filename: string): string {
   const ext = extname(filename).toLowerCase();

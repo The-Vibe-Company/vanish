@@ -7,6 +7,7 @@ import { calculateExpiry, isExpired } from '../lib/expiry.js';
 import { guessContentType } from '../lib/content-type.js';
 import { ensureStorageAvailable } from '../lib/storage.js';
 import { normalizeSitePath } from '../lib/site-path.js';
+import { hashApiKey } from '../lib/api-key.js';
 import { rateLimitMiddleware } from '../middleware/rate-limit.js';
 import {
   getIdempotencyKey,
@@ -124,7 +125,13 @@ bundles.post('/bundles', rateLimitMiddleware, async (c) => {
     expires: expiresAt,
   };
 
-  await saveIdempotentResponse(c.env, 'bundle-create', idempotencyOwner, idempotencyKey, 201, result);
+  if (idempotencyKey) {
+    try {
+      await saveIdempotentResponse(c.env, 'bundle-create', idempotencyOwner, idempotencyKey, 201, result);
+    } catch (err) {
+      console.error('Failed to record bundle create idempotency response:', err);
+    }
+  }
 
   return c.json(result, 201);
 });
@@ -184,12 +191,6 @@ bundles.put('/bundles/:id/files', async (c) => {
   const existingFile = await c.env.DB.prepare(`
     SELECT size_bytes FROM bundle_files WHERE bundle_id = ? AND path = ?
   `).bind(bundle.id, path).first<{ size_bytes: number }>();
-  if (!existingFile && bundle.file_count >= bundle.expected_file_count) {
-    return c.json({
-      ...structuredError('too_many_files', `Too many files. This bundle was created for ${bundle.expected_file_count} files.`, 413),
-      maxFiles: bundle.expected_file_count,
-    }, 413);
-  }
 
   const nextBundleSize = bundle.size_bytes - (existingFile?.size_bytes || 0) + body.byteLength;
   const quota = await ensureStorageAvailable(c.env, auth.tier, auth.userId, nextBundleSize, {
@@ -228,11 +229,40 @@ bundles.put('/bundles/:id/files', async (c) => {
     },
   });
 
-  await c.env.DB.batch([
+  const [inserted] = await c.env.DB.batch([
     c.env.DB.prepare(`
       INSERT OR REPLACE INTO bundle_files (bundle_id, path, filename, content_type, size_bytes, r2_key)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(bundle.id, path, path.split('/').pop() || path, contentType, body.byteLength, r2Key),
+      SELECT ?, ?, ?, ?, ?, ?
+      WHERE EXISTS (
+        SELECT 1 FROM bundles
+        WHERE id = ?
+          AND deleted_at IS NULL
+          AND published_at IS NULL
+      )
+      AND (
+        EXISTS (
+          SELECT 1 FROM bundle_files
+          WHERE bundle_id = ? AND path = ?
+        )
+        OR (
+          SELECT COUNT(*) FROM bundle_files WHERE bundle_id = ?
+        ) < (
+          SELECT expected_file_count FROM bundles WHERE id = ?
+        )
+      )
+    `).bind(
+      bundle.id,
+      path,
+      path.split('/').pop() || path,
+      contentType,
+      body.byteLength,
+      r2Key,
+      bundle.id,
+      bundle.id,
+      path,
+      bundle.id,
+      bundle.id,
+    ),
     c.env.DB.prepare(`
       UPDATE bundles
       SET size_bytes = (
@@ -245,17 +275,61 @@ bundles.put('/bundles/:id/files', async (c) => {
     `).bind(bundle.id, bundle.id, bundle.id),
   ]);
 
+  if ((inserted.meta?.changes || 0) === 0) {
+    cleanupRejectedBundleObject(c, r2Key);
+
+    const currentBundle = await getBundle(c.env, bundle.id);
+    if (!currentBundle) {
+      return c.json(structuredError('bundle_not_found', 'Bundle not found', 404), 404);
+    }
+    if (currentBundle.published_at) {
+      return c.json(structuredError('bundle_published', 'Published bundles cannot be modified', 409), 409);
+    }
+    if (isExpired(currentBundle.expires_at)) {
+      c.executionCtx.waitUntil(deleteBundleObjectsAndMarkDeleted(c.env, currentBundle.id));
+      return c.json(structuredError('bundle_expired', 'This bundle has expired', 410), 410);
+    }
+    if (currentBundle.file_count < currentBundle.expected_file_count) {
+      return c.json(structuredError('bundle_state_changed', 'Bundle changed while uploading this file. Retry the upload.', 409, {
+        retryable: true,
+      }), 409);
+    }
+
+    return c.json({
+      ...structuredError('too_many_files', `Too many files. This bundle was created for ${currentBundle.expected_file_count} files.`, 413),
+      maxFiles: currentBundle.expected_file_count,
+    }, 413);
+  }
+
   return c.json({ ok: true, path, size: body.byteLength, contentType });
 });
 
 bundles.post('/bundles/:id/publish', async (c) => {
-  const bundle = await getBundle(c.env, c.req.param('id'));
+  const bundleId = c.req.param('id');
+  const idempotencyKey = getIdempotencyKey(c.req.raw);
+  const idempotencyScope = `bundle-publish:${bundleId}`;
+
+  if ((c.req.header('Idempotency-Key') || c.req.header('X-Idempotency-Key')) && !idempotencyKey) {
+    return c.json(structuredError('invalid_idempotency_key', 'Invalid idempotency key', 400), 400);
+  }
+
+  const bundle = await getBundle(c.env, bundleId);
   if (!bundle) {
     return c.json(structuredError('bundle_not_found', 'Bundle not found', 404), 404);
   }
   if (isExpired(bundle.expires_at)) {
     await deleteBundleObjectsAndMarkDeleted(c.env, bundle.id);
     return c.json(structuredError('bundle_expired', 'This bundle has expired', 410), 410);
+  }
+
+  const idempotencyOwner = idempotencyKey
+    ? await getBundlePublishIdempotencyOwner(c, bundle)
+    : null;
+  if (idempotencyKey && idempotencyOwner) {
+    const replay = await getIdempotentReplay(c.env, idempotencyScope, idempotencyOwner, idempotencyKey);
+    if (replay) {
+      return c.json(replay.body, replay.status as 200);
+    }
   }
 
   const auth = authorizeBundleMutation(c, bundle);
@@ -290,13 +364,7 @@ bundles.post('/bundles/:id/publish', async (c) => {
   }
 
   const publishedAt = freshBundle.published_at || new Date().toISOString();
-  await c.env.DB.prepare(`
-    UPDATE bundles
-    SET published_at = ?, upload_token = NULL
-    WHERE id = ?
-  `).bind(publishedAt, bundle.id).run();
-
-  return c.json({
+  const result = {
     ok: true,
     id: freshBundle.id,
     url: `${c.env.BASE_URL}/b/${freshBundle.id}`,
@@ -304,7 +372,34 @@ bundles.post('/bundles/:id/publish', async (c) => {
     fileCount: freshBundle.file_count,
     expectedFileCount: freshBundle.expected_file_count,
     expires: freshBundle.expires_at,
-  });
+  };
+
+  const statements: D1PreparedStatement[] = [];
+  if (idempotencyKey && idempotencyOwner) {
+    statements.push(
+      c.env.DB.prepare(`
+        DELETE FROM idempotency_keys
+        WHERE scope = ?
+          AND owner = ?
+          AND idempotency_key = ?
+          AND expires_at <= datetime('now')
+      `).bind(idempotencyScope, idempotencyOwner, idempotencyKey),
+      c.env.DB.prepare(`
+        INSERT OR IGNORE INTO idempotency_keys (scope, owner, idempotency_key, status, response_json, expires_at)
+        VALUES (?, ?, ?, ?, ?, datetime('now', '+48 hours'))
+      `).bind(idempotencyScope, idempotencyOwner, idempotencyKey, 200, JSON.stringify(result)),
+    );
+  }
+  statements.push(
+    c.env.DB.prepare(`
+      UPDATE bundles
+      SET published_at = ?, upload_token = NULL
+      WHERE id = ?
+    `).bind(publishedAt, bundle.id),
+  );
+  await c.env.DB.batch(statements);
+
+  return c.json(result);
 });
 
 bundles.get('/bundles', async (c) => {
@@ -324,7 +419,7 @@ bundles.get('/bundles', async (c) => {
     WHERE user_id = ?
   `;
   if (activeOnly) {
-    query += ` AND deleted_at IS NULL AND (expires_at IS NULL OR expires_at > datetime('now'))`;
+    query += ` AND deleted_at IS NULL AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))`;
   }
   query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`;
 
@@ -456,6 +551,27 @@ function authorizeBundleMutation(
   return { ok: true, tier: 'anonymous', userId: null };
 }
 
+async function getBundlePublishIdempotencyOwner(c: AppContext, bundle: Bundle): Promise<string | null> {
+  const user = c.get('user');
+
+  if (bundle.user_id) {
+    if (user?.id !== bundle.user_id) {
+      return null;
+    }
+    return getIdempotencyOwner(user, c.req.header('CF-Connecting-IP') || null, c.req.header('X-Forwarded-For') || null);
+  }
+
+  const token = c.req.header('X-Bundle-Token');
+  if (!token) {
+    return null;
+  }
+  if (bundle.upload_token && token !== bundle.upload_token) {
+    return null;
+  }
+
+  return `bundle-token:${await hashApiKey(token)}`;
+}
+
 async function getBundle(env: Env, id: string): Promise<Bundle | null> {
   return env.DB.prepare(`
     SELECT id, user_id, name, upload_token, size_bytes, file_count, expected_file_count,
@@ -493,6 +609,12 @@ async function listBundleFiles(env: Env, bundleId: string): Promise<BundleFile[]
   `).bind(bundleId).all<BundleFile>();
 
   return result.results || [];
+}
+
+function cleanupRejectedBundleObject(c: AppContext, r2Key: string): void {
+  c.executionCtx.waitUntil(c.env.BUCKET.delete(r2Key).catch(err => {
+    console.error(`Failed to clean up rejected bundle object ${r2Key}:`, err);
+  }));
 }
 
 async function deleteBundleObjectsAndMarkDeleted(env: Env, id: string): Promise<void> {
@@ -622,9 +744,11 @@ function isActiveContent(contentType: string | null, filename: string): boolean 
 
   return normalized.includes('text/html')
     || normalized.includes('image/svg+xml')
+    || normalized.includes('application/xhtml+xml')
     || normalized.includes('javascript')
     || lowerName.endsWith('.html')
     || lowerName.endsWith('.htm')
+    || lowerName.endsWith('.xhtml')
     || lowerName.endsWith('.svg')
     || lowerName.endsWith('.js')
     || lowerName.endsWith('.mjs');

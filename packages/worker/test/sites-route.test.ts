@@ -570,6 +570,14 @@ class FakeStatement {
       return { size_bytes: site && site.user_id === userId && site.deleted_at === null ? site.size_bytes : 0 } as T;
     }
 
+    if (sql.includes('SELECT COALESCE(size_bytes, 0) as size_bytes FROM bundles')) {
+      return { size_bytes: 0 } as T;
+    }
+
+    if (sql.includes('SELECT COALESCE(SUM(size_bytes), 0) as total_bytes FROM bundles')) {
+      return { total_bytes: 0 } as T;
+    }
+
     if (sql.includes('SELECT size_bytes FROM site_files')) {
       const [siteId, path] = this.args as [string, string];
       const file = this.db.siteFiles.get(`${siteId}:${path}`);

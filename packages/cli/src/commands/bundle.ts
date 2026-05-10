@@ -28,18 +28,29 @@ export async function bundleCommand(files: string[], options: BundleOptions): Pr
 
   const bundleFiles = files.map(file => {
     const absPath = resolve(file);
-    if (!existsSync(absPath)) {
-      fail(`Error: File not found: ${absPath}`, options, 'file_not_found');
+    try {
+      if (!existsSync(absPath)) {
+        fail(`Error: File not found: ${absPath}`, options, 'file_not_found');
+      }
+      const stat = statSync(absPath);
+      if (!stat.isFile()) {
+        fail(`Error: Not a file: ${absPath}`, options, 'not_a_file');
+      }
+      return {
+        absPath,
+        bundlePath: toBundlePath(file, absPath),
+        size: stat.size,
+      };
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith('exit ')) {
+        throw err;
+      }
+      fail(
+        `Error: Failed to read file metadata for ${absPath}: ${err instanceof Error ? err.message : String(err)}`,
+        options,
+        'file_stat_failed',
+      );
     }
-    const stat = statSync(absPath);
-    if (!stat.isFile()) {
-      fail(`Error: Not a file: ${absPath}`, options, 'not_a_file');
-    }
-    return {
-      absPath,
-      bundlePath: toBundlePath(file, absPath),
-      size: stat.size,
-    };
   });
 
   const seenPaths = new Set<string>();

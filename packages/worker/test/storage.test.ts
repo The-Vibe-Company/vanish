@@ -14,9 +14,12 @@ describe('storage quota helpers', () => {
         { id: 'site1', user_id: 'user1', size_bytes: 40, expires_at: future(), deleted_at: null },
         { id: 'site2', user_id: 'user1', size_bytes: 50, expires_at: past(), deleted_at: null },
       ],
+      bundles: [
+        { id: 'bundle1', user_id: 'user1', size_bytes: 5, expires_at: future(), deleted_at: null },
+      ],
     });
 
-    await expect(getActiveStorageBytes(env(db), 'user1')).resolves.toBe(50);
+    await expect(getActiveStorageBytes(env(db), 'user1')).resolves.toBe(55);
   });
 
   it('enforces anonymous max site size', async () => {
@@ -29,6 +32,7 @@ describe('storage quota helpers', () => {
     const db = new StorageDB({
       uploads: [{ user_id: 'user1', size_bytes: 45 * 1024 * 1024, expires_at: future(), deleted_at: null }],
       sites: [],
+      bundles: [],
     });
 
     const result = await ensureStorageAvailable(env(db), 'free', 'user1', 6 * 1024 * 1024);
@@ -40,6 +44,7 @@ describe('storage quota helpers', () => {
     const db = new StorageDB({
       uploads: [{ user_id: 'user1', size_bytes: 45 * 1024 * 1024, expires_at: future(), deleted_at: null }],
       sites: [{ id: 'site1', user_id: 'user1', size_bytes: 4 * 1024 * 1024, expires_at: future(), deleted_at: null }],
+      bundles: [],
     });
 
     const result = await ensureStorageAvailable(env(db), 'free', 'user1', 5 * 1024 * 1024, {
@@ -73,10 +78,12 @@ interface StorageRow {
 class StorageDB {
   uploads: StorageRow[];
   sites: StorageRow[];
+  bundles: StorageRow[];
 
-  constructor(input: { uploads?: StorageRow[]; sites?: StorageRow[] } = {}) {
+  constructor(input: { uploads?: StorageRow[]; sites?: StorageRow[]; bundles?: StorageRow[] } = {}) {
     this.uploads = input.uploads || [];
     this.sites = input.sites || [];
+    this.bundles = input.bundles || [];
   }
 
   prepare(sql: string): StorageStatement {
@@ -102,7 +109,7 @@ class StorageStatement {
       return { total_bytes: sumActive(this.db.uploads, userId) } as T;
     }
 
-    if (normalized.includes('SELECT COALESCE(size_bytes, 0)')) {
+    if (normalized.includes('SELECT COALESCE(size_bytes, 0)') && normalized.includes('FROM sites')) {
       const [siteId, userId] = this.args as [string, string];
       const site = this.db.sites.find(row => row.id === siteId && row.user_id === userId && row.deleted_at === null);
       return { size_bytes: site?.size_bytes || 0 } as T;
@@ -111,6 +118,17 @@ class StorageStatement {
     if (normalized.includes('FROM sites')) {
       const [userId] = this.args as [string];
       return { total_bytes: sumActive(this.db.sites, userId) } as T;
+    }
+
+    if (normalized.includes('SELECT COALESCE(size_bytes, 0)') && normalized.includes('FROM bundles')) {
+      const [bundleId, userId] = this.args as [string, string];
+      const bundle = this.db.bundles.find(row => row.id === bundleId && row.user_id === userId && row.deleted_at === null);
+      return { size_bytes: bundle?.size_bytes || 0 } as T;
+    }
+
+    if (normalized.includes('FROM bundles')) {
+      const [userId] = this.args as [string];
+      return { total_bytes: sumActive(this.db.bundles, userId) } as T;
     }
 
     throw new Error(`Unhandled query: ${normalized}`);

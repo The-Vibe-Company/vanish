@@ -239,7 +239,17 @@ program
 
 // Default: if first arg looks like a file path, treat as upload
 const args = process.argv.slice(2);
-if (args[0] === 'site' && ['info', 'rm', 'extend', 'verify'].includes(args[1] || '')) {
+const siteLifecycleSubcommands = ['info', 'rm', 'extend', 'verify'];
+const VALUE_OPTIONS = new Set([
+  '--channel',
+  '--days',
+  '--idempotency-key',
+  '--root',
+  '--slug',
+  '--update',
+]);
+const hasSiteRootFlag = args.some(arg => arg === '--root' || arg.startsWith('--root='));
+if (args[0] === 'site' && siteLifecycleSubcommands.includes(args[1] || '') && (!hasSiteRootFlag || hasLifecycleTargetArg(args))) {
   process.argv.splice(2, 2, 'sites', args[1]);
   args.splice(0, 2, 'sites', args[1]);
 }
@@ -251,3 +261,25 @@ if (args.length > 0 && !args[0].startsWith('-') && !['upload', 'up', 'site', 'si
 
 await printVersionNoticeIfNeeded(args, pkg.version);
 await program.parseAsync();
+
+function hasLifecycleTargetArg(argv: string[]): boolean {
+  for (let i = 2; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === '--') {
+      return i + 1 < argv.length;
+    }
+    if (arg.includes('=')) {
+      continue;
+    }
+    if (VALUE_OPTIONS.has(arg)) {
+      i++;
+      continue;
+    }
+    if (arg.startsWith('-')) {
+      continue;
+    }
+    return true;
+  }
+
+  return false;
+}
