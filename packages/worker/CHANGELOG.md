@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.17](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.16...@vanish/worker-v0.1.17) (2026-05-10)
+
+
+### Bug Fixes
+
+* **worker:** apply D1 migrations in release ([#52](https://github.com/The-Vibe-Company/vanish/issues/52)) ([b1dff64](https://github.com/The-Vibe-Company/vanish/commit/b1dff64955f210106bd6bd3342e663eef02035eb))
+
 ## [0.1.16](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.15...@vanish/worker-v0.1.16) (2026-05-10)
 
 
