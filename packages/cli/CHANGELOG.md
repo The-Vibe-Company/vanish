@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.13](https://github.com/The-Vibe-Company/vanish/compare/vanish-cli-v0.1.12...vanish-cli-v0.1.13) (2026-05-10)
+
+
+### Features
+
+* **product:** improve vanish activation loop ([#39](https://github.com/The-Vibe-Company/vanish/issues/39)) ([d2c9b3b](https://github.com/The-Vibe-Company/vanish/commit/d2c9b3bda14020f60997cfa019b8dba77f63bfaa))
+
 ## [0.1.12](https://github.com/The-Vibe-Company/vanish/compare/vanish-cli-v0.1.11...vanish-cli-v0.1.12) (2026-05-10)
 
 

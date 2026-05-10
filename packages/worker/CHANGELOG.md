@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.13](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.12...@vanish/worker-v0.1.13) (2026-05-10)
+
+
+### Features
+
+* **dashboard:** redesign /dashboard with sidebar nav and live UI ([#41](https://github.com/The-Vibe-Company/vanish/issues/41)) ([9317e02](https://github.com/The-Vibe-Company/vanish/commit/9317e024492f5312d1257e975ebbd2ddc5dad15e))
+* **product:** improve vanish activation loop ([#39](https://github.com/The-Vibe-Company/vanish/issues/39)) ([d2c9b3b](https://github.com/The-Vibe-Company/vanish/commit/d2c9b3bda14020f60997cfa019b8dba77f63bfaa))
+
 ## [0.1.12](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.11...@vanish/worker-v0.1.12) (2026-05-10)
 
 
