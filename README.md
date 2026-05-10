@@ -4,7 +4,7 @@ Publish temporary mini-sites and file links from your terminal. Built for Claude
 
 ```bash
 npx vanish-cli site ./demo --root index.html
-# https://k8m2q9z4p1ad.vanish.sh/
+# https://quiet-river-42.vanish.sh/
 ```
 
 ## Why
@@ -19,7 +19,7 @@ Single-file uploads still work for screenshots, PDFs, and other quick shares.
 |---|---|---|---|
 | Account needed | No | GitHub login | GitHub login |
 | Mini-sites | Static HTML/CSS/JS/MD folders | Static HTML/CSS/JS/MD folders | Static HTML/CSS/JS/MD folders |
-| Site URL | Random `*.vanish.sh` | Random `*.vanish.sh` | Random or custom `*.vanish.sh` slug |
+| Site URL | Readable random `*.vanish.sh` | Readable random `*.vanish.sh` | Readable random or custom `*.vanish.sh` slug |
 | Site limits | 10 MB, 100 files | 500 files, counts toward 50 MB total | 1,000 files, counts toward 1 GB total |
 | File uploads | Images only | All except executables | All except executables |
 | Max file size | 5 MB | 50 MB | 1 GB |
@@ -46,7 +46,7 @@ npx vanish-cli site ./demo --root index.html
 
 ```bash
 vanish site ./demo --root index.html
-# https://k8m2q9z4p1ad.vanish.sh/
+# https://quiet-river-42.vanish.sh/
 ```
 
 The root file is what Vanish serves at `/`. Vanish does not transform files: HTML is HTML, Markdown is served as Markdown, and CSS/JS/assets are served as static files.
@@ -55,7 +55,7 @@ The root file is what Vanish serves at `/`. Vanish does not transform files: HTM
 
 ```bash
 vanish site ./notes --root README.md
-# https://p4d8n2x7q0ab.vanish.sh/
+# https://silver-meadow-k9.vanish.sh/
 ```
 
 ### Use a Pro slug
@@ -72,6 +72,19 @@ vanish site ./demo --root index.html --days 90
 # Pro only, up to 365 days
 ```
 
+### Update an existing site
+
+```bash
+vanish site ./demo --root index.html --update quiet-river-42
+# replaces the site's files while keeping the same public URL
+```
+
+Updates require login and ownership of the site. Free accounts can replace site content. Pro accounts can also change the slug or retention during the update:
+
+```bash
+vanish site ./demo --root index.html --update quiet-river-42 --slug workshop-demo --days 90
+```
+
 ### JSON output
 
 ```bash
@@ -82,7 +95,7 @@ Returns:
 
 ```json
 {
-  "url": "https://k8m2q9z4p1ad.vanish.sh/",
+  "url": "https://quiet-river-42.vanish.sh/",
   "id": "k8m2q9z4p1ad",
   "rootPath": "index.html",
   "size": 8120,

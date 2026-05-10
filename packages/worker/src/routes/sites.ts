@@ -12,7 +12,19 @@ import { getRateLimitIdentifier } from '../lib/rate-limit.js';
 import { rateLimitMiddleware } from '../middleware/rate-limit.js';
 
 const SITE_ID = customAlphabet('0123456789abcdefghijklmnopqrstuvwxyz', 12);
+const SLUG_SUFFIX = customAlphabet('0123456789abcdefghijklmnopqrstuvwxyz', 2);
 const SITE_TOKEN_PREFIX = 'vnst_';
+const REPLACEMENT_NAME_PREFIX = '__replace__:';
+const SLUG_ADJECTIVES = [
+  'amber', 'brave', 'calm', 'clear', 'cosmic', 'crisp', 'daring', 'dusky',
+  'fuzzy', 'gentle', 'golden', 'happy', 'hidden', 'lively', 'lucky', 'mellow',
+  'neon', 'nimble', 'quiet', 'rapid', 'silver', 'solar', 'tiny', 'velvet',
+];
+const SLUG_NOUNS = [
+  'atlas', 'brook', 'canyon', 'comet', 'delta', 'ember', 'field', 'forest',
+  'harbor', 'island', 'lagoon', 'meadow', 'nova', 'orbit', 'pixel', 'river',
+  'signal', 'spark', 'stone', 'summit', 'tempo', 'valley', 'wave', 'willow',
+];
 
 const sites = new Hono<{ Bindings: Env }>();
 type AppContext = Context<{ Bindings: Env }>;
@@ -22,6 +34,12 @@ interface CreateSiteRequest {
   rootPath?: string;
   fileCount?: number;
   totalBytes?: number;
+  slug?: string;
+  days?: number;
+}
+
+interface PatchSiteRequest {
+  rootPath?: string;
   slug?: string;
   days?: number;
 }
@@ -89,25 +107,25 @@ sites.post('/sites', rateLimitMiddleware, async (c) => {
     }
   }
 
-  let slug: string | null = null;
+  let slug: string | null;
   if (payload.slug) {
     if (tier !== 'pro' || !user) {
       return c.json({ error: 'Custom vanish.sh slugs are only available for Pro accounts' }, 403);
     }
 
-    slug = normalizeSiteSlug(payload.slug);
+    slug = await validateSiteSlug(c.env, payload.slug);
     if (!slug) {
       return c.json({
         error: 'Invalid slug. Use 1-63 lowercase letters, numbers, or hyphens, and avoid reserved names.',
       }, 400);
     }
+  } else {
+    slug = await generateReadableSlug(c.env);
+  }
 
-    const existing = await c.env.DB.prepare(`
-      SELECT id FROM sites WHERE slug = ? AND deleted_at IS NULL LIMIT 1
-    `).bind(slug).first<{ id: string }>();
-    if (existing) {
-      return c.json({ error: `Slug "${slug}" is already taken` }, 409);
-    }
+  const existing = await getSlugConflict(c.env, slug);
+  if (existing) {
+    return c.json({ error: `Slug "${slug}" is already taken` }, 409);
   }
 
   const quota = await ensureStorageAvailable(c.env, tier, user?.id || null, totalBytes);
@@ -138,6 +156,127 @@ sites.post('/sites', rateLimitMiddleware, async (c) => {
     maxFiles: limits.maxSiteFiles,
     maxBytes: tier === 'anonymous' ? TIER_LIMITS.anonymous.maxSiteSize : limits.maxTotalStorage,
     expires: expiresAt,
+  }, 201);
+});
+
+sites.patch('/sites/:id', async (c) => {
+  const user = c.get('user');
+  if (!user) {
+    return c.json({ error: 'Authentication required' }, 401);
+  }
+
+  const site = await getSiteByIdentifier(c.env, c.req.param('id'));
+  if (!site) {
+    return c.json({ error: 'Site not found' }, 404);
+  }
+  if (site.user_id !== user.id) {
+    return c.json({ error: 'Not authorized' }, 403);
+  }
+  if (isExpired(site.expires_at)) {
+    await deleteSiteObjectsAndMarkDeleted(c.env, site.id);
+    return c.json({ error: 'This site has expired' }, 410);
+  }
+
+  const payload = await readJson<PatchSiteRequest>(c.req.raw);
+  if (!payload) {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
+
+  const patch = await validateSiteConfigPatch(c, site, payload);
+  if (!patch.ok) {
+    return c.json({ error: patch.error }, patch.status);
+  }
+
+  await c.env.DB.prepare(`
+    UPDATE sites
+    SET root_path = ?, slug = ?, expires_at = ?
+    WHERE id = ?
+  `).bind(patch.rootPath, patch.slug, patch.expiresAt, site.id).run();
+
+  const updated = await getSite(c.env, site.id);
+  return c.json(siteToJson(c.env.BASE_URL)(updated || site));
+});
+
+sites.post('/sites/:id/replacements', async (c) => {
+  const user = c.get('user');
+  if (!user) {
+    return c.json({ error: 'Authentication required' }, 401);
+  }
+
+  const target = await getSiteByIdentifier(c.env, c.req.param('id'));
+  if (!target) {
+    return c.json({ error: 'Site not found' }, 404);
+  }
+  if (target.user_id !== user.id) {
+    return c.json({ error: 'Not authorized' }, 403);
+  }
+  if (!target.published_at) {
+    return c.json({ error: 'Only published sites can be updated' }, 409);
+  }
+  if (isExpired(target.expires_at)) {
+    await deleteSiteObjectsAndMarkDeleted(c.env, target.id);
+    return c.json({ error: 'This site has expired' }, 410);
+  }
+
+  const payload = await readJson<CreateSiteRequest>(c.req.raw);
+  if (!payload) {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
+
+  const rootPath = payload.rootPath ? normalizeSitePath(payload.rootPath) : null;
+  if (!rootPath) {
+    return c.json({ error: 'rootPath is required and must be a relative file path inside the site folder' }, 400);
+  }
+
+  const totalBytes = parsePositiveInteger(payload.totalBytes);
+  if (totalBytes === null) {
+    return c.json({ error: 'totalBytes is required and must be a positive integer' }, 400);
+  }
+
+  const plannedFileCount = parsePositiveInteger(payload.fileCount);
+  if (plannedFileCount === null) {
+    return c.json({ error: 'fileCount is required and must be a positive integer' }, 400);
+  }
+
+  const limits = TIER_LIMITS[user.tier];
+  if (plannedFileCount > limits.maxSiteFiles) {
+    return c.json({
+      error: `Too many files. Max ${limits.maxSiteFiles} files for ${user.tier} tier.`,
+      maxFiles: limits.maxSiteFiles,
+    }, 413);
+  }
+
+  if ((payload.slug || payload.days !== undefined) && user.tier !== 'pro') {
+    return c.json({
+      error: `${payload.slug ? 'Custom vanish.sh slugs' : 'Custom TTL'} are only available for Pro accounts`,
+    }, 403);
+  }
+
+  const quota = await ensureStorageAvailable(c.env, user.tier, user.id, totalBytes, {
+    excludeSiteId: target.id,
+  });
+  if (!quota.ok) {
+    return c.json(quota, 413);
+  }
+
+  const id = SITE_ID();
+  const uploadToken = SITE_TOKEN_PREFIX + nanoid(32);
+  const name = `${REPLACEMENT_NAME_PREFIX}${target.id}:${sanitizeSiteName(payload.name || target.name)}`;
+
+  await c.env.DB.prepare(`
+    INSERT INTO sites (id, user_id, name, root_path, slug, upload_token, size_bytes, file_count, expected_file_count, expires_at)
+    VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
+  `).bind(id, user.id, name, rootPath, null, uploadToken, plannedFileCount, target.expires_at).run();
+
+  return c.json({
+    id,
+    token: uploadToken,
+    targetId: target.id,
+    rootPath,
+    fileCount: plannedFileCount,
+    maxFiles: limits.maxSiteFiles,
+    maxBytes: limits.maxTotalStorage,
+    expires: target.expires_at,
   }, 201);
 });
 
@@ -192,9 +331,10 @@ sites.put('/sites/:id/files', async (c) => {
     }, 413);
   }
 
+  const replacementTargetId = getReplacementTargetId(site);
   const nextSiteSize = site.size_bytes - (existingFile?.size_bytes || 0) + body.byteLength;
   const quota = await ensureStorageAvailable(c.env, auth.tier, auth.userId, nextSiteSize, {
-    excludeSiteId: site.id,
+    excludeSiteIds: [site.id, ...(replacementTargetId ? [replacementTargetId] : [])],
   });
   if (!quota.ok) {
     return c.json(quota, 413);
@@ -305,6 +445,129 @@ sites.post('/sites/:id/publish', async (c) => {
   });
 });
 
+sites.post('/sites/:id/replacements/:draftId/publish', async (c) => {
+  const user = c.get('user');
+  if (!user) {
+    return c.json({ error: 'Authentication required' }, 401);
+  }
+
+  const target = await getSiteByIdentifier(c.env, c.req.param('id'));
+  if (!target) {
+    return c.json({ error: 'Site not found' }, 404);
+  }
+  if (target.user_id !== user.id) {
+    return c.json({ error: 'Not authorized' }, 403);
+  }
+  if (isExpired(target.expires_at)) {
+    await deleteSiteObjectsAndMarkDeleted(c.env, target.id);
+    return c.json({ error: 'This site has expired' }, 410);
+  }
+
+  const draft = await getSite(c.env, c.req.param('draftId'));
+  if (!draft || draft.user_id !== user.id || getReplacementTargetId(draft) !== target.id) {
+    return c.json({ error: 'Replacement draft not found' }, 404);
+  }
+  if (draft.published_at) {
+    return c.json({ error: 'Replacement draft has already been published' }, 409);
+  }
+  if (c.req.header('X-Site-Token') !== draft.upload_token) {
+    return c.json({ error: 'Site token required' }, 401);
+  }
+
+  const payload = await readJson<PatchSiteRequest>(c.req.raw);
+  if (!payload) {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
+
+  const root = await c.env.DB.prepare(`
+    SELECT path FROM site_files WHERE site_id = ? AND path = ?
+  `).bind(draft.id, draft.root_path).first<{ path: string }>();
+  if (!root) {
+    return c.json({ error: `Root file not uploaded: ${draft.root_path}` }, 400);
+  }
+
+  const freshDraft = await getSite(c.env, draft.id);
+  if (!freshDraft || freshDraft.file_count === 0) {
+    return c.json({ error: 'No site files uploaded' }, 400);
+  }
+  if (freshDraft.file_count !== freshDraft.expected_file_count) {
+    return c.json({
+      error: `Site is incomplete. Uploaded ${freshDraft.file_count} of ${freshDraft.expected_file_count} declared files.`,
+    }, 400);
+  }
+
+  const patch = await validateSiteConfigPatch(c, target, {
+    slug: payload.slug,
+    days: payload.days,
+  });
+  if (!patch.ok) {
+    return c.json({ error: patch.error }, patch.status);
+  }
+
+  const quota = await ensureStorageAvailable(c.env, user.tier, user.id, freshDraft.size_bytes, {
+    excludeSiteIds: [target.id, freshDraft.id],
+  });
+  if (!quota.ok) {
+    return c.json(quota, 413);
+  }
+
+  const oldFiles = await listSiteObjectKeys(c.env, target.id);
+  await c.env.DB.batch([
+    ...oldFiles.map(key =>
+      c.env.DB.prepare('INSERT OR IGNORE INTO pending_r2_deletions (r2_key) VALUES (?)').bind(key)
+    ),
+    c.env.DB.prepare(`
+      INSERT OR REPLACE INTO site_files (site_id, path, content_type, size_bytes, r2_key, created_at)
+      SELECT ?, path, content_type, size_bytes, r2_key, created_at
+      FROM site_files
+      WHERE site_id = ?
+    `).bind(target.id, freshDraft.id),
+    c.env.DB.prepare(`
+      UPDATE sites
+      SET name = ?, root_path = ?, slug = ?, size_bytes = ?, file_count = ?, expected_file_count = ?,
+          expires_at = ?, upload_token = NULL
+      WHERE id = ?
+    `).bind(
+      stripReplacementName(freshDraft.name),
+      freshDraft.root_path,
+      patch.slug,
+      freshDraft.size_bytes,
+      freshDraft.file_count,
+      freshDraft.expected_file_count,
+      patch.expiresAt,
+      target.id,
+    ),
+    c.env.DB.prepare(`
+      DELETE FROM site_files
+      WHERE site_id = ?
+        AND path NOT IN (
+          SELECT path FROM site_files WHERE site_id = ?
+        )
+    `).bind(target.id, freshDraft.id),
+    c.env.DB.prepare('DELETE FROM site_files WHERE site_id = ?').bind(freshDraft.id),
+    c.env.DB.prepare(`
+      UPDATE sites
+      SET upload_token = NULL, size_bytes = 0, file_count = 0, deleted_at = datetime('now')
+      WHERE id = ?
+    `).bind(freshDraft.id),
+  ]);
+
+  await deletePendingR2Objects(c.env, oldFiles);
+
+  const updated = await getSite(c.env, target.id);
+  const identifier = updated?.slug || target.id;
+  return c.json({
+    ok: true,
+    id: target.id,
+    url: buildSiteUrl(c.env.BASE_URL, identifier),
+    rootPath: updated?.root_path || freshDraft.root_path,
+    size: updated?.size_bytes || freshDraft.size_bytes,
+    fileCount: updated?.file_count || freshDraft.file_count,
+    expectedFileCount: updated?.expected_file_count || freshDraft.expected_file_count,
+    expires: updated?.expires_at || patch.expiresAt,
+  });
+});
+
 sites.get('/sites', async (c) => {
   const user = c.get('user');
   if (!user) {
@@ -365,15 +628,7 @@ sites.get('/s/:sitePath{.+}', async (c) => {
 });
 
 async function serveSite(c: AppContext, identifier: string, pathname: string): Promise<Response> {
-  const site = await c.env.DB.prepare(`
-    SELECT id, user_id, name, root_path, slug, upload_token, size_bytes, file_count, expected_file_count,
-           expires_at, published_at, created_at, deleted_at
-    FROM sites
-    WHERE (id = ? OR slug = ?)
-      AND deleted_at IS NULL
-      AND published_at IS NOT NULL
-    LIMIT 1
-  `).bind(identifier, identifier).first<Site>();
+  const site = await getPublishedSiteByIdentifier(c.env, identifier);
 
   if (!site) {
     return c.json({ error: 'Site not found' }, 404);
@@ -480,6 +735,198 @@ async function checkSiteMutationRateLimit(
   c.header('X-RateLimit-Limit', String(limit));
   c.header('X-RateLimit-Remaining', String(limit - count - 1));
   return { ok: true };
+}
+
+async function validateSiteConfigPatch(
+  c: AppContext,
+  site: Site,
+  payload: PatchSiteRequest,
+): Promise<
+  | { ok: true; rootPath: string; slug: string | null; expiresAt: string | null }
+  | { ok: false; error: string; status: 400 | 403 | 409 }
+> {
+  const user = c.get('user');
+  if (!user) {
+    return { ok: false, error: 'Authentication required', status: 403 };
+  }
+
+  let rootPath = site.root_path;
+  if (payload.rootPath !== undefined) {
+    const normalizedRootPath = normalizeSitePath(payload.rootPath);
+    if (!normalizedRootPath) {
+      return { ok: false, error: 'rootPath must be a relative file path inside the site folder', status: 400 };
+    }
+
+    const root = await c.env.DB.prepare(`
+      SELECT path FROM site_files WHERE site_id = ? AND path = ?
+    `).bind(site.id, normalizedRootPath).first<{ path: string }>();
+    if (!root) {
+      return { ok: false, error: `Root file not found: ${normalizedRootPath}`, status: 400 };
+    }
+    rootPath = normalizedRootPath;
+  }
+
+  let slug = site.slug;
+  if (payload.slug !== undefined) {
+    if (user.tier !== 'pro') {
+      return { ok: false, error: 'Custom vanish.sh slugs are only available for Pro accounts', status: 403 };
+    }
+
+    const normalizedSlug = await validateSiteSlug(c.env, payload.slug);
+    if (!normalizedSlug) {
+      return {
+        ok: false,
+        error: 'Invalid slug. Use 1-63 lowercase letters, numbers, or hyphens, and avoid reserved names.',
+        status: 400,
+      };
+    }
+
+    const existing = await getSlugConflict(c.env, normalizedSlug, site.id);
+    if (existing) {
+      return { ok: false, error: `Slug "${normalizedSlug}" is already taken`, status: 409 };
+    }
+    slug = normalizedSlug;
+  }
+
+  let expiresAt = site.expires_at;
+  if (payload.days !== undefined) {
+    const customDays = parsePositiveInteger(payload.days);
+    if (!customDays) {
+      return { ok: false, error: 'days must be a positive integer', status: 400 };
+    }
+    if (user.tier !== 'pro') {
+      return { ok: false, error: 'Custom TTL is only available for Pro tier', status: 403 };
+    }
+    if (customDays > TIER_LIMITS.pro.maxCustomExpiryDays) {
+      return {
+        ok: false,
+        error: `Maximum custom TTL is ${TIER_LIMITS.pro.maxCustomExpiryDays} days.`,
+        status: 400,
+      };
+    }
+    expiresAt = calculateExpiry(user.tier, customDays);
+  }
+
+  return { ok: true, rootPath, slug, expiresAt };
+}
+
+async function generateReadableSlug(env: Env): Promise<string> {
+  for (let attempt = 0; attempt < 25; attempt++) {
+    const adjective = SLUG_ADJECTIVES[Math.floor(Math.random() * SLUG_ADJECTIVES.length)];
+    const noun = SLUG_NOUNS[Math.floor(Math.random() * SLUG_NOUNS.length)];
+    const slug = `${adjective}-${noun}-${SLUG_SUFFIX()}`;
+    if (normalizeSiteSlug(slug) && !(await getSlugConflict(env, slug))) {
+      return slug;
+    }
+  }
+
+  return `site-${SITE_ID()}`;
+}
+
+async function validateSiteSlug(env: Env, input: string): Promise<string | null> {
+  const slug = normalizeSiteSlug(input);
+  if (!slug) {
+    return null;
+  }
+
+  return slug;
+}
+
+async function getSiteBySlug(env: Env, slug: string): Promise<Site | null> {
+  return env.DB.prepare(`
+    SELECT id, user_id, name, root_path, slug, upload_token, size_bytes, file_count, expected_file_count,
+           expires_at, published_at, created_at, deleted_at
+    FROM sites
+    WHERE slug = ? AND deleted_at IS NULL
+    LIMIT 1
+  `).bind(slug).first<Site>();
+}
+
+async function getSlugConflict(env: Env, slug: string, currentSiteId?: string): Promise<Site | null> {
+  const idMatch = await getSite(env, slug);
+  if (idMatch) {
+    return idMatch;
+  }
+
+  const slugMatch = await getSiteBySlug(env, slug);
+  return slugMatch && slugMatch.id !== currentSiteId ? slugMatch : null;
+}
+
+async function getSiteIdentifierConflict(env: Env, identifier: string): Promise<Site | null> {
+  const idMatch = await getSite(env, identifier);
+  if (idMatch) {
+    return idMatch;
+  }
+
+  return getSiteBySlug(env, identifier);
+}
+
+async function getSiteByIdentifier(env: Env, identifier: string): Promise<Site | null> {
+  return getSiteIdentifierConflict(env, identifier);
+}
+
+async function getPublishedSiteByIdentifier(env: Env, identifier: string): Promise<Site | null> {
+  const idMatch = await env.DB.prepare(`
+    SELECT id, user_id, name, root_path, slug, upload_token, size_bytes, file_count, expected_file_count,
+           expires_at, published_at, created_at, deleted_at
+    FROM sites
+    WHERE id = ?
+      AND deleted_at IS NULL
+      AND published_at IS NOT NULL
+    LIMIT 1
+  `).bind(identifier).first<Site>();
+  if (idMatch) {
+    return idMatch;
+  }
+
+  return env.DB.prepare(`
+    SELECT id, user_id, name, root_path, slug, upload_token, size_bytes, file_count, expected_file_count,
+           expires_at, published_at, created_at, deleted_at
+    FROM sites
+    WHERE slug = ?
+      AND deleted_at IS NULL
+      AND published_at IS NOT NULL
+    LIMIT 1
+  `).bind(identifier).first<Site>();
+}
+
+async function listSiteObjectKeys(env: Env, siteId: string): Promise<string[]> {
+  const files = await env.DB.prepare(`
+    SELECT r2_key FROM site_files WHERE site_id = ? LIMIT 1000
+  `).bind(siteId).all<{ r2_key: string }>();
+
+  return (files.results || []).map(file => file.r2_key);
+}
+
+async function deletePendingR2Objects(env: Env, keys: string[]): Promise<void> {
+  for (const key of keys) {
+    try {
+      await env.BUCKET.delete(key);
+      await env.DB.prepare('DELETE FROM pending_r2_deletions WHERE r2_key = ?').bind(key).run();
+    } catch (err) {
+      console.error(`Failed to delete pending R2 object ${key}:`, err);
+    }
+  }
+}
+
+function getReplacementTargetId(site: Site): string | null {
+  if (!site.name.startsWith(REPLACEMENT_NAME_PREFIX)) {
+    return null;
+  }
+
+  const rest = site.name.slice(REPLACEMENT_NAME_PREFIX.length);
+  const separator = rest.indexOf(':');
+  return separator === -1 ? null : rest.slice(0, separator);
+}
+
+function stripReplacementName(name: string): string {
+  if (!name.startsWith(REPLACEMENT_NAME_PREFIX)) {
+    return name;
+  }
+
+  const rest = name.slice(REPLACEMENT_NAME_PREFIX.length);
+  const separator = rest.indexOf(':');
+  return separator === -1 ? 'site' : sanitizeSiteName(rest.slice(separator + 1));
 }
 
 function siteToJson(baseUrl: string) {

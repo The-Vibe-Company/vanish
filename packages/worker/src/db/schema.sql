@@ -70,6 +70,11 @@ CREATE TABLE IF NOT EXISTS site_files (
   PRIMARY KEY (site_id, path)
 );
 
+CREATE TABLE IF NOT EXISTS pending_r2_deletions (
+  r2_key TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Temporary sessions for CLI login flow
 CREATE TABLE IF NOT EXISTS auth_sessions (
   session_id TEXT PRIMARY KEY,

@@ -26,7 +26,7 @@ export async function ensureStorageAvailable(
   tier: Tier,
   userId: string | null,
   incomingBytes: number,
-  options: { excludeSiteId?: string } = {},
+  options: { excludeSiteId?: string; excludeSiteIds?: string[] } = {},
 ): Promise<{ ok: true } | { ok: false; error: string; maxTotalBytes?: number; usedBytes?: number }> {
   const limits = TIER_LIMITS[tier];
 
@@ -44,12 +44,17 @@ export async function ensureStorageAvailable(
 
   let usedBytes = await getActiveStorageBytes(env, userId);
 
-  if (options.excludeSiteId) {
+  const excludeSiteIds = new Set([
+    ...(options.excludeSiteIds || []),
+    ...(options.excludeSiteId ? [options.excludeSiteId] : []),
+  ]);
+
+  for (const siteId of excludeSiteIds) {
     const currentSite = await env.DB.prepare(`
       SELECT COALESCE(size_bytes, 0) as size_bytes
       FROM sites
       WHERE id = ? AND user_id = ? AND deleted_at IS NULL
-    `).bind(options.excludeSiteId, userId).first<{ size_bytes: number }>();
+    `).bind(siteId, userId).first<{ size_bytes: number }>();
     usedBytes -= currentSite?.size_bytes || 0;
   }
 
