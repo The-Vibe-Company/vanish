@@ -14,7 +14,7 @@ dashboard.get('/dashboard', (c) => {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<title>vanish — dashboard</title>
+<title>vanish · dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -289,8 +289,8 @@ code { font-family: var(--mono); }
   font-size: .78rem;
 }
 .expiring-row:last-child { border-bottom: 0; }
-.expiring-row.warn { border-left: 2px solid var(--accent); }
-.expiring-row.critical { border-left: 2px solid var(--red); background: linear-gradient(90deg, color-mix(in srgb, var(--red) 5%, transparent), transparent 30%); }
+.expiring-row.warn { background: linear-gradient(90deg, var(--accent-faint), transparent 30%), var(--bg-card); }
+.expiring-row.critical { background: linear-gradient(90deg, color-mix(in srgb, var(--red) 8%, transparent), transparent 30%), var(--bg-card); }
 .er-left { display: flex; align-items: center; gap: .55rem; min-width: 0; }
 .er-kind { font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; color: var(--fg-mute); }
 .er-name { color: var(--fg-bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -417,7 +417,7 @@ code { font-family: var(--mono); }
   transition: border-color .15s;
 }
 .site-row:hover { border-color: var(--border-2); }
-.site-row.site-expiring { border-left: 2px solid var(--accent); }
+.site-row.site-expiring { background: linear-gradient(90deg, var(--accent-faint), transparent 25%), var(--bg-card); }
 .site-row.site-expired { opacity: .55; }
 .site-main {
   width: 100%;
@@ -1154,7 +1154,7 @@ code { font-family: var(--mono); }
     if (combinedExpiring.length === 0) {
       expiringHtml =
         '<div class="empty subtle"><span class="empty-mark">○</span>' +
-        'nothing vanishing soon — everything you\\'ve published has more than 6 hours left.</div>';
+        'nothing vanishing soon. everything you\\'ve published has more than 6 hours left.</div>';
     } else {
       expiringHtml = '<div class="expiring-list">' + combinedExpiring.map(function(item) {
         var remaining = item.expires - Date.now();
@@ -1179,7 +1179,7 @@ code { font-family: var(--mono); }
     var latest = state.sites.slice().sort(function(a, b) { return b.created - a.created; }).slice(0, 4);
     var recentHtml;
     if (latest.length === 0) {
-      recentHtml = '<div class="empty subtle"><span class="empty-mark">∅</span>no mini-sites yet — publish one with <code>vanish site ./demo</code></div>';
+      recentHtml = '<div class="empty subtle"><span class="empty-mark">∅</span>no mini-sites yet. publish one with <code>vanish site ./demo</code></div>';
     } else {
       recentHtml = '<div class="ov-recent">' + latest.map(function(s) {
         return '<button class="recent-row" data-action="nav" data-section="sites">' +
@@ -1310,7 +1310,7 @@ code { font-family: var(--mono); }
     var rowsHtml;
     if (filtered.length === 0) {
       rowsHtml = '<div class="empty subtle"><span class="empty-mark">∅</span>' +
-        (sites.length === 0 ? 'no mini-sites yet — publish one with <code>vanish site ./demo</code>' : 'no mini-sites match. try another filter.') +
+        (sites.length === 0 ? 'no mini-sites yet. publish one with <code>vanish site ./demo</code>' : 'no mini-sites match. try another filter.') +
         '</div>';
     } else {
       rowsHtml = '<div class="sites-grid">' + filtered.map(renderSiteRow).join('') + '</div>';
@@ -1439,7 +1439,7 @@ code { font-family: var(--mono); }
     var bodyHtml;
     if (visible.length === 0) {
       bodyHtml = '<div class="empty subtle"><span class="empty-mark">∅</span>' +
-        (uploads.length === 0 ? 'no files yet — upload one with <code>vanish upload file.png</code>' : 'no files match. try another filter.') +
+        (uploads.length === 0 ? 'no files yet. upload one with <code>vanish upload file.png</code>' : 'no files match. try another filter.') +
         '</div>';
     } else if (state.filesView === 'list') {
       bodyHtml = '<div class="files-list">' +
@@ -1548,7 +1548,7 @@ code { font-family: var(--mono); }
           '<div class="kr-head">' +
             '<span class="dot dot-gold dot-pulse"></span>' +
             '<strong>' + escapeHtml(k.name) + '</strong>' +
-            '<span class="kr-warn">save this key now — we hash it on the server and can\\'t show it again.</span>' +
+            '<span class="kr-warn">save this key now. we hash it on the server and can\\'t show it again.</span>' +
           '</div>' +
           '<div class="kr-body">' +
             '<code class="kr-key">' + escapeHtml(k.key) + '</code>' +
@@ -1561,7 +1561,7 @@ code { font-family: var(--mono); }
 
     var rowsHtml;
     if (keys.length === 0) {
-      rowsHtml = '<div class="empty subtle"><span class="empty-mark">∅</span>no API keys yet — create one to use the CLI or API.</div>';
+      rowsHtml = '<div class="empty subtle"><span class="empty-mark">∅</span>no API keys yet. create one to use the CLI or API.</div>';
     } else {
       rowsHtml = '<div class="keys-list">' +
         '<div class="keys-head"><div>name</div><div>prefix</div><div>created</div><div>last used</div><div></div></div>' +
@@ -1679,7 +1679,7 @@ code { font-family: var(--mono); }
       '';
 
     var hostedNote = SELF_HOSTED ?
-      '<p class="set-blurb" style="margin-top:1rem">This is a self-hosted instance — billing is disabled.</p>' : '';
+      '<p class="set-blurb" style="margin-top:1rem">This is a self-hosted instance. billing is disabled.</p>' : '';
 
     return '<div class="page page-billing">' +
       '<header class="page-head">' +
@@ -1728,7 +1728,7 @@ code { font-family: var(--mono); }
         '<h2>Profile</h2>' +
         '<div class="set-rows">' +
           '<div class="set-row">' +
-            '<div><div class="set-label">GitHub handle</div><div class="set-hint">Linked via OAuth — change on github.com</div></div>' +
+            '<div><div class="set-label">GitHub handle</div><div class="set-hint">Linked via OAuth. change on github.com</div></div>' +
             '<div class="set-row-r"><div class="set-readonly">@' + escapeHtml(me.username || 'anon') + '</div></div>' +
           '</div>' +
           '<div class="set-row">' +
