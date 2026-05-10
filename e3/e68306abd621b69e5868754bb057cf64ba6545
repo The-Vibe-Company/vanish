@@ -1,0 +1,53 @@
+packages/cli/src/commands/sites.ts
+  s_e8bbf8e53973e7::t_656fe724f49a33 1
+  s_e8bbf8e53973e7::t_19a9f8911bb5c2 151-153,155-163
+  s_e8bbf8e53973e7::t_f4d9e88844326e 196,203-212
+packages/worker/src/routes/serve.ts
+  s_e8bbf8e53973e7::t_19a9f8911bb5c2 94,98
+packages/worker/test/storage.test.ts
+  s_e8bbf8e53973e7::t_19a9f8911bb5c2 17-19,22,35,47,81,83,86,112,123-131
+packages/worker/src/lib/storage.ts
+  s_e8bbf8e53973e7::t_19a9f8911bb5c2 28,31-34,91-94,116-119
+packages/worker/src/routes/user.ts
+  s_e8bbf8e53973e7::t_19a9f8911bb5c2 46,48-51,135-139
+packages/worker/src/routes/upload.ts
+  s_e8bbf8e53973e7::t_19a9f8911bb5c2 169,175
+  s_e8bbf8e53973e7::t_2a48d7d6ae683f 170-174
+packages/cli/src/commands/bundle.ts
+  s_e8bbf8e53973e7::t_19a9f8911bb5c2 31-52
+packages/cli/src/index.ts
+  s_e8bbf8e53973e7::t_f9b5e8598d0741 252,264-285
+  s_e8bbf8e53973e7::t_6f47452ce19619 243-250
+  s_e8bbf8e53973e7::t_19a9f8911bb5c2 242,251
+packages/worker/src/lib/api-response.ts
+  s_e8bbf8e53973e7::t_19a9f8911bb5c2 100-108
+packages/cli/src/commands/site.ts
+  s_e8bbf8e53973e7::t_f4d9e88844326e 405,413-421
+  s_e8bbf8e53973e7::t_19a9f8911bb5c2 349-357,359,362-370
+packages/worker/src/routes/bundles.ts
+  s_e8bbf8e53973e7::t_19a9f8911bb5c2 128,134,252,278,298,301-303,308-316,367,375-376,379-402,422,747,751
+  s_e8bbf8e53973e7::t_0f23ea827829e7 377
+  s_e8bbf8e53973e7::t_be47cf7002b29e 325-332,378,554-567,571-572
+  s_e8bbf8e53973e7::t_f9b5e8598d0741 232,235-251,253-265
+  s_e8bbf8e53973e7::t_4912b47fda7154 568-570
+  s_e8bbf8e53973e7::t_35421f4076a5fc 10
+  s_e8bbf8e53973e7::t_2a48d7d6ae683f 129-133,279-297,299-300,614-617
+packages/worker/test/sites-route.test.ts
+  s_e8bbf8e53973e7::t_9ca9c22269a735 573-580
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "e3e68306abd621b69e5868754bb057cf64ba6545",
+  "prompts": {},
+  "sessions": {
+    "s_e8bbf8e53973e7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e12f3-4b5d-7c93-82b3-0d190fa9be61",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
