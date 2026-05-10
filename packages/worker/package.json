@@ -11,14 +11,14 @@
     "db:migrate": "wrangler d1 execute vanish-db --local --file=src/db/schema.sql"
   },
   "dependencies": {
-    "hono": "^4.7.2",
+    "hono": "^4.12.18",
     "nanoid": "^5.1.2"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250214.0",
-    "@cloudflare/vitest-pool-workers": "^0.8.0",
-    "typescript": "^5.7.3",
-    "vitest": "^3.0.5",
-    "wrangler": "^4.3.0"
+    "@cloudflare/vitest-pool-workers": "^0.16.3",
+    "@cloudflare/workers-types": "^4.20260510.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.5",
+    "wrangler": "^4.90.0"
   }
 }

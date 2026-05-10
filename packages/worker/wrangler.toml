@@ -21,6 +21,7 @@ crons = ["0 * * * *"]  # Every hour
 BASE_URL = "https://vanish.sh"
 SELF_HOSTED = "false"
 DEFAULT_TIER = "free"
+PRODUCT_EVENTS = "false"
 
 # Secrets (set via `wrangler secret put`):
 # GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET

@@ -42,6 +42,8 @@ describe('site routes', () => {
     const root = await request(env, `/s/${draft.id}/`);
     expect(root.status).toBe(200);
     expect(root.headers.get('Content-Type')).toContain('text/html');
+    expect(root.headers.get('X-Robots-Tag')).toBe('noindex, nofollow, noarchive');
+    expect(root.headers.get('Link')).toContain('mailto:abuse@vanish.sh');
     expect(await root.text()).toBe('<h1>ok</h1>');
 
     const asset = await request(env, `/s/${draft.id}/assets/app.js`);
@@ -168,6 +170,65 @@ describe('site routes', () => {
     });
     expect(remove.status).toBe(200);
     expect(bucket.objects.size).toBe(0);
+  });
+
+  it('records privacy-light publish and first-serve events without paths or tokens', async () => {
+    env.PRODUCT_EVENTS = 'true';
+    const draft = await createSite(env, {
+      rootPath: 'index.html',
+      fileCount: 1,
+      totalBytes: 12,
+    });
+    await uploadSiteFile(env, draft.id, draft.token, 'index.html', '<h1>ok</h1>');
+
+    const publish = await request(env, `/sites/${draft.id}/publish`, {
+      method: 'POST',
+      headers: { 'X-Site-Token': draft.token },
+    });
+    expect(publish.status).toBe(200);
+
+    await request(env, `/s/${draft.id}/`);
+    await request(env, `/s/${draft.id}/`);
+
+    expect(db.events.map(event => event.name)).toEqual([
+      'site_publish_started',
+      'site_publish_succeeded',
+      'site_first_served',
+    ]);
+    for (const event of db.events) {
+      expect(event.site_id).toBe(draft.id);
+      expect(event.properties).not.toContain('index.html');
+      expect(event.properties).not.toContain('rootPath');
+      expect(event.properties).not.toContain('token');
+    }
+  });
+
+  it('records update usage for replacement publishes', async () => {
+    env.PRODUCT_EVENTS = 'true';
+    const key = await addUser(db, 'user1', 'free');
+    const draft = await createSite(env, { rootPath: 'index.html', fileCount: 1, totalBytes: 12 }, key);
+    await uploadSiteFile(env, draft.id, draft.token, 'index.html', '<h1>old</h1>', key);
+    await request(env, `/sites/${draft.id}/publish`, {
+      method: 'POST',
+      headers: authHeaders(key, { 'X-Site-Token': draft.token }),
+    });
+
+    const replacement = await request(env, `/sites/${draft.id}/replacements`, {
+      method: 'POST',
+      headers: authHeaders(key, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ rootPath: 'index.html', fileCount: 1, totalBytes: 12 }),
+    });
+    const replacementDraft = await replacement.json() as { id: string; token: string };
+    await uploadSiteFile(env, replacementDraft.id, replacementDraft.token, 'index.html', '<h1>new</h1>', key);
+
+    const publish = await request(env, `/sites/${draft.id}/replacements/${replacementDraft.id}/publish`, {
+      method: 'POST',
+      headers: authHeaders(key, { 'Content-Type': 'application/json', 'X-Site-Token': replacementDraft.token }),
+      body: JSON.stringify({}),
+    });
+
+    expect(publish.status).toBe(200);
+    expect(db.events.map(event => event.name)).toContain('site_update_used');
   });
 
   it('keeps failed old object deletes retryable after replacement publish', async () => {
@@ -381,6 +442,7 @@ class FakeDB {
   apiKeys = new Map<string, User>();
   pendingR2Deletions = new Set<string>();
   rateLimits: Array<{ identifier: string; action: string }> = [];
+  events: Array<{ id: string; name: string; user_id: string | null; site_id: string | null; upload_id: string | null; properties: string }> = [];
 
   prepare(sql: string): FakeStatement {
     return new FakeStatement(this, sql);
@@ -416,6 +478,21 @@ class FakeStatement {
     if (sql.includes('SELECT COUNT(*) as count FROM rate_limits')) {
       const [identifier, action] = this.args as [string, string];
       return { count: this.db.rateLimits.filter(r => r.identifier === identifier && r.action === action).length } as T;
+    }
+
+    if (sql.includes('SELECT COUNT(*) as count FROM sites') && sql.includes('published_at IS NOT NULL')) {
+      const [userId] = this.args as [string];
+      return {
+        count: Array.from(this.db.sites.values()).filter(site =>
+          site.user_id === userId && site.deleted_at === null && site.published_at !== null
+        ).length,
+      } as T;
+    }
+
+    if (sql.includes('SELECT id FROM events')) {
+      const [name, siteId] = this.args as [string, string];
+      const event = this.db.events.find(e => e.name === name && e.site_id === siteId);
+      return (event ? { id: event.id } : null) as T | null;
     }
 
     if (sql.includes('SELECT id FROM sites WHERE slug = ?')) {
@@ -521,6 +598,26 @@ class FakeStatement {
     if (sql.includes('INSERT INTO rate_limits')) {
       const [identifier, action] = this.args as [string, string];
       this.db.rateLimits.push({ identifier, action });
+      return;
+    }
+
+    if (sql.includes('INSERT INTO events')) {
+      const [id, name, userId, siteId, uploadId, properties] = this.args as [
+        string,
+        string,
+        string | null,
+        string | null,
+        string | null,
+        string,
+      ];
+      this.db.events.push({
+        id,
+        name,
+        user_id: userId,
+        site_id: siteId,
+        upload_id: uploadId,
+        properties,
+      });
       return;
     }
 

@@ -8,8 +8,8 @@ const html = `<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>vanish — temporary mini-sites for AI agents</title>
-<meta name="description" content="Publish temporary HTML, Markdown, CSS, JS, and asset folders from Claude Code, Codex, or your terminal.">
+<title>vanish: public preview URLs for agent-made artifacts</title>
+<meta name="description" content="Turn a local HTML, Markdown, CSS, JS, or asset folder from Codex, Claude Code, or your terminal into a temporary public URL.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -45,7 +45,7 @@ const html = `<!DOCTYPE html>
     padding: 4rem 1.5rem 3rem;
   }
 
-  /* — Header — */
+  /* Header */
   .logo {
     font-size: 1.8rem;
     font-weight: 600;
@@ -64,7 +64,18 @@ const html = `<!DOCTYPE html>
     font-size: 0.85rem;
   }
 
-  /* — Sections — */
+  .hero-copy {
+    margin-top: 1.2rem;
+    max-width: 620px;
+    color: var(--fg);
+  }
+
+  .hero-copy strong {
+    color: var(--fg-bright);
+    font-weight: 500;
+  }
+
+  /* Sections */
   section {
     margin-top: 3rem;
   }
@@ -80,7 +91,7 @@ const html = `<!DOCTYPE html>
     border-bottom: 1px solid var(--border);
   }
 
-  /* — Code blocks — */
+  /* Code blocks */
   .cmd {
     background: var(--code-bg);
     border: 1px solid var(--border);
@@ -108,7 +119,7 @@ const html = `<!DOCTYPE html>
   .output { color: var(--green); }
   .comment { color: var(--fg-dim); font-style: italic; }
 
-  /* — Terminal widget — */
+  /* Terminal widget */
   .terminal {
     margin-top: 2rem;
     border: 1px solid var(--accent-dim);
@@ -216,7 +227,7 @@ const html = `<!DOCTYPE html>
   .t-blue { color: var(--blue); }
   .t-bright { color: var(--fg-bright); }
 
-  /* — Tier table — */
+  /* Tier table */
   table {
     width: 100%;
     border-collapse: collapse;
@@ -257,7 +268,7 @@ const html = `<!DOCTYPE html>
     color: var(--green);
   }
 
-  /* — Inline code — */
+  /* Inline code */
   code.inline {
     background: var(--code-bg);
     border: 1px solid var(--border);
@@ -267,7 +278,7 @@ const html = `<!DOCTYPE html>
     color: var(--fg-bright);
   }
 
-  /* — Description text — */
+  /* Description text */
   p {
     margin-bottom: 0.6rem;
   }
@@ -276,7 +287,7 @@ const html = `<!DOCTYPE html>
     margin-top: 0.8rem;
   }
 
-  /* — Footer — */
+  /* Footer */
   footer {
     margin-top: 4rem;
     padding-top: 1.5rem;
@@ -299,7 +310,7 @@ const html = `<!DOCTYPE html>
     text-decoration: underline;
   }
 
-  /* — Responsive — */
+  /* Responsive */
   @media (max-width: 500px) {
     body { padding: 2.5rem 1rem 2rem; }
     .terminal-body { padding: 0.8rem 1rem; font-size: 0.78rem; min-height: 150px; }
@@ -320,7 +331,11 @@ const html = `<!DOCTYPE html>
 
 <header>
   <div class="logo">vanish<span class="dot">.</span></div>
-  <p class="tagline">temporary mini-sites for Claude Code, Codex, and terminal workflows.</p>
+  <p class="tagline">public preview URLs for agent-made artifacts.</p>
+  <p class="hero-copy">
+    <strong>Codex wrote a demo. Claude Code exported a report. Your script generated a static folder.</strong>
+    Vanish gives it a temporary URL in one command, without creating a deployment.
+  </p>
 </header>
 
 <div class="terminal" id="terminal">
@@ -340,33 +355,35 @@ const html = `<!DOCTYPE html>
 </div>
 
 <section>
-  <h2>Install</h2>
+  <h2>One command</h2>
   <div class="cmd">
-    <code><span class="prompt">$ </span>npm i <span class="flag">-g</span> vanish-cli</code>
+    <code><span class="prompt">$ </span>npx vanish-cli site ./demo <span class="flag">--root</span> index.html
+<span class="output">https://quiet-river-42.vanish.sh/</span></code>
   </div>
-  <p>Or use directly with npx:</p>
+  <p>Install the CLI when you publish previews often:</p>
   <div class="cmd">
-    <code><span class="prompt">$ </span>npx vanish-cli site ./demo <span class="flag">--root</span> index.html</code>
+    <code><span class="prompt">$ </span>npm i <span class="flag">-g</span> vanish-cli
+<span class="prompt">$ </span>vanish site ./demo <span class="flag">--root</span> index.html</code>
   </div>
 </section>
 
 <section>
-  <h2>Usage</h2>
+  <h2>Agent handoff</h2>
 
-  <p>Publish a static folder:</p>
+  <p>Publish a generated static folder:</p>
   <div class="cmd">
     <code><span class="prompt">$ </span>vanish site ./lesson-demo <span class="flag">--root</span> index.html
 <span class="output">https://k8m2q9z4p1ad.vanish.sh/</span>
 <span class="comment"># copied to clipboard</span></code>
   </div>
 
-  <p>Choose any root file. Vanish serves it as-is:</p>
+  <p>Serve Markdown, HTML, CSS, JavaScript, and assets as-is:</p>
   <div class="cmd">
     <code><span class="prompt">$ </span>vanish site ./notes <span class="flag">--root</span> README.md
 <span class="output">https://p4d8n2x7q0ab.vanish.sh/</span></code>
   </div>
 
-  <p>Keep sharing single files and screenshots:</p>
+  <p>Use file uploads for screenshots, PDFs, decks, and one-off artifacts:</p>
   <div class="cmd">
     <code><span class="prompt">$ </span>vanish screenshot.png
 <span class="output">https://vanish.sh/f/a7xK9mQ2.png</span></code>
@@ -380,7 +397,7 @@ const html = `<!DOCTYPE html>
 </section>
 
 <section>
-  <h2>cURL / API</h2>
+  <h2>API reference</h2>
 
   <p>Set your key once:</p>
   <div class="cmd">
@@ -530,7 +547,7 @@ const html = `<!DOCTYPE html>
   -d</span> <span class="url">'{"name":"ci-bot"}'</span> <span class="flag">\\
   </span><span class="url">https://vanish.sh/keys</span>
 <span class="output">{"api_key":"vnsh_...","name":"ci-bot"}</span>
-<span class="comment"># key shown only once — save it</span></code>
+<span class="comment"># key shown only once; save it</span></code>
   </div>
 
   <p>Manage your keys and uploads on the <a href="/dashboard">dashboard</a>.</p>
@@ -555,6 +572,7 @@ const html = `<!DOCTYPE html>
 
 <footer>
   <span>\u00A9 vanish.sh</span>
+  <a href="mailto:abuse@vanish.sh?subject=Vanish%20abuse%20report">report abuse</a>
   <a href="https://github.com/The-Vibe-Company/vanish">github</a>
 </footer>
 

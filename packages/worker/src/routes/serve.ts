@@ -40,8 +40,10 @@ serve.get('/f/:id{.+}', async (c) => {
   headers.set('Content-Type', upload.content_type || 'application/octet-stream');
   headers.set('Content-Length', String(upload.size_bytes));
   headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
   headers.set('Cache-Control', 'public, max-age=3600');
   headers.set('Content-Disposition', `inline; filename="${upload.filename}"`);
+  headers.set('Link', '<mailto:abuse@vanish.sh>; rel="abuse"');
 
   // CORS for embedding in GitHub/GitLab
   headers.set('Access-Control-Allow-Origin', '*');

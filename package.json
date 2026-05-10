@@ -10,19 +10,16 @@
     "test": "vitest run",
     "dev:worker": "npm run dev --workspace=@vanish/worker",
     "dev:cli": "npm run dev --workspace=vanish-cli",
+    "commit": "czg",
     "prepare": "husky"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.4.1",
     "@commitlint/config-conventional": "^20.4.1",
-    "commitizen": "^4.3.1",
-    "cz-conventional-changelog": "^3.3.0",
-    "husky": "^9.1.7"
-  },
-  "config": {
-    "commitizen": {
-      "path": "cz-conventional-changelog"
-    }
+    "czg": "^1.13.1",
+    "husky": "^9.1.7",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.5"
   },
   "commitlint": {
     "extends": [

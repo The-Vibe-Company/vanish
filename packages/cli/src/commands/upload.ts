@@ -52,7 +52,9 @@ export async function uploadCommand(files: string[], options: UploadOptions): Pr
       spinner.start();
       const result = await client.upload(file, { days: options.days });
       spinner.stop();
-      results.push(result);
+      const canDelete = result.deletable ?? Boolean(config.api_key);
+      const enriched = enrichUploadResult(result, canDelete);
+      results.push(enriched);
 
       if (!options.json) {
         if (options.md) {
@@ -60,6 +62,7 @@ export async function uploadCommand(files: string[], options: UploadOptions): Pr
         } else {
           console.log(result.url);
         }
+        printActivationHint(enriched, canDelete);
       }
     } catch (err) {
       spinner.stop();
@@ -88,8 +91,32 @@ export async function uploadCommand(files: string[], options: UploadOptions): Pr
   if (!config.api_key && !options.json) {
     const expiry = results[0]?.expires;
     if (expiry) {
-      const hours = Math.round((new Date(expiry).getTime() - Date.now()) / (1000 * 60 * 60));
-      process.stderr.write(`Expires in ${hours}h (images only). Login for 48h + all file types: vanish login\n`);
+      process.stderr.write('Login for deletes, 48h retention, and all file types: vanish login\n');
     }
   }
+}
+
+function enrichUploadResult(result: Awaited<ReturnType<VanishClient['upload']>>, canDelete: boolean) {
+  return {
+    ...result,
+    expiresInHours: result.expires ? hoursUntil(result.expires) : null,
+    deleteCommand: canDelete ? `vanish rm ${result.id}` : undefined,
+  };
+}
+
+function printActivationHint(
+  result: ReturnType<typeof enrichUploadResult>,
+  canDelete: boolean,
+): void {
+  if (result.expiresInHours !== null) {
+    process.stderr.write(`Expires in ${result.expiresInHours}h.\n`);
+  }
+
+  if (canDelete && result.deleteCommand) {
+    process.stderr.write(`Delete this file: ${result.deleteCommand}\n`);
+  }
+}
+
+function hoursUntil(iso: string): number {
+  return Math.max(0, Math.round((new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60)));
 }
