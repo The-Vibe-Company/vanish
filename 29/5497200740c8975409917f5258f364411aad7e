@@ -1,0 +1,25 @@
+packages/worker/src/routes/bundles.ts
+  s_e8bbf8e53973e7::t_d065e020a60ecc 112-122,131-151
+packages/cli/src/commands/sites.ts
+  s_e8bbf8e53973e7::t_d065e020a60ecc 209
+packages/cli/src/commands/site.ts
+  s_e8bbf8e53973e7::t_d065e020a60ecc 418
+packages/worker/src/routes/sites.ts
+  s_e8bbf8e53973e7::t_d065e020a60ecc 193-207,216-221,224,227,230-243,253-265
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "295497200740c8975409917f5258f364411aad7e",
+  "prompts": {},
+  "sessions": {
+    "s_e8bbf8e53973e7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e12f3-4b5d-7c93-82b3-0d190fa9be61",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
