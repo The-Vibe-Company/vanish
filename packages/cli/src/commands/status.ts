@@ -33,6 +33,7 @@ export async function statusCommand(options: { json?: boolean }): Promise<void> 
 
     console.log(`Active uploads: ${me.stats.total_uploads}`);
     console.log(`Active sites: ${me.stats.total_sites || 0}`);
+    console.log(`Active bundles: ${me.stats.total_bundles || 0}`);
     console.log(`Max file size: ${formatBytes(me.limits.maxFileSize)}`);
     if (me.limits.maxSiteSize) {
       console.log(`Max site size: ${formatBytes(me.limits.maxSiteSize)}`);

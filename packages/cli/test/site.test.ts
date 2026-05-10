@@ -129,6 +129,23 @@ describe('siteCommand', () => {
     });
   });
 
+  it('prints a dry-run manifest with blocked files without creating a draft', async () => {
+    writeFileSync(join(dir, 'deploy.sh'), 'echo bad');
+
+    await siteCommand(dir, { root: 'index.html', dryRun: true, json: true, clipboard: false });
+
+    expect(mocks.client.createSite).not.toHaveBeenCalled();
+    const result = JSON.parse(String(logSpy.mock.calls[0][0]));
+    expect(result).toMatchObject({
+      ok: false,
+      dryRun: true,
+      rootPath: 'index.html',
+      fileCount: 2,
+      blockedFiles: [{ path: 'deploy.sh', extension: '.sh' }],
+    });
+    expect(result.errors[0]).toContain('deploy.sh');
+  });
+
   it('rejects missing root files before creating a draft', async () => {
     await expect(siteCommand(dir, { root: 'missing.html' })).rejects.toThrow('exit 1');
 

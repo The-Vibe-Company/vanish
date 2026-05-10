@@ -12,7 +12,9 @@ import billingRoutes from './routes/billing.js';
 import landingRoutes from './routes/landing.js';
 import dashboardRoutes from './routes/dashboard.js';
 import siteRoutes from './routes/sites.js';
+import bundleRoutes from './routes/bundles.js';
 import { handleCleanup } from './cron/cleanup.js';
+import { structuredError } from './lib/api-response.js';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -20,7 +22,7 @@ const app = new Hono<{ Bindings: Env }>();
 app.use('*', cors({
   origin: '*',
   allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Authorization', 'Content-Type', 'X-Filename', 'X-Expires-Days', 'X-Site-Token'],
+  allowHeaders: ['Authorization', 'Content-Type', 'X-Filename', 'X-Expires-Days', 'X-Site-Token', 'X-Bundle-Token', 'Idempotency-Key', 'X-Idempotency-Key'],
 }));
 
 // Auth middleware for all routes
@@ -34,6 +36,9 @@ app.get('/health', (c) => c.json({ status: 'ok', version: '0.1.0' }));
 
 // Sites need to run before the landing page so *.vanish.sh can serve /.
 app.route('/', siteRoutes);
+
+// Bundles expose public /b/:id URLs and authenticated management endpoints.
+app.route('/', bundleRoutes);
 
 // Dashboard
 app.route('/', dashboardRoutes);
@@ -50,12 +55,12 @@ app.route('/', userRoutes);
 app.route('/', billingRoutes);
 
 // 404 fallback
-app.notFound((c) => c.json({ error: 'Not found' }, 404));
+app.notFound((c) => c.json(structuredError('not_found', 'Not found', 404), 404));
 
 // Error handler
 app.onError((err, c) => {
   console.error('Unhandled error:', err);
-  return c.json({ error: 'Internal server error' }, 500);
+  return c.json(structuredError('internal_error', 'Internal server error', 500, { retryable: true }), 500);
 });
 
 export default {

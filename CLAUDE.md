@@ -59,6 +59,14 @@ Uses **Commander** for argument parsing. Entry point is `index.ts`.
 - **`commands/`**: `site.ts` (publish static folder), `upload.ts`, `login.ts` (OAuth polling flow), `ls.ts`, `rm.ts`, `status.ts`
 - **`lib/`**: `config.ts` (reads `~/.config/vanish/config.json`, env vars override file), `api-client.ts`, `clipboard.ts` (cross-platform), `progress.ts` (spinner)
 
+Agent-ready surfaces:
+- Use `--json --no-clipboard` for machine handoffs; JSON errors include stable fields when available.
+- Use `vanish site --dry-run --json` before public mini-site publishes.
+- Use `--idempotency-key` on retry-prone agent uploads/publishes.
+- Use `--channel <name>` for stable owner-scoped site URLs.
+- Use `vanish bundle <files...>` when several files should share one public URL.
+- Use `vanish sites ...` and `vanish keys ...` for lifecycle/API-key management.
+
 ### Tier System
 
 Three tiers with different limits defined in `TIER_LIMITS` (`packages/worker/src/types.ts`):

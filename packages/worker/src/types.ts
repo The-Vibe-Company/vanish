@@ -62,6 +62,30 @@ export interface SiteFile {
   created_at: string;
 }
 
+export interface Bundle {
+  id: string;
+  user_id: string | null;
+  name: string;
+  upload_token: string | null;
+  size_bytes: number;
+  file_count: number;
+  expected_file_count: number;
+  expires_at: string | null;
+  published_at: string | null;
+  created_at: string;
+  deleted_at: string | null;
+}
+
+export interface BundleFile {
+  bundle_id: string;
+  path: string;
+  filename: string;
+  content_type: string | null;
+  size_bytes: number;
+  r2_key: string;
+  created_at: string;
+}
+
 export const TIER_LIMITS = {
   anonymous: {
     maxFileSize: 5 * 1024 * 1024, // 5 MB

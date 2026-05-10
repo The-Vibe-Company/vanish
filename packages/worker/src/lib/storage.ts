@@ -18,7 +18,24 @@ export async function getActiveStorageBytes(env: Env, userId: string): Promise<n
       AND (expires_at IS NULL OR expires_at > datetime('now'))
   `).bind(userId).first<{ total_bytes: number }>();
 
-  return (uploads?.total_bytes || 0) + (sites?.total_bytes || 0);
+  let bundleBytes = 0;
+  try {
+    const bundles = await env.DB.prepare(`
+      SELECT COALESCE(SUM(size_bytes), 0) as total_bytes
+      FROM bundles
+      WHERE user_id = ?
+        AND deleted_at IS NULL
+        AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))
+    `).bind(userId).first<{ total_bytes: number }>();
+    bundleBytes = bundles?.total_bytes || 0;
+  } catch (err) {
+    if (!isMissingTableError(err, 'bundles')) {
+      throw err;
+    }
+    bundleBytes = 0;
+  }
+
+  return (uploads?.total_bytes || 0) + (sites?.total_bytes || 0) + bundleBytes;
 }
 
 export async function ensureStorageAvailable(
@@ -26,7 +43,7 @@ export async function ensureStorageAvailable(
   tier: Tier,
   userId: string | null,
   incomingBytes: number,
-  options: { excludeSiteId?: string; excludeSiteIds?: string[] } = {},
+  options: { excludeSiteId?: string; excludeSiteIds?: string[]; excludeBundleId?: string; excludeBundleIds?: string[] } = {},
 ): Promise<{ ok: true } | { ok: false; error: string; maxTotalBytes?: number; usedBytes?: number }> {
   const limits = TIER_LIMITS[tier];
 
@@ -58,6 +75,26 @@ export async function ensureStorageAvailable(
     usedBytes -= currentSite?.size_bytes || 0;
   }
 
+  const excludeBundleIds = new Set([
+    ...(options.excludeBundleIds || []),
+    ...(options.excludeBundleId ? [options.excludeBundleId] : []),
+  ]);
+
+  for (const bundleId of excludeBundleIds) {
+    try {
+      const currentBundle = await env.DB.prepare(`
+        SELECT COALESCE(size_bytes, 0) as size_bytes
+        FROM bundles
+        WHERE id = ? AND user_id = ? AND deleted_at IS NULL
+      `).bind(bundleId, userId).first<{ size_bytes: number }>();
+      usedBytes -= currentBundle?.size_bytes || 0;
+    } catch (err) {
+      if (!isMissingTableError(err, 'bundles')) {
+        throw err;
+      }
+    }
+  }
+
   if (usedBytes + incomingBytes > limits.maxTotalStorage) {
     return {
       ok: false,
@@ -75,4 +112,9 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`;
   if (bytes < 1024 * 1024 * 1024) return `${Math.round(bytes / (1024 * 1024))}MB`;
   return `${Math.round(bytes / (1024 * 1024 * 1024))}GB`;
+}
+
+function isMissingTableError(err: unknown, table: string): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.includes('no such table') && message.includes(table);
 }

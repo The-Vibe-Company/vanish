@@ -11,7 +11,11 @@ import { lsCommand } from './commands/ls.js';
 import { rmCommand } from './commands/rm.js';
 import { statusCommand } from './commands/status.js';
 import { updateCommand } from './commands/update.js';
+import { sitesListCommand, siteInfoCommand, siteRmCommand, siteExtendCommand, siteVerifyCommand } from './commands/sites.js';
+import { keysCreateCommand, keysListCommand, keysRevokeCommand } from './commands/keys.js';
+import { bundleCommand } from './commands/bundle.js';
 import { printVersionNoticeIfNeeded } from './lib/version-check.js';
+import { CliExit } from './lib/output.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'));
@@ -32,6 +36,7 @@ program
   .option('--md', 'Output as Markdown image link')
   .option('--no-clipboard', 'Do not copy URL to clipboard')
   .option('--days <days>', 'Custom retention in days (Pro only, 1-365)', parseInt)
+  .option('--idempotency-key <key>', 'Stable key for safe agent retries')
   .action(uploadCommand);
 
 program
@@ -41,10 +46,89 @@ program
   .requiredOption('--root <file>', 'Root file to serve at /, relative to the folder')
   .option('--update <site>', 'Replace an existing owned site by ID or slug')
   .option('--slug <slug>', 'Custom vanish.sh subdomain slug (Pro only)')
+  .option('--channel <channel>', 'Owned stable channel that creates or updates the same site URL')
   .option('--days <days>', 'Custom retention in days (Pro only, 1-365)', parseInt)
+  .option('--dry-run', 'Inspect and print the site manifest without uploading')
+  .option('--verify', 'Fetch the published root and referenced assets after publish')
+  .option('--idempotency-key <key>', 'Stable key for safe agent retries')
   .option('--json', 'Output as JSON')
   .option('--no-clipboard', 'Do not copy URL to clipboard')
   .action(siteCommand);
+
+const sites = program
+  .command('sites')
+  .description('Manage owned mini-sites');
+
+sites
+  .command('ls')
+  .description('List your mini-sites')
+  .option('--json', 'Output as JSON')
+  .option('--all', 'Include expired and deleted sites')
+  .action((options) => sitesListCommand({ json: options.json, active: !options.all }));
+
+sites
+  .command('info')
+  .description('Show a mini-site and its files')
+  .argument('<site>', 'site ID or slug')
+  .option('--json', 'Output as JSON')
+  .action(siteInfoCommand);
+
+sites
+  .command('rm')
+  .description('Delete a mini-site by ID or slug')
+  .argument('<site>', 'site ID or slug')
+  .option('--json', 'Output as JSON')
+  .action(siteRmCommand);
+
+sites
+  .command('extend')
+  .description('Extend a Pro mini-site expiry')
+  .argument('<site>', 'site ID or slug')
+  .requiredOption('--days <days>', 'Custom retention in days (Pro only, 1-365)', parseInt)
+  .option('--json', 'Output as JSON')
+  .action(siteExtendCommand);
+
+sites
+  .command('verify')
+  .description('Verify a published mini-site root and referenced assets')
+  .argument('<site>', 'site ID or slug')
+  .option('--json', 'Output as JSON')
+  .action(siteVerifyCommand);
+
+program
+  .command('bundle')
+  .description('Publish multiple files behind one temporary public URL')
+  .argument('<files...>', 'files to include')
+  .option('--json', 'Output as JSON')
+  .option('--no-clipboard', 'Do not copy URL to clipboard')
+  .option('--days <days>', 'Custom retention in days (Pro only, 1-365)', parseInt)
+  .option('--idempotency-key <key>', 'Stable key for safe agent retries')
+  .option('--name <name>', 'Bundle display name')
+  .action(bundleCommand);
+
+const keys = program
+  .command('keys')
+  .description('Manage API keys');
+
+keys
+  .command('ls')
+  .description('List API keys')
+  .option('--json', 'Output as JSON')
+  .action(keysListCommand);
+
+keys
+  .command('create')
+  .description('Create an API key')
+  .option('--name <name>', 'API key name')
+  .option('--json', 'Output as JSON')
+  .action(keysCreateCommand);
+
+keys
+  .command('revoke')
+  .description('Revoke an API key by prefix')
+  .argument('<prefix>', 'API key prefix')
+  .option('--json', 'Output as JSON')
+  .action(keysRevokeCommand);
 
 program
   .command('login')
@@ -156,10 +240,55 @@ program
 
 // Default: if first arg looks like a file path, treat as upload
 const args = process.argv.slice(2);
-if (args.length > 0 && !args[0].startsWith('-') && !['upload', 'up', 'site', 'login', 'logout', 'upgrade', 'whoami', 'ls', 'rm', 'status', 'update', 'help', 'mcp-serve'].includes(args[0])) {
+const siteLifecycleSubcommands = ['info', 'rm', 'extend', 'verify'];
+const VALUE_OPTIONS = new Set([
+  '--channel',
+  '--days',
+  '--idempotency-key',
+  '--root',
+  '--slug',
+  '--update',
+]);
+const hasSiteRootFlag = args.some(arg => arg === '--root' || arg.startsWith('--root='));
+if (args[0] === 'site' && siteLifecycleSubcommands.includes(args[1] || '') && (!hasSiteRootFlag || hasLifecycleTargetArg(args))) {
+  process.argv.splice(2, 2, 'sites', args[1]);
+  args.splice(0, 2, 'sites', args[1]);
+}
+
+if (args.length > 0 && !args[0].startsWith('-') && !['upload', 'up', 'site', 'sites', 'bundle', 'keys', 'login', 'logout', 'upgrade', 'whoami', 'ls', 'rm', 'status', 'update', 'help', 'mcp-serve'].includes(args[0])) {
   // Shorthand: `vanish file.png` = `vanish upload file.png`
   process.argv.splice(2, 0, 'upload');
 }
 
-await printVersionNoticeIfNeeded(args, pkg.version);
-await program.parseAsync();
+try {
+  await printVersionNoticeIfNeeded(args, pkg.version);
+  await program.parseAsync();
+} catch (err) {
+  if (err instanceof CliExit) {
+    process.exitCode = err.code;
+  } else {
+    throw err;
+  }
+}
+
+function hasLifecycleTargetArg(argv: string[]): boolean {
+  for (let i = 2; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === '--') {
+      return i + 1 < argv.length;
+    }
+    if (arg.includes('=')) {
+      continue;
+    }
+    if (VALUE_OPTIONS.has(arg)) {
+      i++;
+      continue;
+    }
+    if (arg.startsWith('-')) {
+      continue;
+    }
+    return true;
+  }
+
+  return false;
+}

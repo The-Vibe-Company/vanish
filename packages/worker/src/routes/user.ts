@@ -34,9 +34,28 @@ user.get('/me', async (c) => {
       AND (expires_at IS NULL OR expires_at > datetime('now'))
   `).bind(currentUser.id).first<{ total_sites: number; total_bytes: number }>();
 
+  let bundleStats: { total_bundles: number; total_bytes: number } | null = null;
+  try {
+    bundleStats = await c.env.DB.prepare(`
+      SELECT
+        COUNT(*) as total_bundles,
+        COALESCE(SUM(size_bytes), 0) as total_bytes
+      FROM bundles
+      WHERE user_id = ?
+        AND deleted_at IS NULL
+        AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))
+    `).bind(currentUser.id).first<{ total_bundles: number; total_bytes: number }>();
+  } catch (err) {
+    if (!isMissingTableError(err, 'bundles')) {
+      throw err;
+    }
+    bundleStats = null;
+  }
+
   const limits = TIER_LIMITS[currentUser.tier];
   const uploadBytes = uploadStats?.total_bytes || 0;
   const siteBytes = siteStats?.total_bytes || 0;
+  const bundleBytes = bundleStats?.total_bytes || 0;
 
   return c.json({
     id: currentUser.id,
@@ -47,9 +66,11 @@ user.get('/me', async (c) => {
     stats: {
       total_uploads: uploadStats?.total_uploads || 0,
       total_sites: siteStats?.total_sites || 0,
+      total_bundles: bundleStats?.total_bundles || 0,
       upload_bytes: uploadBytes,
       site_bytes: siteBytes,
-      total_bytes: uploadBytes + siteBytes,
+      bundle_bytes: bundleBytes,
+      total_bytes: uploadBytes + siteBytes + bundleBytes,
     },
     limits: {
       maxFileSize: limits.maxFileSize,
@@ -111,3 +132,8 @@ user.get('/uploads', async (c) => {
 });
 
 export default user;
+
+function isMissingTableError(err: unknown, table: string): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.includes('no such table') && message.includes(table);
+}

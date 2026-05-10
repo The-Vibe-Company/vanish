@@ -106,6 +106,28 @@ Returns non-breaking fields such as:
 }
 ```
 
+Agent-safe preflight:
+
+```bash
+vanish site ./demo --root index.html --dry-run --json --no-clipboard
+```
+
+Stable owner-scoped channels create the first URL, then update it on later runs:
+
+```bash
+vanish site ./demo --root index.html --channel pr-42 --verify --json --no-clipboard
+```
+
+Lifecycle commands:
+
+```bash
+vanish sites ls --json
+vanish site info quiet-river-42 --json
+vanish site verify quiet-river-42 --json
+vanish site extend quiet-river-42 --days 90 --json
+vanish site rm quiet-river-42 --json
+```
+
 ## File Uploads
 
 ```bash
@@ -122,12 +144,19 @@ Output formats:
 vanish upload image.png --md
 vanish upload data.json --json
 vanish upload file.png --no-clipboard
+vanish upload file.png --idempotency-key retry-safe-123 --json --no-clipboard
 ```
 
 Authenticated file uploads can be deleted from the CLI:
 
 ```bash
 vanish rm a1b2c3d4e5f6
+```
+
+Share several related files behind one public URL:
+
+```bash
+vanish bundle report.pdf screenshot.png logs.txt --json --no-clipboard
 ```
 
 ## Account
@@ -138,6 +167,10 @@ vanish whoami      # show username and tier
 vanish status      # show storage usage and limits
 vanish ls          # list file uploads
 vanish rm <id>     # delete a file upload
+vanish sites ls    # list mini-sites
+vanish keys ls     # list API keys
+vanish keys create --name agent-ci
+vanish keys revoke <prefix>
 vanish upgrade     # Pro slugs and longer retention
 vanish update      # update the CLI to the latest version
 ```

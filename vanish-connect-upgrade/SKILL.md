@@ -17,6 +17,14 @@ vanish status --json
 vanish logout      # remove saved API key
 vanish upgrade     # open Pro checkout
 vanish update      # update the CLI to the latest version
+vanish keys ls --json
+vanish keys create --name agent-ci --json
+vanish keys revoke <prefix> --json
+vanish sites ls --json
+vanish site info <id-or-slug> --json
+vanish site rm <id-or-slug> --json
+vanish site extend <id-or-slug> --days 90 --json
+vanish site verify <id-or-slug> --json
 ```
 
 If `vanish` is not installed, use `npx vanish-cli <command>`.
@@ -51,6 +59,7 @@ The config file can contain `api_key` and `api_url`. Environment variables overr
 ## When To Route Here
 
 - `--update` fails or is needed: login is required.
+- `--channel` is requested: login is required.
 - `--slug` or `--days` is requested: Pro is required.
 - Anonymous upload fails for non-image files: login is required.
 - Storage quota or file size blocks sharing: check status, then suggest cleanup or upgrade.
