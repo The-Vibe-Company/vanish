@@ -521,13 +521,16 @@ export class VanishClient {
     }
   }
 
-  async publishBundle(bundleId: string, token: string): Promise<PublishBundleResult> {
+  async publishBundle(bundleId: string, token: string, options?: RequestOptions): Promise<PublishBundleResult> {
     const headers: Record<string, string> = {
       'X-Bundle-Token': token,
     };
 
     if (this.apiKey) {
       headers['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+    if (options?.idempotencyKey) {
+      headers['Idempotency-Key'] = options.idempotencyKey;
     }
 
     const response = await fetch(`${this.apiUrl}/bundles/${bundleId}/publish`, {

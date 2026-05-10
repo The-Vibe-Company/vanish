@@ -19,13 +19,16 @@ export function fail(message: string, options: JsonErrorOptions = {}, code = 'cl
 }
 
 export function failWithUnknownError(err: unknown, options: JsonErrorOptions = {}, fallback = 'Command failed'): never {
+  const withContext = (message: string) => fallback === 'Command failed' ? message : `${fallback}: ${message}`;
+
   if (isVanishApiError(err)) {
+    const message = withContext(err.message);
     if (options.json) {
       console.log(JSON.stringify({
         ok: false,
-        error: err.message,
+        error: message,
         code: err.code,
-        message: err.message,
+        message,
         status: err.status,
         hint: err.hint,
         retryable: err.retryable,
@@ -33,7 +36,7 @@ export function failWithUnknownError(err: unknown, options: JsonErrorOptions = {
         upgradeRequired: err.upgradeRequired,
       }, null, 2));
     } else {
-      console.error(err.message);
+      console.error(message);
       if (err.hint) {
         console.error(err.hint);
       }
@@ -41,7 +44,7 @@ export function failWithUnknownError(err: unknown, options: JsonErrorOptions = {
     process.exit(1);
   }
 
-  fail(err instanceof Error ? err.message : fallback, options);
+  fail(err instanceof Error ? withContext(err.message) : fallback, options);
 }
 
 function isVanishApiError(err: unknown): err is Error & {

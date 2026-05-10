@@ -102,6 +102,9 @@ export async function siteVerifyCommand(id: string, options: JsonOptions): Promi
     const result = await verifySite(site.url, site.root_path, files.map(file => file.path));
     if (options.json) {
       console.log(JSON.stringify({ site, ...result }, null, 2));
+      if (!result.verified) {
+        process.exit(1);
+      }
       return;
     }
 
@@ -181,7 +184,10 @@ function extractAssetPaths(html: string): Set<string> {
     if (!value || value.startsWith('http:') || value.startsWith('https:') || value.startsWith('data:') || value.startsWith('#')) {
       continue;
     }
-    paths.add(value.split(/[?#]/)[0].replace(/^\.\//, ''));
+    const path = value.split(/[?#]/)[0].replace(/^\.\//, '').replace(/^\/+/, '');
+    if (path) {
+      paths.add(path);
+    }
   }
 
   return paths;

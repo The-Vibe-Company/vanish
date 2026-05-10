@@ -385,7 +385,7 @@ function extractAssetPaths(html: string): Set<string> {
       continue;
     }
 
-    const normalized = normalizeCliPath(value.split(/[?#]/)[0]);
+    const normalized = normalizeCliPath(value.split(/[?#]/)[0].replace(/^\/+/, ''));
     if (normalized) {
       paths.add(normalized);
     }

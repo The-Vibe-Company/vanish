@@ -74,7 +74,9 @@ export async function bundleCommand(files: string[], options: BundleOptions): Pr
     }
 
     spinner.update('Publishing bundle');
-    const published = await client.publishBundle(draft.id, draft.token);
+    const published = await client.publishBundle(draft.id, draft.token, options.idempotencyKey
+      ? { idempotencyKey: `${options.idempotencyKey}:publish` }
+      : undefined);
     spinner.stop();
 
     const result = {

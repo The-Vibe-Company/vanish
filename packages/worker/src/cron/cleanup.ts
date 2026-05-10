@@ -106,8 +106,10 @@ export async function handleCleanup(env: Env): Promise<void> {
         break;
       }
     }
-  } catch {
-    // Older self-hosted schemas may not have bundles yet.
+  } catch (err) {
+    if (!isMissingTableError(err, 'bundles') && !isMissingTableError(err, 'bundle_files')) {
+      throw err;
+    }
   }
 
   // Also clean up expired auth sessions
@@ -119,8 +121,10 @@ export async function handleCleanup(env: Env): Promise<void> {
     await env.DB.prepare(`
       DELETE FROM idempotency_keys WHERE expires_at < datetime('now')
     `).run();
-  } catch {
-    // Older self-hosted schemas may not have idempotency yet.
+  } catch (err) {
+    if (!isMissingTableError(err, 'idempotency_keys')) {
+      throw err;
+    }
   }
 
   // Clean up old rate limit records (2h retention, beyond the 1h window)
@@ -195,4 +199,9 @@ async function deleteBundleFiles(env: Env, bundleId: string): Promise<void> {
       DELETE FROM bundle_files WHERE bundle_id = ? AND r2_key IN (${placeholders})
     `).bind(bundleId, ...keys.map(file => file.r2_key)).run();
   }
+}
+
+function isMissingTableError(err: unknown, table: string): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.includes('no such table') && message.includes(table);
 }
