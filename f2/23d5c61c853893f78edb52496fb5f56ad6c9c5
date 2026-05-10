@@ -1,0 +1,19 @@
+packages/worker/src/routes/dashboard.ts
+  s_be5380f45316a9::t_4db6ca8f63ec7a 824-825,869-874,1033,1217,1400,1404,1548-1549,1578,2026-2069,2073-2078
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "f223d5c61c853893f78edb52496fb5f56ad6c9c5",
+  "prompts": {},
+  "sessions": {
+    "s_be5380f45316a9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e1267-77b0-7163-b080-c3ab44739d99",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
