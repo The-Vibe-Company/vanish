@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.10](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.9...@vanish/worker-v0.1.10) (2026-05-10)
+
+
+### Features
+
+* **sites:** update sites and readable subdomains ([#32](https://github.com/The-Vibe-Company/vanish/issues/32)) ([68040a7](https://github.com/The-Vibe-Company/vanish/commit/68040a75c6bdb277bfd283474154bbd7a40d0067))
+
 ## [0.1.9](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.8...@vanish/worker-v0.1.9) (2026-05-10)
 
 
