@@ -8,7 +8,8 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "test": "vitest run",
-    "db:migrate": "wrangler d1 execute vanish-db --local --file=src/db/schema.sql"
+    "db:bootstrap": "wrangler d1 execute vanish-db --local --file=src/db/schema.sql",
+    "db:migrate": "wrangler d1 migrations apply vanish-db --local"
   },
   "dependencies": {
     "hono": "^4.12.18",

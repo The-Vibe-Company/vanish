@@ -211,7 +211,7 @@ vanish runs on Cloudflare Workers + R2 + D1. To self-host:
 
 ```bash
 cd packages/worker
-wrangler d1 execute vanish-db --file=src/db/schema.sql
+wrangler d1 migrations apply vanish-db --remote
 wrangler deploy
 ```
 
