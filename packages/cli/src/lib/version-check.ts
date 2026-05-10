@@ -145,22 +145,93 @@ function createNotice(currentVersion: string, latestVersion: string): VersionNot
 }
 
 function compareVersions(a: string, b: string): number {
-  const aParts = normalizeVersion(a);
-  const bParts = normalizeVersion(b);
+  const aVersion = parseVersion(a);
+  const bVersion = parseVersion(b);
 
   for (let i = 0; i < 3; i++) {
-    if (aParts[i] > bParts[i]) return 1;
-    if (aParts[i] < bParts[i]) return -1;
+    if (aVersion.parts[i] > bVersion.parts[i]) return 1;
+    if (aVersion.parts[i] < bVersion.parts[i]) return -1;
+  }
+
+  return comparePrerelease(aVersion.prerelease, bVersion.prerelease);
+}
+
+function parseVersion(version: string): { parts: [number, number, number]; prerelease: string[] } {
+  const withoutBuild = version.replace(/^v/, '').split('+', 1)[0];
+  const prereleaseIndex = withoutBuild.indexOf('-');
+  const core = prereleaseIndex === -1 ? withoutBuild : withoutBuild.slice(0, prereleaseIndex);
+  const prerelease = prereleaseIndex === -1 ? '' : withoutBuild.slice(prereleaseIndex + 1);
+  const [major = '0', minor = '0', patch = '0'] = core.split('.');
+
+  return {
+    parts: [
+      Number.parseInt(major, 10) || 0,
+      Number.parseInt(minor, 10) || 0,
+      Number.parseInt(patch, 10) || 0,
+    ],
+    prerelease: prerelease ? prerelease.split('.') : [],
+  };
+}
+
+function comparePrerelease(a: string[], b: string[]): number {
+  if (a.length === 0 && b.length === 0) return 0;
+  if (a.length === 0) return 1;
+  if (b.length === 0) return -1;
+
+  const maxLength = Math.max(a.length, b.length);
+  for (let i = 0; i < maxLength; i++) {
+    const aPart = a[i];
+    const bPart = b[i];
+
+    if (aPart === undefined) return -1;
+    if (bPart === undefined) return 1;
+
+    const compared = comparePrereleasePart(aPart, bPart);
+    if (compared !== 0) {
+      return compared;
+    }
   }
 
   return 0;
 }
 
-function normalizeVersion(version: string): [number, number, number] {
-  const [major = '0', minor = '0', patch = '0'] = version.replace(/^v/, '').split('-', 1)[0].split('.');
-  return [
-    Number.parseInt(major, 10) || 0,
-    Number.parseInt(minor, 10) || 0,
-    Number.parseInt(patch, 10) || 0,
-  ];
+function comparePrereleasePart(a: string, b: string): number {
+  const aNumeric = isNumericIdentifier(a);
+  const bNumeric = isNumericIdentifier(b);
+
+  if (aNumeric && bNumeric) {
+    return compareNumericIdentifier(a, b);
+  }
+
+  if (aNumeric) return -1;
+  if (bNumeric) return 1;
+
+  return compareAscii(a, b);
+}
+
+function isNumericIdentifier(value: string): boolean {
+  return /^(0|[1-9]\d*)$/.test(value);
+}
+
+function compareNumericIdentifier(a: string, b: string): number {
+  if (a.length !== b.length) {
+    return a.length - b.length;
+  }
+
+  return compareAscii(a, b);
+}
+
+function compareAscii(a: string, b: string): number {
+  const maxLength = Math.max(a.length, b.length);
+
+  for (let i = 0; i < maxLength; i++) {
+    const aCode = a.charCodeAt(i);
+    const bCode = b.charCodeAt(i);
+
+    if (Number.isNaN(aCode)) return -1;
+    if (Number.isNaN(bCode)) return 1;
+    if (aCode !== bCode) return aCode - bCode;
+  }
+
+  return 0;
 }

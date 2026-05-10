@@ -52,6 +52,74 @@ describe('version check', () => {
     }
   });
 
+  it('treats stable releases as newer than matching prereleases', async () => {
+    const { dir, path } = cachePath();
+    const fetchImpl = fetchJson({ version: '1.0.0' });
+
+    try {
+      const notice = await getVersionNotice('1.0.0-beta.1', { fetchImpl, cachePath: path });
+
+      expect(notice).toMatchObject({
+        currentVersion: '1.0.0-beta.1',
+        latestVersion: '1.0.0',
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('compares prerelease identifiers using semver precedence', async () => {
+    const { dir, path } = cachePath();
+    const fetchImpl = fetchJson({ version: '1.0.0-beta.2' });
+
+    try {
+      const notice = await getVersionNotice('1.0.0-beta.1', { fetchImpl, cachePath: path });
+
+      expect(notice?.latestVersion).toBe('1.0.0-beta.2');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves hyphens inside prerelease identifiers', async () => {
+    const { dir, path } = cachePath();
+    const fetchImpl = fetchJson({ version: '1.0.0-alpha-beta.2' });
+
+    try {
+      const notice = await getVersionNotice('1.0.0-alpha-beta.1', { fetchImpl, cachePath: path });
+
+      expect(notice?.latestVersion).toBe('1.0.0-alpha-beta.2');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('uses ASCII ordering for non-numeric prerelease identifiers', async () => {
+    const { dir, path } = cachePath();
+    const fetchImpl = fetchJson({ version: '1.0.0-alpha.a' });
+
+    try {
+      const notice = await getVersionNotice('1.0.0-alpha.Z', { fetchImpl, cachePath: path });
+
+      expect(notice?.latestVersion).toBe('1.0.0-alpha.a');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('compares large numeric prerelease identifiers without precision loss', async () => {
+    const { dir, path } = cachePath();
+    const fetchImpl = fetchJson({ version: '1.0.0-beta.9007199254740993' });
+
+    try {
+      const notice = await getVersionNotice('1.0.0-beta.9007199254740992', { fetchImpl, cachePath: path });
+
+      expect(notice?.latestVersion).toBe('1.0.0-beta.9007199254740993');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('skips when the registry request fails or returns invalid data', async () => {
     const { dir, path } = cachePath();
 
