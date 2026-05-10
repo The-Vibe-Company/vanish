@@ -751,11 +751,34 @@ code { font-family: var(--mono); }
 .btn-github {
   display: inline-flex; align-items: center; gap: .55rem;
   padding: .7rem 1.3rem;
+  min-height: 44px;
   background: var(--fg-bright); color: var(--bg);
   font-weight: 500; border-radius: 4px;
   transition: opacity .15s;
 }
 .btn-github:hover { opacity: .9; }
+.btn-github:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.login-divider { color: var(--fg-mute); font-size: .68rem; letter-spacing: .12em; text-transform: uppercase; }
+.login-key-form {
+  width: min(100%, 360px);
+  display: grid; gap: .7rem;
+}
+.login-key-form input {
+  width: 100%;
+  background: var(--bg-card); border: 1px solid var(--border);
+  color: var(--fg-bright); border-radius: 4px;
+  padding: .72rem .85rem; outline: none;
+  min-height: 44px;
+  font-family: var(--mono); font-size: .78rem;
+}
+.login-key-form input:focus { border-color: var(--accent-dim); }
+.login-key-form button {
+  background: var(--bg-card); color: var(--fg-bright);
+  border: 1px solid var(--border); border-radius: 4px;
+  padding: .7rem 1rem; min-height: 44px; cursor: pointer;
+}
+.login-key-form button:hover { border-color: var(--fg-dim); }
+.login-key-form button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .login-alt { color: var(--fg-dim); font-size: .78rem; }
 .login-alt code {
   background: var(--bg-card); border: 1px solid var(--border);
@@ -1001,6 +1024,22 @@ code { font-family: var(--mono); }
       state.uploads = (rs[2].uploads || []).map(normalizeUpload);
       state.keys = (rs[3].keys || []);
       render();
+    });
+  }
+
+  function loginWithApiKey(key) {
+    apiKey = String(key || '').trim();
+    if (!apiKey) {
+      toast('enter an API key');
+      return;
+    }
+    localStorage.setItem('vanish_api_key', apiKey);
+    rootEl.innerHTML = '<div class="loading">loading…</div>';
+    fetchAll().catch(function(e) {
+      localStorage.removeItem('vanish_api_key');
+      apiKey = null;
+      renderLogin();
+      toast(String(e).indexOf('unauthorized') === -1 ? 'failed to validate API key' : 'invalid API key');
     });
   }
   function normalizeSite(s) {
@@ -1767,7 +1806,12 @@ code { font-family: var(--mono); }
       '<div class="login-screen">' +
         '<div class="login-logo">vanish<span class="dot">.</span>sh</div>' +
         '<p class="login-msg">sign in to manage your mini-sites, files, and API keys</p>' +
-        '<a class="btn-github" href="/auth/github?redirect=/dashboard">Sign in with GitHub</a>' +
+        '<a class="btn-github" href="/auth/github?redirect=/dashboard">Connect with GitHub</a>' +
+        '<div class="login-divider">or</div>' +
+        '<form class="login-key-form" data-login-key-form>' +
+          '<input name="api_key" autocomplete="off" spellcheck="false" placeholder="vnsh_..." aria-label="API key">' +
+          '<button type="submit">Use API key</button>' +
+        '</form>' +
         '<p class="login-alt">or use the CLI: <code>vanish login</code></p>' +
       '</div>';
   }
@@ -1960,6 +2004,14 @@ code { font-family: var(--mono); }
       state.sitesSort = el.value;
       rerenderMain();
     }
+  });
+
+  document.addEventListener('submit', function(e) {
+    var form = e.target;
+    if (!form || !form.matches || !form.matches('[data-login-key-form]')) return;
+    e.preventDefault();
+    var input = form.querySelector('input[name="api_key"]');
+    loginWithApiKey(input && input.value);
   });
 
   // — Ticker (live countdowns) —

@@ -343,25 +343,9 @@ auth.get('/auth/callback', async (c) => {
     return c.redirect(`${redirect}?success=true`);
   }
 
-  // Default: show success page with API key
-  const html = `<!DOCTYPE html>
-<html><head><title>vanish - Logged in</title>
-<style>
-  body { font-family: -apple-system, system-ui, sans-serif; max-width: 600px; margin: 80px auto; padding: 0 20px; }
-  .key { background: #f0f0f0; padding: 12px 16px; border-radius: 8px; font-family: monospace; font-size: 14px; word-break: break-all; }
-  .copy-btn { margin-top: 12px; padding: 8px 16px; background: #111827; color: #f9fafb; border: none; border-radius: 6px; cursor: pointer; }
-  .warning { color: #666; font-size: 13px; margin-top: 8px; }
-</style></head>
-<body>
-  <h1>Welcome, @${ghUser.login}!</h1>
-  <p>Your account is set up (${tier} tier). Here's your API key:</p>
-  <div class="key" id="key">${apiKey}</div>
-  <button class="copy-btn" onclick="navigator.clipboard.writeText('${apiKey}');this.textContent='Copied!'">Copy to clipboard</button>
-  <p class="warning">This key is shown only once. Save it now.</p>
-  <p>If you used <code>vanish login</code>, the CLI has already picked it up. You can close this tab.</p>
-</body></html>`;
-
-  return c.html(html);
+  const dashboardUrl = new URL('/dashboard', c.env.BASE_URL);
+  dashboardUrl.searchParams.set('key', apiKey);
+  return c.redirect(dashboardUrl.pathname + dashboardUrl.search);
 });
 
 /**
