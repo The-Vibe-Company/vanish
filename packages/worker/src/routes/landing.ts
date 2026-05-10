@@ -14,6 +14,7 @@ const html = `<!doctype html>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2308090a'/%3E%3Cpath d='M14 16h28c6 0 10 4 10 10v12c0 6-4 10-10 10H14V16Z' fill='%23d4a850'/%3E%3Cpath d='M22 24h17c3 0 5 2 5 5v2H22v-7Zm0 12h22v2c0 3-2 5-5 5H22v-7Z' fill='%2308090a'/%3E%3Cpath d='M45 18h5v5h-5zM51 27h4v4h-4zM47 39h3v3h-3z' fill='%23d4a850'/%3E%3C/svg%3E" />
 
 <style>
 :root {
@@ -69,15 +70,12 @@ button { font-family: inherit; cursor: pointer; }
   border-bottom: 1px solid color-mix(in oklab, var(--line) 50%, transparent);
 }
 .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 60px; gap: 32px; }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16px; letter-spacing: -0.01em; }
+.brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16px; letter-spacing: -0.01em; }
 .brand-mark {
-  width: 22px; height: 22px;
-  display: grid; place-items: center;
-  border-radius: 6px;
-  background: var(--accent);
-  color: oklch(0.18 0.02 70);
-  font-family: 'JetBrains Mono', monospace;
-  font-weight: 700; font-size: 13px;
+  width: 26px; height: 26px; flex: 0 0 auto;
+  border-radius: 7px; display: block;
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 22%, transparent),
+              0 10px 22px -14px var(--accent);
 }
 .brand-domain { color: var(--fg-mute); font-weight: 400; }
 .nav-links { display: flex; gap: 28px; font-size: 14px; color: var(--fg-mute); }
@@ -123,6 +121,12 @@ button { font-family: inherit; cursor: pointer; }
 }
 .eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 3px color-mix(in oklab, var(--success) 25%, transparent); }
 .eyebrow strong { color: var(--fg); font-weight: 500; }
+
+/* BRAND LOCKUP (SVG) */
+.brand:hover .vanish-chip { animation: chipDrift 1.1s cubic-bezier(0.16,1,0.3,1) both; }
+.brand:hover .vanish-scan { transform: scaleX(0.18); opacity: 0.35; }
+.vanish-scan { transform-origin: left; transition: transform 0.5s cubic-bezier(0.16,1,0.3,1), opacity 0.5s; }
+@keyframes chipDrift { to { transform: translateX(3px); opacity: 0.28; } }
 
 .hero h1 {
   font-size: clamp(40px, 5.6vw, 72px);
@@ -453,8 +457,15 @@ h2 .serif { font-family: 'Instrument Serif', serif; font-style: italic; font-wei
 <!-- NAV -->
 <nav class="nav">
   <div class="shell nav-inner">
-    <a href="/" class="brand">
-      <span class="brand-mark">v</span>
+    <a href="/" class="brand" aria-label="vanish.sh">
+      <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
+        <rect width="64" height="64" rx="14" fill="oklch(0.13 0.008 75)" />
+        <path d="M13 16h29c6.1 0 10 3.9 10 10v12c0 6.1-3.9 10-10 10H13V16Z" fill="var(--accent)" />
+        <path class="vanish-scan" d="M22 24h17c3.1 0 5 1.9 5 5v2H22v-7Zm0 12h22v2c0 3.1-1.9 5-5 5H22v-7Z" fill="oklch(0.13 0.008 75)" />
+        <path class="vanish-chip" d="M45 18h5v5h-5z" fill="var(--accent)" />
+        <path class="vanish-chip" d="M51 27h4v4h-4z" fill="var(--accent)" style="animation-delay:.05s" />
+        <path class="vanish-chip" d="M47 39h3v3h-3z" fill="var(--accent)" style="animation-delay:.1s" />
+      </svg>
       <span>vanish<span class="brand-domain">.sh</span></span>
     </a>
     <div class="nav-links">
@@ -846,8 +857,15 @@ h2 .serif { font-family: 'Instrument Serif', serif; font-style: italic; font-wei
   <div class="shell">
     <div class="footer-grid">
       <div>
-        <div class="brand" style="margin-bottom:14px">
-          <span class="brand-mark">v</span>
+        <div class="brand" style="margin-bottom:14px" aria-label="vanish.sh">
+          <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true" style="width:30px;height:30px">
+            <rect width="64" height="64" rx="14" fill="oklch(0.13 0.008 75)" />
+            <path d="M13 16h29c6.1 0 10 3.9 10 10v12c0 6.1-3.9 10-10 10H13V16Z" fill="var(--accent)" />
+            <path class="vanish-scan" d="M22 24h17c3.1 0 5 1.9 5 5v2H22v-7Zm0 12h22v2c0 3.1-1.9 5-5 5H22v-7Z" fill="oklch(0.13 0.008 75)" />
+            <path class="vanish-chip" d="M45 18h5v5h-5z" fill="var(--accent)" />
+            <path class="vanish-chip" d="M51 27h4v4h-4z" fill="var(--accent)" style="animation-delay:.05s" />
+            <path class="vanish-chip" d="M47 39h3v3h-3z" fill="var(--accent)" style="animation-delay:.1s" />
+          </svg>
           <span>vanish<span class="brand-domain">.sh</span></span>
         </div>
         <p class="footer-blurb">
