@@ -1,0 +1,25 @@
+packages/cli/src/lib/version-check.ts
+  s_ea48e9dfff0c67::t_59a4129379a8fe 148-149,152-160,164-192,198-202,204-208,212-213
+  s_ea48e9dfff0c67::t_5350710649baf6 161-163
+  s_ea48e9dfff0c67::t_0b7c07cf15b3ff 203,209,214-236
+packages/cli/test/version-check.test.ts
+  s_ea48e9dfff0c67::t_bc49b0da5c4b46 84-96
+  s_ea48e9dfff0c67::t_e092eab54815c2 97-122
+  s_ea48e9dfff0c67::t_d52c9640de3780 55-83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "6cbaefb33b4b862e55a3b70269e838e2d68a65ae",
+  "prompts": {},
+  "sessions": {
+    "s_ea48e9dfff0c67": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e1184-2c71-7532-bc1a-4970bdb63aa8",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
