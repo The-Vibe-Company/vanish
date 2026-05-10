@@ -111,6 +111,110 @@ describe('auth routes', () => {
     expect(location).toMatch(/^\/dashboard#key=vnsh_/);
   });
 
+  it('rotates the active web API key on repeated dashboard logins', async () => {
+    const first = await request(env, '/auth/callback?code=abc123');
+    expect(first.status).toBe(302);
+    const firstKey = keyFromRedirect(first.headers.get('Location'));
+
+    const second = await request(env, '/auth/callback?code=abc123');
+    expect(second.status).toBe(302);
+    const secondKey = keyFromRedirect(second.headers.get('Location'));
+
+    expect(secondKey).not.toBe(firstKey);
+
+    const webKeys = Array.from(db.apiKeys.values()).filter(key => key.source === 'web');
+    expect(webKeys).toHaveLength(2);
+    expect(webKeys.filter(key => key.revoked_at === null)).toHaveLength(1);
+    expect(webKeys.find(key => key.key_prefix === keyPrefix(firstKey))?.revoked_at).not.toBeNull();
+    expect(webKeys.find(key => key.key_prefix === keyPrefix(secondKey))?.revoked_at).toBeNull();
+  });
+
+  it('does not revoke the active web API key during CLI login', async () => {
+    const webLogin = await request(env, '/auth/callback?code=abc123');
+    const webKey = keyFromRedirect(webLogin.headers.get('Location'));
+
+    const started = await request(env, '/auth/cli/start', { method: 'POST' });
+    const start = await started.json() as { loginUrl: string };
+    const github = await requestAbsolute(env, start.loginUrl);
+    const state = new URL(github.headers.get('Location')!).searchParams.get('state');
+
+    const cliCallback = await request(env, `/auth/callback?code=abc123&state=${encodeURIComponent(state!)}`);
+
+    expect(cliCallback.status).toBe(200);
+    const keys = Array.from(db.apiKeys.values());
+    expect(keys.filter(key => key.source === 'web' && key.revoked_at === null)).toHaveLength(1);
+    expect(keys.find(key => key.key_prefix === keyPrefix(webKey))?.revoked_at).toBeNull();
+    expect(keys.filter(key => key.source === 'cli' && key.revoked_at === null)).toHaveLength(1);
+  });
+
+  it('rejects invalid CLI callbacks without rotating the active web API key', async () => {
+    const webLogin = await request(env, '/auth/callback?code=abc123');
+    const webKey = keyFromRedirect(webLogin.headers.get('Location'));
+    const started = await request(env, '/auth/cli/start', { method: 'POST' });
+    const start = await started.json() as { session: string };
+    const invalidState = btoa(JSON.stringify({
+      session: start.session,
+      nonce: 'wrong-nonce',
+    }));
+    fetchMock.mockClear();
+
+    const invalidCallback = await request(env, `/auth/callback?code=abc123&state=${encodeURIComponent(invalidState)}`);
+
+    expect(invalidCallback.status).toBe(410);
+    expect(await invalidCallback.text()).toContain('CLI login expired');
+    expect(fetchMock).not.toHaveBeenCalled();
+    const keys = Array.from(db.apiKeys.values());
+    expect(keys.find(key => key.key_prefix === keyPrefix(webKey))?.revoked_at).toBeNull();
+    expect(keys.filter(key => key.source === 'web' && key.revoked_at === null)).toHaveLength(1);
+    expect(keys.filter(key => key.source === 'cli')).toHaveLength(0);
+  });
+
+  it('does not leave an active CLI key when the auth session expires before update', async () => {
+    const started = await request(env, '/auth/cli/start', { method: 'POST' });
+    const start = await started.json() as { loginUrl: string };
+    const github = await requestAbsolute(env, start.loginUrl);
+    const state = new URL(github.headers.get('Location')!).searchParams.get('state');
+    db.dropAuthSessionOnAuthorize = true;
+
+    const callback = await request(env, `/auth/callback?code=abc123&state=${encodeURIComponent(state!)}`);
+
+    expect(callback.status).toBe(410);
+    expect(await callback.text()).toContain('CLI login expired');
+    const keys = Array.from(db.apiKeys.values()).filter(key => key.source === 'cli');
+    expect(keys).toHaveLength(1);
+    expect(keys[0].revoked_at).not.toBeNull();
+  });
+
+  it('preserves manual and legacy default keys when dashboard login rotates web keys', async () => {
+    const first = await request(env, '/auth/callback?code=abc123');
+    const firstKey = keyFromRedirect(first.headers.get('Location'));
+    const userId = Array.from(db.users.values())[0].id;
+    db.apiKeys.set('manual-hash', {
+      user_id: userId,
+      key_prefix: 'vnsh_manual123',
+      name: 'manual',
+      source: 'manual',
+      revoked_at: null,
+    });
+    db.apiKeys.set('legacy-default-hash', {
+      user_id: userId,
+      key_prefix: 'vnsh_legacy123',
+      name: 'default',
+      source: 'manual',
+      revoked_at: null,
+    });
+
+    const second = await request(env, '/auth/callback?code=abc123');
+    const secondKey = keyFromRedirect(second.headers.get('Location'));
+
+    const keys = Array.from(db.apiKeys.values());
+    expect(keys.find(key => key.key_prefix === 'vnsh_manual123')?.revoked_at).toBeNull();
+    expect(keys.find(key => key.key_prefix === 'vnsh_legacy123')?.revoked_at).toBeNull();
+    expect(keys.find(key => key.key_prefix === keyPrefix(firstKey))?.revoked_at).not.toBeNull();
+    expect(keys.find(key => key.key_prefix === keyPrefix(secondKey))?.revoked_at).toBeNull();
+    expect(keys.filter(key => key.source === 'web' && key.revoked_at === null)).toHaveLength(1);
+  });
+
   it('redirects default browser GitHub login to the dashboard instead of showing an API key page', async () => {
     const callback = await request(env, '/auth/callback?code=abc123');
 
@@ -135,14 +239,51 @@ function future(): string {
   return new Date(Date.now() + 60_000).toISOString();
 }
 
+function keyFromRedirect(location: string | null): string {
+  expect(location).toBeTruthy();
+  const url = new URL(location!, 'https://vanish.sh');
+  const key = new URLSearchParams(url.hash.slice(1)).get('key');
+  expect(key).toMatch(/^vnsh_/);
+  return key!;
+}
+
+function keyPrefix(apiKey: string): string {
+  return apiKey.slice(0, 15);
+}
+
+type AuthApiKey = {
+  user_id: string;
+  key_prefix: string;
+  name: string;
+  source: 'manual' | 'web' | 'cli';
+  revoked_at: string | null;
+};
+
 class AuthDB {
   users = new Map<number, User>();
-  apiKeys = new Map<string, { user_id: string; key_prefix: string; name: string }>();
+  apiKeys = new Map<string, AuthApiKey>();
   authSessions = new Map<string, { api_key: string | null; username: string | null; expires_at: string }>();
   events: Array<{ name: string; user_id: string | null; properties: string }> = [];
+  dropAuthSessionOnAuthorize = false;
 
   prepare(sql: string): AuthStatement {
     return new AuthStatement(this, sql);
+  }
+
+  async batch(statements: AuthStatement[]): Promise<Array<{ meta: { changes: number } }>> {
+    const snapshot = new Map(
+      Array.from(this.apiKeys.entries()).map(([hash, key]) => [hash, { ...key }])
+    );
+    try {
+      const results: Array<{ meta: { changes: number } }> = [];
+      for (const statement of statements) {
+        results.push(await statement.run());
+      }
+      return results;
+    } catch (error) {
+      this.apiKeys = snapshot;
+      throw error;
+    }
   }
 }
 
@@ -162,7 +303,9 @@ class AuthStatement {
     if (sql.includes('FROM api_keys ak JOIN users u')) {
       const [keyHash] = this.args as [string];
       const key = this.db.apiKeys.get(keyHash);
-      const user = key ? Array.from(this.db.users.values()).find(row => row.id === key.user_id) : null;
+      const user = key && key.revoked_at === null
+        ? Array.from(this.db.users.values()).find(row => row.id === key.user_id)
+        : null;
       return (user || null) as T | null;
     }
 
@@ -187,33 +330,60 @@ class AuthStatement {
     throw new Error(`Unhandled first query: ${sql}`);
   }
 
-  async run(): Promise<void> {
+  async run(): Promise<{ meta: { changes: number } }> {
     const sql = normalizeSql(this.sql);
 
     if (sql.includes('UPDATE api_keys SET last_used_at')) {
-      return;
+      return { meta: { changes: 0 } };
+    }
+
+    if (sql.includes('UPDATE api_keys SET revoked_at') && sql.includes('WHERE key_hash = ?')) {
+      const [keyHash] = this.args as [string];
+      const key = this.db.apiKeys.get(keyHash);
+      if (key && key.revoked_at === null) {
+        key.revoked_at = new Date().toISOString();
+        return { meta: { changes: 1 } };
+      }
+      return { meta: { changes: 0 } };
+    }
+
+    if (sql.includes('UPDATE api_keys SET revoked_at')) {
+      const [userId] = this.args as [string];
+      let changes = 0;
+      for (const key of this.db.apiKeys.values()) {
+        if (key.user_id === userId && key.source === 'web' && key.revoked_at === null) {
+          key.revoked_at = new Date().toISOString();
+          changes++;
+        }
+      }
+      return { meta: { changes } };
     }
 
     if (sql.includes('INSERT INTO auth_sessions')) {
       const [sessionId, apiKey, expiresAt] = this.args as [string, string, string];
       this.db.authSessions.set(sessionId, { api_key: apiKey, username: null, expires_at: expiresAt });
-      return;
+      return { meta: { changes: 1 } };
     }
 
     if (sql.includes('UPDATE auth_sessions SET api_key = ?, username = ?')) {
       const [apiKey, username, sessionId] = this.args as [string, string, string];
+      if (this.db.dropAuthSessionOnAuthorize) {
+        this.db.authSessions.delete(sessionId);
+        return { meta: { changes: 0 } };
+      }
       const session = this.db.authSessions.get(sessionId);
       if (session) {
         session.api_key = apiKey;
         session.username = username;
+        return { meta: { changes: 1 } };
       }
-      return;
+      return { meta: { changes: 0 } };
     }
 
     if (sql.includes('DELETE FROM auth_sessions')) {
       const [sessionId] = this.args as [string];
-      this.db.authSessions.delete(sessionId);
-      return;
+      const changes = this.db.authSessions.delete(sessionId) ? 1 : 0;
+      return { meta: { changes } };
     }
 
     if (sql.includes('INSERT INTO users')) {
@@ -229,7 +399,7 @@ class AuthStatement {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       });
-      return;
+      return { meta: { changes: 1 } };
     }
 
     if (sql.includes('UPDATE users SET github_username')) {
@@ -240,22 +410,47 @@ class AuthStatement {
           user.email = email || user.email;
         }
       }
-      return;
+      return { meta: { changes: 1 } };
     }
 
     if (sql.includes('INSERT INTO api_keys')) {
-      const [keyHash, userId, keyPrefix, name] = this.args as [string, string, string, string];
-      this.db.apiKeys.set(keyHash, { user_id: userId, key_prefix: keyPrefix, name });
-      return;
+      const [keyHash, userId, keyPrefix] = this.args as [string, string, string];
+      const key = this.readApiKeyInsert(keyHash, userId, keyPrefix, sql);
+      const activeWebExists = Array.from(this.db.apiKeys.values()).some(row =>
+        row.user_id === key.user_id &&
+        row.source === 'web' &&
+        row.revoked_at === null
+      );
+      if (key.source === 'web' && activeWebExists) {
+        throw new Error('UNIQUE constraint failed: api_keys.user_id');
+      }
+      this.db.apiKeys.set(keyHash, key);
+      return { meta: { changes: 1 } };
     }
 
     if (sql.includes('INSERT INTO events')) {
       const [, name, userId, , , properties] = this.args as [string, string, string | null, null, null, string];
       this.db.events.push({ name, user_id: userId, properties });
-      return;
+      return { meta: { changes: 1 } };
     }
 
     throw new Error(`Unhandled run query: ${sql}`);
+  }
+
+  private readApiKeyInsert(keyHash: string, userId: string, keyPrefix: string, sql: string): AuthApiKey {
+    if (sql.includes("VALUES (?, ?, ?, 'default', 'web')")) {
+      return { user_id: userId, key_prefix: keyPrefix, name: 'default', source: 'web', revoked_at: null };
+    }
+    if (sql.includes("VALUES (?, ?, ?, 'default', ?)")) {
+      const source = this.args[3] as AuthApiKey['source'];
+      return { user_id: userId, key_prefix: keyPrefix, name: 'default', source, revoked_at: null };
+    }
+    if (sql.includes("VALUES (?, ?, ?, ?, 'manual')")) {
+      const name = this.args[3] as string;
+      return { user_id: userId, key_prefix: keyPrefix, name, source: 'manual', revoked_at: null };
+    }
+
+    throw new Error(`Unhandled api key insert query: ${sql} (${keyHash})`);
   }
 }
 
