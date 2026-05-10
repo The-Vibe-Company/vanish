@@ -148,7 +148,7 @@ program
 
 // Default: if first arg looks like a file path, treat as upload
 const args = process.argv.slice(2);
-if (args.length > 0 && !args[0].startsWith('-') && !['upload', 'site', 'login', 'logout', 'upgrade', 'whoami', 'ls', 'rm', 'status', 'help', 'mcp-serve'].includes(args[0])) {
+if (args.length > 0 && !args[0].startsWith('-') && !['upload', 'up', 'site', 'login', 'logout', 'upgrade', 'whoami', 'ls', 'rm', 'status', 'help', 'mcp-serve'].includes(args[0])) {
   // Shorthand: `vanish file.png` = `vanish upload file.png`
   process.argv.splice(2, 0, 'upload');
 }

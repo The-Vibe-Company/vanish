@@ -311,8 +311,8 @@ sites.get('/sites', async (c) => {
     return c.json({ error: 'Authentication required' }, 401);
   }
 
-  const limit = Math.min(parseInt(c.req.query('limit') || '50', 10), 100);
-  const offset = parseInt(c.req.query('offset') || '0', 10);
+  const limit = parseBoundedInteger(c.req.query('limit'), 50, 1, 100);
+  const offset = parseBoundedInteger(c.req.query('offset'), 0, 0, Number.MAX_SAFE_INTEGER);
   const activeOnly = c.req.query('active') !== 'false';
 
   let query = `
@@ -553,6 +553,19 @@ function parsePositiveInteger(value: unknown): number | null {
     return null;
   }
   return value;
+}
+
+function parseBoundedInteger(value: string | undefined, fallback: number, min: number, max: number): number {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  const parsed = parseInt(value, 10);
+  if (!Number.isSafeInteger(parsed) || parsed < min) {
+    return fallback;
+  }
+
+  return Math.min(parsed, max);
 }
 
 function sanitizeSiteName(value: string): string {
