@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.16](https://github.com/The-Vibe-Company/vanish/compare/vanish-cli-v0.1.15...vanish-cli-v0.1.16) (2026-05-10)
+
+
+### Features
+
+* **agent-ready:** harden handoff flows ([#48](https://github.com/The-Vibe-Company/vanish/issues/48)) ([f7bfe19](https://github.com/The-Vibe-Company/vanish/commit/f7bfe197f93f10eb04d362d452e5bb84505cc85e))
+
 ## [0.1.15](https://github.com/The-Vibe-Company/vanish/compare/vanish-cli-v0.1.14...vanish-cli-v0.1.15) (2026-05-10)
 
 
