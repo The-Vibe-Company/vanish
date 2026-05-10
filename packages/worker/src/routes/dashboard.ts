@@ -801,7 +801,7 @@ code { font-family: var(--mono); }
 
   // — State —
   var apiKey = localStorage.getItem('vanish_api_key');
-  var params = new URLSearchParams(window.location.search);
+  var params = new URLSearchParams(window.location.hash.slice(1));
   if (params.get('key')) {
     apiKey = params.get('key');
     localStorage.setItem('vanish_api_key', apiKey);

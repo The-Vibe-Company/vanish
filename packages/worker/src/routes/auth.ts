@@ -334,8 +334,8 @@ auth.get('/auth/callback', async (c) => {
     try {
       const url = new URL(redirect, c.env.BASE_URL);
       if (url.origin === new URL(c.env.BASE_URL).origin) {
-        url.searchParams.set('key', apiKey);
-        return c.redirect(url.pathname + url.search);
+        url.hash = `key=${encodeURIComponent(apiKey)}`;
+        return c.redirect(url.pathname + url.search + url.hash);
       }
     } catch {
       // Invalid URL, fall through to default redirect
@@ -344,8 +344,8 @@ auth.get('/auth/callback', async (c) => {
   }
 
   const dashboardUrl = new URL('/dashboard', c.env.BASE_URL);
-  dashboardUrl.searchParams.set('key', apiKey);
-  return c.redirect(dashboardUrl.pathname + dashboardUrl.search);
+  dashboardUrl.hash = `key=${encodeURIComponent(apiKey)}`;
+  return c.redirect(dashboardUrl.pathname + dashboardUrl.hash);
 });
 
 /**

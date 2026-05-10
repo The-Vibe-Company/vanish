@@ -108,7 +108,7 @@ describe('auth routes', () => {
 
     expect(callback.status).toBe(302);
     const location = callback.headers.get('Location');
-    expect(location).toMatch(/^\/dashboard\?key=vnsh_/);
+    expect(location).toMatch(/^\/dashboard#key=vnsh_/);
   });
 
   it('redirects default browser GitHub login to the dashboard instead of showing an API key page', async () => {
@@ -116,7 +116,7 @@ describe('auth routes', () => {
 
     expect(callback.status).toBe(302);
     const location = callback.headers.get('Location');
-    expect(location).toMatch(/^\/dashboard\?key=vnsh_/);
+    expect(location).toMatch(/^\/dashboard#key=vnsh_/);
   });
 });
 
