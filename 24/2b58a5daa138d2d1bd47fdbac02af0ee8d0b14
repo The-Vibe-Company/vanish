@@ -1,0 +1,19 @@
+packages/worker/src/routes/dashboard.ts
+  s_ccfef965af5f49::t_8eae1a5bf3065b 1978
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "242b58a5daa138d2d1bd47fdbac02af0ee8d0b14",
+  "prompts": {},
+  "sessions": {
+    "s_ccfef965af5f49": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e126b-6b9d-7f61-976a-44f0a1c09b16",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
