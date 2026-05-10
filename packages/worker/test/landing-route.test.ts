@@ -17,9 +17,9 @@ describe('landing route', () => {
 
     expect(response.status).toBe(200);
     const html = await response.text();
-    expect(html).toContain('<title>vanish: public preview URLs for agent-made artifacts</title>');
-    expect(html).toContain('npx vanish-cli site ./demo');
-    expect(html).toContain('Agent handoff');
+    expect(html).toContain('<title>vanish — temporary URLs from your terminal</title>');
+    expect(html).toContain('npm install -g vanish-cli');
+    expect(html).toContain('Native skills for');
     expect(html).toContain('href="/auth/github?redirect=/dashboard"');
     expect(html).not.toContain('href="/auth/github">');
     expect(html).toContain('href="/dashboard"');
