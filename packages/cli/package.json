@@ -1,6 +1,6 @@
 {
   "name": "vanish-cli",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "Publish temporary mini-sites and file URLs from your terminal.",
   "type": "module",
   "bin": {
