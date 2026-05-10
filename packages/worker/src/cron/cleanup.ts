@@ -8,6 +8,7 @@ const BATCH_SIZE = 100;
  */
 export async function handleCleanup(env: Env): Promise<void> {
   let totalDeleted = 0;
+  let totalSitesDeleted = 0;
 
   while (true) {
     // Find expired uploads not yet cleaned up
@@ -43,6 +44,36 @@ export async function handleCleanup(env: Env): Promise<void> {
     }
   }
 
+  while (true) {
+    const expiredSites = await env.DB.prepare(`
+      SELECT id FROM sites
+      WHERE expires_at IS NOT NULL
+        AND expires_at < datetime('now')
+        AND deleted_at IS NULL
+      LIMIT ?
+    `).bind(BATCH_SIZE).all<{ id: string }>();
+
+    if (!expiredSites.results || expiredSites.results.length === 0) {
+      break;
+    }
+
+    const siteIds = expiredSites.results.map(r => r.id);
+    for (const siteId of siteIds) {
+      await deleteSiteFiles(env, siteId);
+    }
+
+    const stmts = siteIds.map(siteId =>
+      env.DB.prepare('UPDATE sites SET deleted_at = datetime(\'now\') WHERE id = ?').bind(siteId)
+    );
+    await env.DB.batch(stmts);
+
+    totalSitesDeleted += siteIds.length;
+
+    if (siteIds.length < BATCH_SIZE) {
+      break;
+    }
+  }
+
   // Also clean up expired auth sessions
   await env.DB.prepare(`
     DELETE FROM auth_sessions WHERE expires_at < datetime('now')
@@ -53,5 +84,25 @@ export async function handleCleanup(env: Env): Promise<void> {
     DELETE FROM rate_limits WHERE created_at < datetime('now', '-2 hours')
   `).run();
 
-  console.log(`Cleanup complete: ${totalDeleted} expired uploads deleted`);
+  console.log(`Cleanup complete: ${totalDeleted} expired uploads deleted, ${totalSitesDeleted} expired sites deleted`);
+}
+
+async function deleteSiteFiles(env: Env, siteId: string): Promise<void> {
+  while (true) {
+    const files = await env.DB.prepare(`
+      SELECT r2_key FROM site_files WHERE site_id = ? LIMIT ?
+    `).bind(siteId, BATCH_SIZE).all<{ r2_key: string }>();
+
+    const keys = files.results || [];
+    if (keys.length === 0) {
+      break;
+    }
+
+    await Promise.all(keys.map(file => env.BUCKET.delete(file.r2_key)));
+
+    const placeholders = keys.map(() => '?').join(',');
+    await env.DB.prepare(`
+      DELETE FROM site_files WHERE site_id = ? AND r2_key IN (${placeholders})
+    `).bind(siteId, ...keys.map(file => file.r2_key)).run();
+  }
 }

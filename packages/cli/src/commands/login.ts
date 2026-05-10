@@ -38,7 +38,8 @@ export async function loginCommand(): Promise<void> {
         const data = await response.json() as { api_key: string; username: string };
         saveConfig({ api_key: data.api_key });
         console.log(`\nLogged in as @${data.username}. API key saved.`);
-        console.log('Your uploads now have 30-day retention. Upgrade for unlimited: vanish upgrade');
+        console.log('Your uploads and mini-sites now have 48h retention and share 50MB storage.');
+        console.log('Upgrade for custom site slugs and longer retention: vanish upgrade');
         return;
       }
       // 202 = still waiting, continue polling
@@ -57,7 +58,7 @@ export async function loginCommand(): Promise<void> {
 
 export function logoutCommand(): void {
   saveConfig({ api_key: undefined });
-  console.log('Logged out. Your uploads will now expire in 48h.');
+  console.log('Logged out. Anonymous uploads and mini-sites expire in 24h.');
 }
 
 function sleep(ms: number): Promise<void> {

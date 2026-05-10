@@ -1,62 +1,98 @@
 ---
 name: vanish
-description: Upload and share files via temporary public URLs using the Vanish CLI (vanish-cli). Use when the user wants to upload files, share screenshots or images, get a public URL for a file, manage temporary file uploads, or embed images in markdown/PRs. Triggers on file sharing, temporary links, screenshot uploads, and vanish commands.
+description: Publish temporary static mini-sites and share files via public URLs using the Vanish CLI (vanish-cli). Use when the user wants to share an HTML/CSS/JS/Markdown folder, a temporary website, a Claude Code or Codex artifact, screenshots, images, or other temporary files.
 ---
 
 # Vanish CLI
 
-Upload files to get temporary public URLs. Install with `npm i -g vanish-cli` or use `npx vanish-cli`.
+Vanish publishes temporary public URLs. Prefer mini-sites when an agent has produced a folder containing HTML, Markdown, CSS, JavaScript, images, or other static assets.
 
-## Upload
+Install with `npm i -g vanish-cli` or use `npx vanish-cli`.
+
+## Publish a Mini-Site
 
 ```bash
-vanish screenshot.png                    # shorthand for vanish upload
-vanish upload file1.png file2.jpg        # multiple files
-vanish upload image.png --md             # markdown: ![image.png](url)
-vanish upload data.json --json           # JSON: { url, id, filename, size, expires }
-vanish upload file.png --no-clipboard    # don't copy URL to clipboard
-vanish upload report.pdf --days 90       # custom retention: Pro only, 1-365 days
+vanish site ./demo --root index.html
+npx vanish-cli site ./demo --root index.html
 ```
 
-Use `npx vanish-cli` instead of `vanish` when not globally installed.
+- `--root` is required and must be a file inside the folder.
+- The root file is served at `/`.
+- Files are served as-is. Vanish does not transform Markdown to HTML or rewrite links.
+- Anonymous sites expire in 24h and are limited to 10 MB and 100 files per site.
+- Logged-in free accounts expire in 48h and share the 50 MB total storage quota across files and sites, with 500 files per site.
+- Pro accounts get 30-day default retention, `--days` up to 365, 1 GB total storage, 1,000 files per site, and custom `*.vanish.sh` slugs.
 
-- Default output is the public URL, automatically copied to clipboard.
-- `--md` produces `![filename](url)` — use when embedding in PR descriptions, issues, or markdown files.
-- `--json` returns `{ url, id, filename, size, expires }` — use when metadata is needed.
-- `--days N` sets custom retention in days (Pro tier only, 1-365).
+## Mini-Site Options
+
+```bash
+vanish site ./demo --root index.html --json
+vanish site ./demo --root README.md
+vanish site ./demo --root index.html --slug agent-demo   # Pro only
+vanish site ./demo --root index.html --days 90           # Pro only
+vanish site ./demo --root index.html --no-clipboard
+```
+
+Default output is the public URL, copied to clipboard.
+
+`--json` returns:
+
+```json
+{
+  "url": "https://k8m2q9z4p1ad.vanish.sh/",
+  "id": "k8m2q9z4p1ad",
+  "rootPath": "index.html",
+  "size": 8120,
+  "fileCount": 3,
+  "expires": "2026-05-12T10:30:00.000Z"
+}
+```
+
+## Share a Single File
+
+```bash
+vanish screenshot.png
+vanish upload file1.png file2.jpg
+vanish upload image.png --md
+vanish upload data.json --json
+vanish upload file.png --no-clipboard
+vanish upload report.pdf --days 90       # Pro only
+```
+
+`--md` produces `![filename](url)` for PRs, issues, and Markdown docs.
 
 ## Tier Limits
 
-| Tier | File types | Retention | Max Size | Rate Limit |
-|------|------------|-----------|----------|------------|
-| Anonymous (no login) | Images only | 24 hours | 5 MB | 10/hour |
-| Free (`vanish login`) | All (except executables) | 48 hours | 50 MB | 50/hour |
-| Pro (`vanish upgrade`) | All (except executables) | 30 days (up to 365 with `--days`) | 1 GB | 200/hour |
+| Tier | Mini-sites | File uploads | Retention | Storage | Rate limit |
+|------|------------|--------------|-----------|---------|------------|
+| Anonymous | Static folders, 10 MB and 100 files max | Images only, 5 MB max | 24 hours | Ephemeral | 10/hour |
+| Free (`vanish login`) | 500 files max, counts toward 50 MB total | All except executables, 50 MB max | 48 hours | 50 MB total | 50/hour |
+| Pro (`vanish upgrade`) | Custom slug, 1,000 files max, counts toward 1 GB total | All except executables, 1 GB max | 30 days, up to 365 with `--days` | 1 GB total | 200/hour |
 
-Blocked extensions: `.exe`, `.bat`, `.cmd`, `.com`, `.msi`, `.scr`, `.sh`, `.bash`, `.ps1`, `.psm1`.
+Blocked extensions for file uploads: `.exe`, `.bat`, `.cmd`, `.com`, `.msi`, `.scr`, `.sh`, `.bash`, `.ps1`, `.psm1`.
 
 ## Account Commands
 
 ```bash
-vanish login       # GitHub OAuth (opens browser, saves key)
+vanish login       # GitHub OAuth, saves API key
 vanish whoami      # show username and tier
 vanish status      # show storage usage, tier, and limits
 vanish logout      # remove saved API key
-vanish upgrade     # open Stripe checkout for Pro (2 EUR/month)
+vanish upgrade     # Pro slugs and longer retention
 ```
 
-## Upload Management (requires login)
+## Upload Management
 
 ```bash
-vanish ls             # list uploads (table: ID | Filename | Size | Expires | URL)
-vanish ls --json      # list as JSON array
-vanish rm <id>        # delete upload by ID
-vanish rm id1 id2     # delete multiple
+vanish ls             # list file uploads
+vanish ls --json      # list file uploads as JSON
+vanish rm <id>        # delete file upload by ID
 ```
+
+Mini-sites for authenticated users are visible in the Vanish dashboard.
 
 ## Configuration
 
-Config file: `~/.config/vanish/config.json` (keys: `api_key`, `api_url`).
+Config file: `~/.config/vanish/config.json` with `api_key` and `api_url`.
 Env vars: `VANISH_API_KEY`, `VANISH_API_URL`.
-Default API: `https://vanish.sh`.
 Priority: env vars > config file > defaults.

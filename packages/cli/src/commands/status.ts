@@ -32,7 +32,14 @@ export async function statusCommand(options: { json?: boolean }): Promise<void> 
     }
 
     console.log(`Active uploads: ${me.stats.total_uploads}`);
+    console.log(`Active sites: ${me.stats.total_sites || 0}`);
     console.log(`Max file size: ${formatBytes(me.limits.maxFileSize)}`);
+    if (me.limits.maxSiteSize) {
+      console.log(`Max site size: ${formatBytes(me.limits.maxSiteSize)}`);
+    }
+    if (me.limits.maxSiteFiles) {
+      console.log(`Max site files: ${me.limits.maxSiteFiles}`);
+    }
 
     const retentionDays = Math.round(me.limits.maxExpiryHours / 24);
     const retentionStr = me.limits.customTtl

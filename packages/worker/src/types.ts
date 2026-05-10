@@ -36,9 +36,36 @@ export interface Upload {
   deleted_at: string | null;
 }
 
+export interface Site {
+  id: string;
+  user_id: string | null;
+  name: string;
+  root_path: string;
+  slug: string | null;
+  upload_token: string | null;
+  size_bytes: number;
+  file_count: number;
+  expected_file_count: number;
+  expires_at: string | null;
+  published_at: string | null;
+  created_at: string;
+  deleted_at: string | null;
+}
+
+export interface SiteFile {
+  site_id: string;
+  path: string;
+  content_type: string | null;
+  size_bytes: number;
+  r2_key: string;
+  created_at: string;
+}
+
 export const TIER_LIMITS = {
   anonymous: {
     maxFileSize: 5 * 1024 * 1024, // 5 MB
+    maxSiteSize: 10 * 1024 * 1024, // 10 MB
+    maxSiteFiles: 100,
     maxTotalStorage: null, // no total limit (ephemeral, 24h)
     maxExpiryHours: 24,
     rateLimit: 10, // per hour
@@ -47,6 +74,8 @@ export const TIER_LIMITS = {
   },
   free: {
     maxFileSize: 50 * 1024 * 1024, // 50 MB
+    maxSiteSize: 50 * 1024 * 1024, // bounded by total storage
+    maxSiteFiles: 500,
     maxTotalStorage: 50 * 1024 * 1024, // 50 MB total
     maxExpiryHours: 48,
     rateLimit: 50,
@@ -55,6 +84,8 @@ export const TIER_LIMITS = {
   },
   pro: {
     maxFileSize: 1024 * 1024 * 1024, // 1 GB
+    maxSiteSize: 1024 * 1024 * 1024, // bounded by total storage
+    maxSiteFiles: 1000,
     maxTotalStorage: 1024 * 1024 * 1024, // 1 GB total
     maxExpiryHours: 30 * 24, // 30 days default
     maxCustomExpiryDays: 365,

@@ -1,107 +1,135 @@
 # vanish
 
-Upload files, get temporary public URLs. Dead simple.
+Publish temporary mini-sites and file links from your terminal. Built for Claude Code, Codex, and agent workflows that need to hand someone a real HTML/Markdown/CSS/JS artifact for a short time.
 
 ```bash
-npx vanish-cli upload screenshot.png
-# https://vanish.sh/f/a1b2c3d4e5f6
+npx vanish-cli site ./demo --root index.html
+# https://k8m2q9z4p1ad.vanish.sh/
 ```
 
 ## Why
 
-You're using Claude Code and want screenshots in your PRs. Or you need to quickly share a file with a coworker. `vanish` gives you a public URL in one command.
+Agents often create small static projects: an `index.html`, a Markdown report, CSS, JavaScript, images, and other assets. Vanish turns that folder into a public temporary URL in one command, without deploying a real app.
+
+Single-file uploads still work for screenshots, PDFs, and other quick shares.
 
 ## Tiers
 
 | | Anonymous | Free | Pro |
 |---|---|---|---|
 | Account needed | No | GitHub login | GitHub login |
-| File types | Images only | All (except executables) | All (except executables) |
+| Mini-sites | Static HTML/CSS/JS/MD folders | Static HTML/CSS/JS/MD folders | Static HTML/CSS/JS/MD folders |
+| Site URL | Random `*.vanish.sh` | Random `*.vanish.sh` | Random or custom `*.vanish.sh` slug |
+| Site limits | 10 MB, 100 files | 500 files, counts toward 50 MB total | 1,000 files, counts toward 1 GB total |
+| File uploads | Images only | All except executables | All except executables |
 | Max file size | 5 MB | 50 MB | 1 GB |
-| Total storage | — | 50 MB | 1 GB |
-| Retention | 24 hours | 48 hours | 30 days (up to 365 with `--days`) |
+| Total storage | Ephemeral only | 50 MB | 1 GB |
+| Retention | 24 hours | 48 hours | 30 days, up to 365 with `--days` |
 | Rate limit | 10/hour | 50/hour | 200/hour |
 | Price | Free | Free | 2 EUR/month |
 
 ## Install
 
 ```bash
-# Use directly with npx (no install needed)
-npx vanish-cli upload file.png
-
-# Or install globally
 npm install -g vanish-cli
 ```
 
-## Install the Skill
+Or use directly with npx:
 
 ```bash
-npx skills add the-vibe-company/vanish
+npx vanish-cli site ./demo --root index.html
 ```
 
-## Usage
+## Mini-Sites
 
-### Upload an image (anonymous, 24h)
+### Publish a folder
+
+```bash
+vanish site ./demo --root index.html
+# https://k8m2q9z4p1ad.vanish.sh/
+```
+
+The root file is what Vanish serves at `/`. Vanish does not transform files: HTML is HTML, Markdown is served as Markdown, and CSS/JS/assets are served as static files.
+
+### Publish Markdown as the root
+
+```bash
+vanish site ./notes --root README.md
+# https://p4d8n2x7q0ab.vanish.sh/
+```
+
+### Use a Pro slug
+
+```bash
+vanish site ./demo --root index.html --slug workshop-demo
+# https://workshop-demo.vanish.sh/
+```
+
+### Custom retention
+
+```bash
+vanish site ./demo --root index.html --days 90
+# Pro only, up to 365 days
+```
+
+### JSON output
+
+```bash
+vanish site ./demo --root index.html --json
+```
+
+Returns:
+
+```json
+{
+  "url": "https://k8m2q9z4p1ad.vanish.sh/",
+  "id": "k8m2q9z4p1ad",
+  "rootPath": "index.html",
+  "size": 8120,
+  "fileCount": 3,
+  "expires": "2026-05-12T10:30:00.000Z"
+}
+```
+
+## File Uploads
 
 ```bash
 vanish upload screenshot.png
-# https://vanish.sh/f/a1b2c3d4e5f6
-```
+# https://vanish.sh/f/a1b2c3d4e5f6.png
 
-### Upload multiple files
-
-```bash
-vanish upload *.png
-```
-
-### Upload with custom retention (Pro)
-
-```bash
 vanish upload report.pdf --days 90
-# Expires in 90 days
+# Pro only
 ```
 
-### Login for 48h retention and all file types
+Output formats:
 
 ```bash
-vanish login
-# Opens browser for GitHub OAuth
-# API key saved to ~/.config/vanish/config.json
+vanish upload image.png --md
+vanish upload data.json --json
+vanish upload file.png --no-clipboard
 ```
 
-### Upgrade to Pro
+## Account
 
 ```bash
-vanish upgrade
-# Opens billing page
-```
-
-### Other commands
-
-```bash
-vanish whoami          # Show current user and tier
-vanish status          # Show storage usage and limits
-vanish logout          # Remove saved API key
-```
-
-### Output formats
-
-```bash
-vanish upload file.png              # Plain URL
-vanish upload file.png --json       # JSON with metadata
-vanish upload file.png --md         # Markdown image link
+vanish login       # GitHub OAuth, saves API key
+vanish whoami      # show username and tier
+vanish status      # show storage usage and limits
+vanish ls          # list file uploads
+vanish rm <id>     # delete a file upload
+vanish upgrade     # Pro slugs and longer retention
 ```
 
 ## Configuration
 
-Config is read in this order (highest priority first):
+Config is read in this order:
 
 1. CLI flags
 2. Environment variables (`VANISH_API_KEY`, `VANISH_API_URL`)
 3. Config file (`~/.config/vanish/config.json`)
 4. Defaults
 
-## Self-hosting
+## Self-Hosting
 
 vanish runs on Cloudflare Workers + R2 + D1. To self-host:
 
@@ -117,20 +145,18 @@ wrangler d1 execute vanish-db --file=src/db/schema.sql
 wrangler deploy
 ```
 
-Set `SELF_HOSTED=true` and `DEFAULT_TIER=pro` to give all users Pro access without billing.
+For production mini-site URLs, route `*.your-domain` to the Worker. Local development uses path URLs like `http://localhost:8787/s/<site-id>/`.
+
+Set `SELF_HOSTED=true` and `DEFAULT_TIER=pro` to give newly authenticated users Pro access without billing.
 
 ## Architecture
 
+```text
+CLI (npm)  --HTTPS-->  Cloudflare Worker (Hono)
+                            |-- D1 (users, uploads, sites metadata)
+                            |-- R2 (files and site assets)
+                            `-- Cron (cleanup expired uploads/sites)
 ```
-CLI (npm)  ──HTTPS──>  Cloudflare Worker (Hono)
-                            ├── D1 (users, uploads metadata)
-                            ├── R2 (file storage)
-                            └── Cron (cleanup expired files)
-```
-
-- **R2**: Zero egress fees, 10GB free storage
-- **D1**: SQLite at the edge, free tier
-- **Hono**: Lightweight web framework for Workers
 
 ## License
 

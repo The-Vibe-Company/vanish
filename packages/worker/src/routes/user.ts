@@ -13,16 +13,30 @@ user.get('/me', async (c) => {
     return c.json({ error: 'Authentication required' }, 401);
   }
 
-  // Get upload stats
-  const stats = await c.env.DB.prepare(`
+  // Get active file and site stats.
+  const uploadStats = await c.env.DB.prepare(`
     SELECT
       COUNT(*) as total_uploads,
       COALESCE(SUM(size_bytes), 0) as total_bytes
     FROM uploads
-    WHERE user_id = ? AND deleted_at IS NULL
+    WHERE user_id = ?
+      AND deleted_at IS NULL
+      AND (expires_at IS NULL OR expires_at > datetime('now'))
   `).bind(currentUser.id).first<{ total_uploads: number; total_bytes: number }>();
 
+  const siteStats = await c.env.DB.prepare(`
+    SELECT
+      COUNT(*) as total_sites,
+      COALESCE(SUM(size_bytes), 0) as total_bytes
+    FROM sites
+    WHERE user_id = ?
+      AND deleted_at IS NULL
+      AND (expires_at IS NULL OR expires_at > datetime('now'))
+  `).bind(currentUser.id).first<{ total_sites: number; total_bytes: number }>();
+
   const limits = TIER_LIMITS[currentUser.tier];
+  const uploadBytes = uploadStats?.total_bytes || 0;
+  const siteBytes = siteStats?.total_bytes || 0;
 
   return c.json({
     id: currentUser.id,
@@ -31,11 +45,16 @@ user.get('/me', async (c) => {
     tier: currentUser.tier,
     created_at: currentUser.created_at,
     stats: {
-      total_uploads: stats?.total_uploads || 0,
-      total_bytes: stats?.total_bytes || 0,
+      total_uploads: uploadStats?.total_uploads || 0,
+      total_sites: siteStats?.total_sites || 0,
+      upload_bytes: uploadBytes,
+      site_bytes: siteBytes,
+      total_bytes: uploadBytes + siteBytes,
     },
     limits: {
       maxFileSize: limits.maxFileSize,
+      maxSiteSize: limits.maxSiteSize,
+      maxSiteFiles: limits.maxSiteFiles,
       maxTotalStorage: limits.maxTotalStorage,
       maxExpiryHours: limits.maxExpiryHours,
       imageOnly: limits.imageOnly,
