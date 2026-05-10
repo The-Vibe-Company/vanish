@@ -84,6 +84,22 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
   expires_at TEXT NOT NULL
 );
 
+-- Privacy-light product funnel events. Properties must never include filenames,
+-- paths, tokens, keys, email addresses, or content.
+CREATE TABLE IF NOT EXISTS events (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  site_id TEXT REFERENCES sites(id) ON DELETE SET NULL,
+  upload_id TEXT REFERENCES uploads(id) ON DELETE SET NULL,
+  properties TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_name_created ON events(name, created_at);
+CREATE INDEX IF NOT EXISTS idx_events_user_created ON events(user_id, created_at) WHERE user_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_events_site_name ON events(site_id, name) WHERE site_id IS NOT NULL;
+
 -- Rate limiting
 CREATE TABLE IF NOT EXISTS rate_limits (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

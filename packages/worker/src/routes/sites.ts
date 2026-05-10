@@ -9,6 +9,7 @@ import { ensureStorageAvailable } from '../lib/storage.js';
 import { normalizeSitePath, normalizeSiteSlug } from '../lib/site-path.js';
 import { buildSiteUrl, getSiteIdentifierFromHost, supportsPathSiteUrls } from '../lib/site-url.js';
 import { getRateLimitIdentifier } from '../lib/rate-limit.js';
+import { hasProductEvent, logProductEvent, productEventsEnabled } from '../lib/events.js';
 import { rateLimitMiddleware } from '../middleware/rate-limit.js';
 
 const SITE_ID = customAlphabet('0123456789abcdefghijklmnopqrstuvwxyz', 12);
@@ -143,6 +144,20 @@ sites.post('/sites', rateLimitMiddleware, async (c) => {
     VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
   `).bind(id, user?.id || null, name, rootPath, slug, uploadToken, plannedFileCount, expiresAt).run();
 
+  await logProductEvent(c.env, {
+    name: 'site_publish_started',
+    userId: user?.id || null,
+    siteId: id,
+    properties: {
+      tier,
+      file_count: plannedFileCount,
+      total_bytes: totalBytes,
+      max_bytes: tier === 'anonymous' ? TIER_LIMITS.anonymous.maxSiteSize : limits.maxTotalStorage,
+      slug_requested: Boolean(payload.slug),
+      custom_ttl_requested: customDays !== undefined,
+    },
+  });
+
   const identifier = slug || id;
 
   return c.json({
@@ -267,6 +282,21 @@ sites.post('/sites/:id/replacements', async (c) => {
     INSERT INTO sites (id, user_id, name, root_path, slug, upload_token, size_bytes, file_count, expected_file_count, expires_at)
     VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
   `).bind(id, user.id, name, rootPath, null, uploadToken, plannedFileCount, target.expires_at).run();
+
+  await logProductEvent(c.env, {
+    name: 'site_publish_started',
+    userId: user.id,
+    siteId: id,
+    properties: {
+      tier: user.tier,
+      file_count: plannedFileCount,
+      total_bytes: totalBytes,
+      max_bytes: limits.maxTotalStorage,
+      is_update: true,
+      slug_requested: Boolean(payload.slug),
+      custom_ttl_requested: payload.days !== undefined,
+    },
+  });
 
   return c.json({
     id,
@@ -432,6 +462,8 @@ sites.post('/sites/:id/publish', async (c) => {
     WHERE id = ?
   `).bind(publishedAt, site.id).run();
 
+  await logSitePublished(c, freshSite, auth, false);
+
   const identifier = freshSite.slug || freshSite.id;
   return c.json({
     ok: true,
@@ -555,6 +587,7 @@ sites.post('/sites/:id/replacements/:draftId/publish', async (c) => {
   await deletePendingR2Objects(c.env, oldFiles);
 
   const updated = await getSite(c.env, target.id);
+  await logSitePublished(c, updated || target, { tier: user.tier, userId: user.id }, true);
   const identifier = updated?.slug || target.id;
   return c.json({
     ok: true,
@@ -666,10 +699,14 @@ async function serveSite(c: AppContext, identifier: string, pathname: string): P
   headers.set('Content-Type', file.content_type || guessContentType(file.path));
   headers.set('Content-Length', String(file.size_bytes));
   headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
   headers.set('Referrer-Policy', 'no-referrer');
   headers.set('Cache-Control', 'public, max-age=300');
   headers.set('Content-Disposition', `inline; filename="${escapeHeaderFilename(file.path.split('/').pop() || 'index')}"`);
   headers.set('Access-Control-Allow-Origin', '*');
+  headers.set('Link', '<mailto:abuse@vanish.sh>; rel="abuse"');
+
+  c.executionCtx.waitUntil(logSiteFirstServed(c.env, site));
 
   return new Response(object.body, { headers });
 }
@@ -735,6 +772,79 @@ async function checkSiteMutationRateLimit(
   c.header('X-RateLimit-Limit', String(limit));
   c.header('X-RateLimit-Remaining', String(limit - count - 1));
   return { ok: true };
+}
+
+async function logSitePublished(
+  c: AppContext,
+  site: Site,
+  auth: { tier: Tier; userId: string | null },
+  isUpdate: boolean,
+): Promise<void> {
+  await logProductEvent(c.env, {
+    name: 'site_publish_succeeded',
+    userId: auth.userId,
+    siteId: site.id,
+    properties: {
+      tier: auth.tier,
+      file_count: site.file_count,
+      total_bytes: site.size_bytes,
+      is_update: isUpdate,
+    },
+  });
+
+  if (isUpdate) {
+    await logProductEvent(c.env, {
+      name: 'site_update_used',
+      userId: auth.userId,
+      siteId: site.id,
+      properties: {
+        tier: auth.tier,
+      },
+    });
+    return;
+  }
+
+  if (!auth.userId || !productEventsEnabled(c.env)) {
+    return;
+  }
+
+  const count = await c.env.DB.prepare(`
+    SELECT COUNT(*) as count
+    FROM sites
+    WHERE user_id = ?
+      AND deleted_at IS NULL
+      AND published_at IS NOT NULL
+  `).bind(auth.userId).first<{ count: number }>();
+
+  if ((count?.count || 0) > 1) {
+    await logProductEvent(c.env, {
+      name: 'site_repeat_publish',
+      userId: auth.userId,
+      siteId: site.id,
+      properties: {
+        tier: auth.tier,
+      },
+    });
+  }
+}
+
+async function logSiteFirstServed(env: Env, site: Site): Promise<void> {
+  if (!productEventsEnabled(env)) {
+    return;
+  }
+
+  if (await hasProductEvent(env, 'site_first_served', site.id)) {
+    return;
+  }
+
+  await logProductEvent(env, {
+    name: 'site_first_served',
+    userId: site.user_id,
+    siteId: site.id,
+    properties: {
+      tier: site.user_id ? null : 'anonymous',
+    },
+  });
 }
 
 async function validateSiteConfigPatch(

@@ -5,7 +5,7 @@ description: Use this skill when the user or workflow needs to publish, share, s
 
 # Vanish Publish Site
 
-Publish static folders through Vanish and return temporary public URLs. Use this for browser demos, generated HTML reports, Markdown mini-sites, and shareable artifact folders.
+Publish static folders through Vanish and return temporary public URLs. Use this as the primary Vanish path for Codex/Claude artifacts: browser demos, generated HTML reports, Markdown mini-sites, and shareable static folders.
 
 ## Workflow
 
@@ -30,7 +30,7 @@ If `vanish` is not installed, use:
 npx vanish-cli site <folder> --root <root-file> --json --no-clipboard
 ```
 
-Return the URL, expiry, site id or slug, root path, size, and file count from the JSON output.
+Return the URL, expiry, site id or slug, root path, size, file count, and any update/delete command fields from the JSON output.
 
 ## Root Selection
 

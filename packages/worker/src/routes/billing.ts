@@ -1,11 +1,12 @@
 import { Hono } from 'hono';
 import type { Env } from '../types.js';
 import { StripeClient, verifyWebhookSignature } from '../lib/stripe.js';
+import { logProductEvent } from '../lib/events.js';
 
 const billing = new Hono<{ Bindings: Env }>();
 
 /**
- * GET /billing/checkout — Create a Stripe Checkout session and redirect.
+ * GET /billing/checkout - Create a Stripe Checkout session and redirect.
  * Requires authentication.
  */
 billing.get('/billing/checkout', async (c) => {
@@ -38,11 +39,20 @@ billing.get('/billing/checkout', async (c) => {
     cancelUrl: `${baseUrl}/billing/cancel`,
   });
 
+  await logProductEvent(c.env, {
+    name: 'upgrade_clicked',
+    userId: user.id,
+    properties: {
+      tier: user.tier,
+      checkout_provider: 'stripe',
+    },
+  });
+
   return c.redirect(session.url);
 });
 
 /**
- * GET /billing/portal — Redirect to Stripe Customer Portal.
+ * GET /billing/portal - Redirect to Stripe Customer Portal.
  * Requires authentication + existing Stripe customer.
  */
 billing.get('/billing/portal', async (c) => {
@@ -74,7 +84,7 @@ billing.get('/billing/portal', async (c) => {
 });
 
 /**
- * GET /billing/success — Shown after successful checkout.
+ * GET /billing/success - Shown after successful checkout.
  */
 billing.get('/billing/success', (c) => {
   return c.html(`<!DOCTYPE html>
@@ -95,7 +105,7 @@ billing.get('/billing/success', (c) => {
 });
 
 /**
- * GET /billing/cancel — Shown when checkout is cancelled.
+ * GET /billing/cancel - Shown when checkout is cancelled.
  */
 billing.get('/billing/cancel', (c) => {
   return c.html(`<!DOCTYPE html>
@@ -110,7 +120,7 @@ billing.get('/billing/cancel', (c) => {
 });
 
 /**
- * GET /billing/portal-return — Return page after leaving Stripe portal.
+ * GET /billing/portal-return - Return page after leaving Stripe portal.
  */
 billing.get('/billing/portal-return', (c) => {
   return c.html(`<!DOCTYPE html>
@@ -125,7 +135,7 @@ billing.get('/billing/portal-return', (c) => {
 });
 
 /**
- * POST /webhooks/stripe — Handle Stripe webhook events.
+ * POST /webhooks/stripe - Handle Stripe webhook events.
  * Events handled:
  *   - checkout.session.completed: link Stripe customer to user, upgrade to Pro
  *   - customer.subscription.deleted: downgrade to Free
@@ -170,12 +180,37 @@ billing.post('/webhooks/stripe', async (c) => {
         break;
       }
 
+      const currentUser = await c.env.DB.prepare(`
+        SELECT tier, stripe_customer_id, stripe_subscription_id
+        FROM users
+        WHERE id = ?
+      `).bind(userId).first<{
+        tier: string;
+        stripe_customer_id: string | null;
+        stripe_subscription_id: string | null;
+      }>();
+      const alreadyRecorded = currentUser?.tier === 'pro' &&
+        currentUser.stripe_customer_id === customerId &&
+        currentUser.stripe_subscription_id === subscriptionId;
+
       // Link Stripe customer + subscription to user, upgrade to Pro
       await c.env.DB.prepare(`
         UPDATE users
         SET stripe_customer_id = ?, stripe_subscription_id = ?, tier = 'pro', updated_at = datetime('now')
         WHERE id = ?
       `).bind(customerId, subscriptionId, userId).run();
+
+      if (!alreadyRecorded) {
+        await logProductEvent(c.env, {
+          name: 'upgrade_completed',
+          userId,
+          properties: {
+            tier: 'pro',
+            checkout_provider: 'stripe',
+            subscription_status: 'active',
+          },
+        });
+      }
 
       console.log(`User ${userId} upgraded to Pro (customer: ${customerId})`);
       break;
@@ -192,7 +227,7 @@ billing.post('/webhooks/stripe', async (c) => {
         WHERE stripe_subscription_id = ?
       `).bind(subscriptionId).run();
 
-      console.log(`Subscription ${subscriptionId} cancelled — user downgraded to free`);
+      console.log(`Subscription ${subscriptionId} cancelled - user downgraded to free`);
       break;
     }
 
@@ -209,7 +244,7 @@ billing.post('/webhooks/stripe', async (c) => {
           WHERE stripe_subscription_id = ?
         `).bind(subscriptionId).run();
 
-        console.log(`Subscription ${subscriptionId} status ${status} — downgraded to free`);
+        console.log(`Subscription ${subscriptionId} status ${status} - downgraded to free`);
       } else if (status === 'active') {
         // Re-upgrade if subscription becomes active again
         await c.env.DB.prepare(`
@@ -218,7 +253,7 @@ billing.post('/webhooks/stripe', async (c) => {
           WHERE stripe_subscription_id = ?
         `).bind(subscriptionId).run();
 
-        console.log(`Subscription ${subscriptionId} active — upgraded to pro`);
+        console.log(`Subscription ${subscriptionId} active - upgraded to pro`);
       }
       break;
     }

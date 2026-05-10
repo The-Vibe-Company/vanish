@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import { loadConfig, saveConfig } from '../lib/config.js';
 
 export async function loginCommand(): Promise<void> {
@@ -9,8 +8,17 @@ export async function loginCommand(): Promise<void> {
     return;
   }
 
-  const sessionId = randomBytes(16).toString('hex');
-  const loginUrl = `${config.api_url}/auth/github?cli=true&session=${sessionId}`;
+  const session = await startCliAuth(config.api_url);
+  if (!session) {
+    console.error('Unable to start CLI login. Please try again or check the vanish API URL.');
+    process.exit(1);
+  }
+
+  const sessionId = session.session;
+  const loginUrl = session.loginUrl;
+
+  console.log(`Confirm code: ${session.userCode}`);
+  console.log('The browser will ask for this code after GitHub login.\n');
 
   console.log('Opening browser for GitHub login...');
   console.log(`If it doesn't open, visit: ${loginUrl}\n`);
@@ -33,7 +41,9 @@ export async function loginCommand(): Promise<void> {
     await sleep(2000);
 
     try {
-      const response = await fetch(pollUrl);
+      const response = await fetch(pollUrl, {
+        headers: { 'X-Poll-Token': session.pollToken },
+      });
       if (response.status === 200) {
         const data = await response.json() as { api_key: string; username: string };
         saveConfig({ api_key: data.api_key });
@@ -63,4 +73,27 @@ export function logoutCommand(): void {
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function startCliAuth(apiUrl: string): Promise<{ session: string; pollToken: string; userCode: string; loginUrl: string } | null> {
+  try {
+    const response = await fetch(`${apiUrl}/auth/cli/start`, { method: 'POST' });
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json() as Partial<{ session: string; pollToken: string; userCode: string; loginUrl: string }>;
+    if (!data.session || !data.pollToken || !data.userCode || !data.loginUrl) {
+      return null;
+    }
+
+    return {
+      session: data.session,
+      pollToken: data.pollToken,
+      userCode: data.userCode,
+      loginUrl: data.loginUrl,
+    };
+  } catch {
+    return null;
+  }
 }

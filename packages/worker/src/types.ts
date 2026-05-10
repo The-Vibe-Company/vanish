@@ -4,6 +4,7 @@ export interface Env {
   BASE_URL: string;
   SELF_HOSTED: string;
   DEFAULT_TIER: string;
+  PRODUCT_EVENTS?: string;
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
   STRIPE_SECRET_KEY?: string;

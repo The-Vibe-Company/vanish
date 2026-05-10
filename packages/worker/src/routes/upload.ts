@@ -126,6 +126,8 @@ upload.post('/upload', async (c) => {
     filename,
     size,
     expires: expiresAt,
+    tier,
+    deletable: Boolean(user),
   }, 201);
 });
 

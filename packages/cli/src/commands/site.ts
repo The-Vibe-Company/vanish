@@ -75,6 +75,8 @@ export async function siteCommand(folder: string, options: SiteOptions): Promise
   const config = loadConfig();
   const client = new VanishClient(config);
   const isUpdate = Boolean(options.update);
+  let accountTier = config.api_key ? 'authenticated' : 'anonymous';
+  let canManageSite = false;
 
   if (!config.api_key) {
     if (isUpdate) {
@@ -96,6 +98,8 @@ export async function siteCommand(folder: string, options: SiteOptions): Promise
   } else {
     try {
       const me = await client.me();
+      accountTier = me.tier;
+      canManageSite = true;
       const maxSiteSize = me.limits.maxSiteSize ?? me.limits.maxTotalStorage ?? me.limits.maxFileSize;
       if (maxSiteSize && totalBytes > maxSiteSize) {
         console.error(`Error: Site too large for ${me.tier}. Max ${formatBytes(maxSiteSize)}, folder is ${formatBytes(totalBytes)}.`);
@@ -117,6 +121,8 @@ export async function siteCommand(folder: string, options: SiteOptions): Promise
         console.error(err instanceof Error ? err.message : String(err));
         process.exit(1);
       }
+      accountTier = 'anonymous';
+      canManageSite = false;
     }
   }
 
@@ -161,6 +167,14 @@ export async function siteCommand(folder: string, options: SiteOptions): Promise
       size: published.size,
       fileCount: published.fileCount,
       expires: published.expires,
+      expiresInHours: published.expires ? hoursUntil(published.expires) : null,
+      tier: accountTier,
+      updateCommand: canManageSite
+        ? buildUpdateCommand(folder, rootPath, published.id)
+        : undefined,
+      deleteCommand: canManageSite
+        ? `curl -X DELETE -H "Authorization: Bearer $VANISH_API_KEY" ${config.api_url}/sites/${published.id}`
+        : undefined,
     };
 
     if (options.json) {
@@ -176,9 +190,16 @@ export async function siteCommand(folder: string, options: SiteOptions): Promise
       }
     }
 
-    if (!config.api_key && !options.json && published.expires) {
-      const hours = Math.round((new Date(published.expires).getTime() - Date.now()) / (1000 * 60 * 60));
-      process.stderr.write(`Expires in ${hours}h. Login for 48h + 50MB storage: vanish login\n`);
+    if (!options.json) {
+      if (result.expiresInHours !== null) {
+        process.stderr.write(`Expires in ${result.expiresInHours}h.\n`);
+      }
+      if (canManageSite) {
+        process.stderr.write(`Update this URL: ${result.updateCommand}\n`);
+        process.stderr.write(`Delete this site: ${result.deleteCommand}\n`);
+      } else {
+        process.stderr.write('Login for updates, deletes, 48h retention, and 50MB storage: vanish login\n');
+      }
     }
   } catch (err) {
     spinner.stop();
@@ -257,6 +278,22 @@ function normalizeCliPath(input: string): string | null {
 
 function toSitePath(root: string, file: string): string {
   return relative(root, file).replaceAll('\\', '/');
+}
+
+function buildUpdateCommand(folder: string, rootPath: string, siteId: string): string {
+  return `vanish site ${quoteShellArg(folder)} --root ${quoteShellArg(rootPath)} --update ${siteId}`;
+}
+
+function quoteShellArg(value: string): string {
+  if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(value)) {
+    return value;
+  }
+
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+function hoursUntil(iso: string): number {
+  return Math.max(0, Math.round((new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60)));
 }
 
 function isInside(root: string, child: string): boolean {

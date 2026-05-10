@@ -8,6 +8,8 @@ export interface UploadResult {
   filename: string;
   size: number;
   expires: string | null;
+  tier?: string;
+  deletable?: boolean;
 }
 
 export interface CreateSiteResult {

@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
 import type { Env, User } from '../types.js';
 import { generateApiKey, getKeyPrefix, hashApiKey } from '../lib/api-key.js';
+import { logProductEvent } from '../lib/events.js';
 
 interface GitHubUser {
   id: number;
@@ -15,10 +16,129 @@ interface GitHubTokenResponse {
   scope: string;
 }
 
+type CliAuthSession =
+  | {
+      status: 'pending';
+      pollTokenHash: string;
+      stateNonce: string;
+      userCodeHash: string;
+    }
+  | {
+      status: 'authorized';
+      pollTokenHash: string;
+      userCodeHash: string;
+      apiKey: string;
+      username: string;
+    }
+  | {
+      status: 'ready';
+      pollTokenHash: string;
+      apiKey: string;
+      username: string;
+    };
+
 const auth = new Hono<{ Bindings: Env }>();
+const CLI_USER_CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 
 /**
- * GET /auth/github — Start GitHub OAuth flow.
+ * POST /auth/cli/start - Creates a CLI login session.
+ * The browser URL only receives the session + state nonce; polling requires
+ * a separate token returned to the local CLI process.
+ */
+auth.post('/auth/cli/start', async (c) => {
+  if (!c.env.GITHUB_CLIENT_ID) {
+    return c.json({ error: 'GitHub OAuth not configured' }, 503);
+  }
+
+  const session = nanoid(32);
+  const pollToken = nanoid(32);
+  const stateNonce = nanoid(32);
+  const userCode = generateUserCode();
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+  const loginUrl = new URL(`${c.env.BASE_URL}/auth/github`);
+  loginUrl.searchParams.set('cli', 'true');
+  loginUrl.searchParams.set('session', session);
+  loginUrl.searchParams.set('nonce', stateNonce);
+
+  await c.env.DB.prepare(`
+    INSERT INTO auth_sessions (session_id, api_key, username, expires_at)
+    VALUES (?, ?, NULL, ?)
+  `).bind(
+    session,
+    JSON.stringify({
+      status: 'pending',
+      pollTokenHash: await hashApiKey(pollToken),
+      stateNonce,
+      userCodeHash: await hashApiKey(normalizeUserCode(userCode)),
+    } satisfies CliAuthSession),
+    expiresAt,
+  ).run();
+
+  restrictAuthCors(c);
+  return c.json({
+    session,
+    pollToken,
+    userCode,
+    loginUrl: loginUrl.toString(),
+    expires: expiresAt,
+  }, 201);
+});
+
+/**
+ * POST /auth/cli/confirm - Browser-side confirmation after GitHub OAuth.
+ * Requires the short code printed by the CLI, which prevents a third party from
+ * starting a session, sending the OAuth URL to a victim, and harvesting the key.
+ */
+auth.post('/auth/cli/confirm', async (c) => {
+  const payload = await readConfirmPayload(c.req.raw);
+  if (!payload?.session || !payload.code) {
+    return c.html(cliConfirmPage({
+      title: 'Missing confirmation code',
+      body: 'Return to your terminal, run vanish login again, and enter the code shown there.',
+    }), 400);
+  }
+
+  const session = await readCliAuthSession(c.env, payload.session);
+  if (!session || session.status !== 'authorized') {
+    return c.html(cliConfirmPage({
+      title: 'CLI login expired',
+      body: 'Return to your terminal and run vanish login again.',
+    }), 410);
+  }
+
+  if (await hashApiKey(normalizeUserCode(payload.code)) !== session.userCodeHash) {
+    return c.html(cliConfirmPage({
+      title: 'Code did not match',
+      body: 'Check the code in your terminal and try again.',
+      sessionId: payload.session,
+      retry: true,
+    }), 403);
+  }
+
+  await c.env.DB.prepare(`
+    UPDATE auth_sessions
+    SET api_key = ?, username = ?
+    WHERE session_id = ? AND expires_at > datetime('now')
+  `).bind(
+    JSON.stringify({
+      status: 'ready',
+      pollTokenHash: session.pollTokenHash,
+      apiKey: session.apiKey,
+      username: session.username,
+    } satisfies CliAuthSession),
+    session.username,
+    payload.session,
+  ).run();
+
+  restrictAuthCors(c);
+  return c.html(cliConfirmPage({
+    title: 'CLI login confirmed',
+    body: 'You can close this tab and return to your terminal.',
+  }));
+});
+
+/**
+ * GET /auth/github - Start GitHub OAuth flow.
  * Query params:
  *   - session: CLI session ID for polling (optional, for CLI flow)
  *   - redirect: URL to redirect to after auth (optional, for web flow)
@@ -31,9 +151,10 @@ auth.get('/auth/github', async (c) => {
 
   const session = c.req.query('session') || '';
   const redirect = c.req.query('redirect') || '';
+  const nonce = c.req.query('nonce') || '';
 
   // Store session + redirect as state (will be passed through OAuth)
-  const state = btoa(JSON.stringify({ session, redirect }));
+  const state = btoa(JSON.stringify({ session, redirect, nonce }));
 
   const githubAuthUrl = new URL('https://github.com/login/oauth/authorize');
   githubAuthUrl.searchParams.set('client_id', clientId);
@@ -45,7 +166,7 @@ auth.get('/auth/github', async (c) => {
 });
 
 /**
- * GET /auth/callback — GitHub OAuth callback.
+ * GET /auth/callback - GitHub OAuth callback.
  * Exchanges code for token, creates/updates user, generates API key.
  */
 auth.get('/auth/callback', async (c) => {
@@ -58,10 +179,12 @@ auth.get('/auth/callback', async (c) => {
 
   let session = '';
   let redirect = '';
+  let nonce = '';
   try {
     const parsed = JSON.parse(atob(stateParam));
     session = parsed.session || '';
     redirect = parsed.redirect || '';
+    nonce = parsed.nonce || '';
   } catch {
     // Invalid state, continue without session/redirect
   }
@@ -158,12 +281,52 @@ auth.get('/auth/callback', async (c) => {
 
   // If CLI session, store API key for polling
   if (session) {
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 min TTL
-    await c.env.DB.prepare(`
-      INSERT OR REPLACE INTO auth_sessions (session_id, api_key, username, expires_at)
-      VALUES (?, ?, ?, ?)
-    `).bind(session, apiKey, ghUser.login, expiresAt).run();
+    const secureSession = await readCliAuthSession(c.env, session);
+    if (secureSession?.status === 'pending' && secureSession.stateNonce === nonce) {
+      await c.env.DB.prepare(`
+        UPDATE auth_sessions
+        SET api_key = ?, username = ?
+        WHERE session_id = ? AND expires_at > datetime('now')
+      `).bind(
+        JSON.stringify({
+          status: 'authorized',
+          pollTokenHash: secureSession.pollTokenHash,
+          userCodeHash: secureSession.userCodeHash,
+          apiKey,
+          username: ghUser.login,
+        } satisfies CliAuthSession),
+        ghUser.login,
+        session,
+      ).run();
+      await logProductEvent(c.env, {
+        name: 'login_completed',
+        userId,
+        properties: {
+          tier,
+          has_cli_session: true,
+          has_redirect: Boolean(redirect),
+          secure_cli_flow: true,
+        },
+      });
+      return c.html(cliConfirmPage({
+        title: 'Confirm CLI login',
+        body: 'Enter the code shown in your terminal to finish login.',
+        sessionId: session,
+        retry: true,
+      }));
+    }
   }
+
+  await logProductEvent(c.env, {
+    name: 'login_completed',
+    userId,
+    properties: {
+      tier,
+      has_cli_session: Boolean(session),
+      has_redirect: Boolean(redirect),
+      secure_cli_flow: Boolean(session && nonce),
+    },
+  });
 
   // If web redirect, redirect with success
   if (redirect) {
@@ -186,7 +349,7 @@ auth.get('/auth/callback', async (c) => {
 <style>
   body { font-family: -apple-system, system-ui, sans-serif; max-width: 600px; margin: 80px auto; padding: 0 20px; }
   .key { background: #f0f0f0; padding: 12px 16px; border-radius: 8px; font-family: monospace; font-size: 14px; word-break: break-all; }
-  .copy-btn { margin-top: 12px; padding: 8px 16px; background: #000; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+  .copy-btn { margin-top: 12px; padding: 8px 16px; background: #111827; color: #f9fafb; border: none; border-radius: 6px; cursor: pointer; }
   .warning { color: #666; font-size: 13px; margin-top: 8px; }
 </style></head>
 <body>
@@ -202,11 +365,12 @@ auth.get('/auth/callback', async (c) => {
 });
 
 /**
- * GET /auth/poll — CLI polls this to retrieve the API key after OAuth.
+ * GET /auth/poll - CLI polls this to retrieve the API key after OAuth.
  * Returns 202 while waiting, 200 with key when ready.
  */
 auth.get('/auth/poll', async (c) => {
   const session = c.req.query('session');
+  const pollToken = c.req.header('X-Poll-Token') || '';
   if (!session) {
     return c.json({ error: 'Missing session parameter' }, 400);
   }
@@ -219,16 +383,136 @@ auth.get('/auth/poll', async (c) => {
     return c.json({ status: 'waiting' }, 202);
   }
 
-  // Delete session after successful retrieval
-  c.executionCtx.waitUntil(
-    c.env.DB.prepare('DELETE FROM auth_sessions WHERE session_id = ?')
-      .bind(session).run()
-  );
+  const payload = parseCliAuthSession(result.api_key);
+  if (payload) {
+    if (payload.status === 'pending' || payload.status === 'authorized') {
+      restrictAuthCors(c);
+      return c.json({ status: 'waiting' }, 202);
+    }
 
-  return c.json({
-    api_key: result.api_key,
-    username: result.username,
-  }, 200);
+    if (!pollToken || await hashApiKey(pollToken) !== payload.pollTokenHash) {
+      restrictAuthCors(c);
+      return c.json({ error: 'Invalid polling token' }, 401);
+    }
+
+    c.executionCtx.waitUntil(
+      c.env.DB.prepare('DELETE FROM auth_sessions WHERE session_id = ?')
+        .bind(session).run()
+    );
+
+    restrictAuthCors(c);
+    return c.json({
+      api_key: payload.apiKey,
+      username: payload.username,
+    }, 200);
+  }
+
+  restrictAuthCors(c);
+  return c.json({ status: 'waiting' }, 202);
 });
+
+async function readCliAuthSession(env: Env, session: string): Promise<CliAuthSession | null> {
+  const result = await env.DB.prepare(
+    'SELECT api_key FROM auth_sessions WHERE session_id = ? AND expires_at > datetime(\'now\')'
+  ).bind(session).first<{ api_key: string }>();
+
+  return result?.api_key ? parseCliAuthSession(result.api_key) : null;
+}
+
+function parseCliAuthSession(value: string): CliAuthSession | null {
+  try {
+    const parsed = JSON.parse(value) as Partial<CliAuthSession>;
+    if (parsed.status === 'pending' &&
+      typeof parsed.pollTokenHash === 'string' &&
+      typeof parsed.stateNonce === 'string' &&
+      typeof parsed.userCodeHash === 'string') {
+      return parsed as CliAuthSession;
+    }
+    if (parsed.status === 'authorized' &&
+      typeof parsed.pollTokenHash === 'string' &&
+      typeof parsed.userCodeHash === 'string' &&
+      typeof parsed.apiKey === 'string' &&
+      typeof parsed.username === 'string') {
+      return parsed as CliAuthSession;
+    }
+    if (parsed.status === 'ready' &&
+      typeof parsed.pollTokenHash === 'string' &&
+      typeof parsed.apiKey === 'string' &&
+      typeof parsed.username === 'string') {
+      return parsed as CliAuthSession;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+async function readConfirmPayload(request: Request): Promise<{ session?: string; code?: string } | null> {
+  const contentType = request.headers.get('Content-Type') || '';
+  try {
+    if (contentType.includes('application/json')) {
+      return await request.json() as { session?: string; code?: string };
+    }
+
+    const form = await request.formData();
+    return {
+      session: String(form.get('session') || ''),
+      code: String(form.get('code') || ''),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function cliConfirmPage(input: { title: string; body: string; sessionId?: string; retry?: boolean }): string {
+  const form = input.retry && input.sessionId
+    ? `<form method="post" action="/auth/cli/confirm">
+        <input type="hidden" name="session" value="${escapeHtml(input.sessionId)}">
+        <label for="code">Code from terminal</label>
+        <input id="code" name="code" autocomplete="one-time-code" inputmode="text" required autofocus>
+        <button type="submit">Confirm login</button>
+      </form>`
+    : '';
+
+  return `<!DOCTYPE html>
+<html><head><title>vanish - ${escapeHtml(input.title)}</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; max-width: 600px; margin: 80px auto; padding: 0 20px; }
+  form { display: grid; gap: 10px; margin-top: 24px; max-width: 280px; }
+  input { font: inherit; padding: 10px 12px; border: 1px solid #ccc; border-radius: 6px; text-transform: uppercase; }
+  button { font: inherit; padding: 10px 14px; background: #111827; color: #f9fafb; border: 0; border-radius: 6px; cursor: pointer; }
+</style></head>
+<body>
+  <h1>${escapeHtml(input.title)}</h1>
+  <p>${escapeHtml(input.body)}</p>
+  ${form}
+</body></html>`;
+}
+
+function generateUserCode(): string {
+  let code = '';
+  const bytes = crypto.getRandomValues(new Uint8Array(6));
+  for (const byte of bytes) {
+    code += CLI_USER_CODE_ALPHABET[byte % CLI_USER_CODE_ALPHABET.length];
+  }
+  return code;
+}
+
+function normalizeUserCode(code: string): string {
+  return code.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function restrictAuthCors(c: { header: (name: string, value: string) => void; env: Env }): void {
+  c.header('Access-Control-Allow-Origin', new URL(c.env.BASE_URL).origin);
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 
 export default auth;

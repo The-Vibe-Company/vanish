@@ -27,7 +27,9 @@ vi.mock('../src/lib/clipboard.js', () => ({
 }));
 
 vi.mock('../src/lib/api-client.js', () => ({
-  VanishClient: vi.fn(() => mocks.client),
+  VanishClient: vi.fn(function () {
+    return mocks.client;
+  }),
 }));
 
 const { siteCommand } = await import('../src/commands/site.js');
@@ -37,6 +39,7 @@ describe('siteCommand', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
   let logSpy: ReturnType<typeof vi.spyOn>;
   let errorSpy: ReturnType<typeof vi.spyOn>;
+  let stderrSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'vanish-site-test-'));
@@ -44,9 +47,14 @@ describe('siteCommand', () => {
     writeFileSync(join(dir, 'index.html'), '<h1>ok</h1>');
     writeFileSync(join(dir, 'assets', 'app.js'), 'window.ok = true;');
 
+    mocks.loadConfig.mockReset();
+    mocks.copyToClipboard.mockReset();
+    for (const fn of Object.values(mocks.client)) {
+      fn.mockReset();
+    }
+
     mocks.loadConfig.mockReturnValue({ api_url: 'https://vanish.test' });
     mocks.copyToClipboard.mockReturnValue(false);
-    mocks.client.me.mockReset();
     mocks.client.createSite.mockResolvedValue({
       id: 'site123',
       token: 'vnst_token',
@@ -95,6 +103,7 @@ describe('siteCommand', () => {
     });
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   });
 
   afterEach(() => {
@@ -193,6 +202,36 @@ describe('siteCommand', () => {
       rootPath: 'index.html',
       fileCount: 2,
     });
+  });
+
+  it('prints update and delete commands after authenticated publish success', async () => {
+    mocks.loadConfig.mockReturnValue({ api_url: 'https://vanish.test', api_key: 'vnsh_key' });
+    mocks.client.me.mockResolvedValue({
+      id: 'user1',
+      username: 'stan',
+      email: null,
+      tier: 'free',
+      created_at: '2026-05-10T00:00:00.000Z',
+      stats: { total_uploads: 0, total_sites: 0, total_bytes: 0 },
+      limits: {
+        maxFileSize: 50 * 1024 * 1024,
+        maxSiteSize: 50 * 1024 * 1024,
+        maxSiteFiles: 500,
+        maxTotalStorage: 50 * 1024 * 1024,
+        maxExpiryHours: 48,
+        imageOnly: false,
+        customTtl: false,
+        rateLimit: 50,
+      },
+    });
+
+    await siteCommand(dir, { root: 'index.html', clipboard: false });
+
+    expect(logSpy).toHaveBeenCalledWith('https://site123.vanish.sh/');
+    const stderr = stderrSpy.mock.calls.map(call => String(call[0])).join('');
+    expect(stderr).toContain('Expires in');
+    expect(stderr).toContain(`Update this URL: vanish site ${dir} --root index.html --update site123`);
+    expect(stderr).toContain('Delete this site: curl -X DELETE -H "Authorization: Bearer $VANISH_API_KEY" https://vanish.test/sites/site123');
   });
 
   it('requires login for site updates', async () => {

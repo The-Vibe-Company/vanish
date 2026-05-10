@@ -8,8 +8,8 @@ const html = `<!doctype html>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>vanish.sh — ship what your agent just made</title>
-<meta name="description" content="Turn a folder of generated HTML, Markdown, and assets into a real URL. One command. Built for Claude Code, Codex, and the artifacts you generate at 2am." />
+<title>vanish: public preview URLs for agent-made artifacts</title>
+<meta name="description" content="Turn a local HTML, Markdown, CSS, JS, or asset folder from Codex, Claude Code, or your terminal into a temporary public URL." />
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -488,7 +488,7 @@ const html = `<!doctype html>
   <div class="wrap topbar-inner">
     <a href="/" class="brand" aria-label="vanish">
       vanish<span class="dot">.</span>sh
-      <span class="brand-meta">v0.1.11</span>
+      <span class="brand-meta">v0.1.12</span>
     </a>
     <nav class="nav" aria-label="primary">
       <a href="#how">How it works</a>
@@ -708,8 +708,8 @@ const html = `<!doctype html>
 <section class="section alt" id="uses">
   <div class="wrap">
     <div class="sh">
-      <span class="num">04 / use cases</span>
-      <h2>What agents actually publish.</h2>
+      <span class="num">04 / agent handoff</span>
+      <h2>Agent handoff, not generic hosting.</h2>
       <p class="desc">Vanish is the missing distribution channel between an agent finishing a task and a human seeing it. These are the patterns we keep seeing.</p>
     </div>
 
@@ -886,6 +886,7 @@ r = requests.<span class="f">post</span>(
           <li><a href="#">Privacy</a></li>
           <li><a href="#">Terms</a></li>
           <li><a href="#">Status</a></li>
+          <li><a href="mailto:abuse@vanish.sh?subject=Vanish%20abuse%20report">Report abuse</a></li>
           <li><a href="mailto:hi@vanish.sh">Contact</a></li>
         </ul>
       </div>

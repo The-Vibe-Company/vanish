@@ -5,7 +5,7 @@ description: Use this skill when the user or workflow needs to share by public l
 
 # Vanish Upload Files
 
-Upload files through Vanish and return temporary public URLs. Use this for documents, screenshots, generated reports, decks, spreadsheets, images, and any file artifact that needs to be shared outside the workspace.
+Upload files through Vanish and return temporary public URLs. Use this for documents, screenshots, generated reports, decks, spreadsheets, images, and any single-file artifact that needs to be shared outside the workspace. Use `vanish-publish-site` instead when the deliverable is a static folder or browser preview.
 
 ## Workflow
 
@@ -24,7 +24,7 @@ If `vanish` is not installed, use:
 npx vanish-cli upload <files...> --json --no-clipboard
 ```
 
-Return the URL, id, filename, size, and expiry from the JSON output.
+Return the URL, id, filename, size, expiry, and any delete command field from the JSON output.
 
 ## Output Formats
 
