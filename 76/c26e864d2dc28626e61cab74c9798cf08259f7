@@ -1,0 +1,21 @@
+packages/cli/src/index.ts
+  s_cbc124db960f11::t_b7293c47ef3476 151
+packages/worker/src/routes/sites.ts
+  s_cbc124db960f11::t_611694cd2f225a 314-315,558-568
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "76c26e864d2dc28626e61cab74c9798cf08259f7",
+  "prompts": {},
+  "sessions": {
+    "s_cbc124db960f11": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e1084-f05e-7232-a069-588c20547ee9",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
