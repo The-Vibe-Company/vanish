@@ -1,0 +1,6 @@
+interface:
+  display_name: "Vanish Upload Files"
+  short_description: "Share files and documents by URL"
+  default_prompt: "Use $vanish-upload-files to upload these files and return public Vanish URLs."
+policy:
+  allow_implicit_invocation: true

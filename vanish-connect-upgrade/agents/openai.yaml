@@ -1,0 +1,6 @@
+interface:
+  display_name: "Vanish Connect Upgrade"
+  short_description: "Manage Vanish auth, status, and Pro"
+  default_prompt: "Use $vanish-connect-upgrade to check Vanish login, quota, retention, or upgrade status."
+policy:
+  allow_implicit_invocation: true

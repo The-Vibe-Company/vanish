@@ -1,0 +1,6 @@
+interface:
+  display_name: "Vanish Legacy"
+  short_description: "Route legacy Vanish invocations"
+  default_prompt: "Use $vanish only as a compatibility shim, then route to a specific Vanish skill."
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Vanish Publish Site"
+  short_description: "Publish temporary static site URLs"
+  default_prompt: "Use $vanish-publish-site to publish this static folder as a temporary Vanish URL."
+policy:
+  allow_implicit_invocation: true
