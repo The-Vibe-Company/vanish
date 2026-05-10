@@ -1,0 +1,58 @@
+packages/cli/test/site.test.ts
+  s_8c6eaf9e7a81ff::t_d4ad2739727765 12,15-16,62-71,82-90,156-202
+packages/worker/test/sites-route.test.ts
+  s_8c6eaf9e7a81ff::t_8af348b87097b0 40
+  s_8c6eaf9e7a81ff::t_b947103d065451 1,183,202-203
+  s_8c6eaf9e7a81ff::t_02d152906fa151 3-4,39,41,122-131,133-159,204-266,282-300,303,306,310,313,316,322-342
+  s_8c6eaf9e7a81ff::t_321299bea14c59 132,160-182,184-201,267-280
+  s_8c6eaf9e7a81ff::t_9b8bea0cf98781 431-443,509-511,528-536,548,567-574,615,628-642,673,683-688,722-736
+  s_8c6eaf9e7a81ff::t_3176091aa48b71 380-381,390-394,411-415,426,453-454,459-474,527,611-614,616-627,643-672,674-682,689-699
+  s_8c6eaf9e7a81ff::t_2f5cc1df95cb8d 354,370-372,382
+packages/worker/src/routes/sites.ts
+  s_8c6eaf9e7a81ff::t_7c02d0b057e668 126,784-785,818,843-852
+  s_8c6eaf9e7a81ff::t_8237967316accd 516-518,555,899-909
+  s_8c6eaf9e7a81ff::t_45ccaee7b2a8f7 740-783,786-817,819-842,853-854,864,882-885,889,891-898,910-931
+  s_8c6eaf9e7a81ff::t_c1814523e06a6d 855-863,865-881,886-888,890
+  s_8c6eaf9e7a81ff::t_b155054e855ae5 15,17-27,41-42
+  s_8c6eaf9e7a81ff::t_1eb3486b758742 162-282
+  s_8c6eaf9e7a81ff::t_004809c0a3bd04 334,337,448-515,519,526-539,548-554,556-567
+  s_8c6eaf9e7a81ff::t_fe7ab2836e6ff3 110,116,122-124,127-128
+  s_8c6eaf9e7a81ff::t_720e85edc66b78 631
+  s_8c6eaf9e7a81ff::t_43e14a6fc42c7d 520-525,540-547
+vanish/SKILL.md
+  s_8c6eaf9e7a81ff::t_bad0b3741c3c7b 25,34,40
+packages/worker/src/cron/cleanup.ts
+  s_8c6eaf9e7a81ff::t_3fbb58b4b5888c 12,88-113
+packages/worker/src/lib/storage.ts
+  s_8c6eaf9e7a81ff::t_b5cca9f1e1eeb5 29,47-52,57
+packages/cli/src/lib/api-client.ts
+  s_8c6eaf9e7a81ff::t_7cf0c425768452 26-36,141-161,205-240
+packages/worker/src/index.ts
+  s_8c6eaf9e7a81ff::t_0c6adf0f52f8a1 22
+packages/cli/src/index.ts
+  s_8c6eaf9e7a81ff::t_f8617a250f1679 40
+README.md
+  s_8c6eaf9e7a81ff::t_fd8e546ec515cd 7,22,49,58,75-87,98
+packages/cli/src/commands/site.ts
+  s_8c6eaf9e7a81ff::t_26eb2c418541e5 3,21,77,80-83,108,116,123,125,129,136-140,148-154
+packages/worker/src/routes/landing.ts
+  s_8c6eaf9e7a81ff::t_9642d9ad67121f 397,426-431,507
+packages/worker/src/db/schema.sql
+  s_8c6eaf9e7a81ff::t_3f18ebea3dbd20 73-77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "cecc3a084769870cbfb9685e36b2660d8af8bbb3",
+  "prompts": {},
+  "sessions": {
+    "s_8c6eaf9e7a81ff": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e10e4-d48d-73e2-840a-650275e37cb4",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
