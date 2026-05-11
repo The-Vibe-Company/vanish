@@ -1,0 +1,38 @@
+packages/worker/src/routes/dashboard.ts
+  s_e17f5d600222d6::t_7f4bcd9b5b81e4 1706-1715,1717-1718
+  s_e17f5d600222d6::t_7061b3b04adf4b 1716,1996-2004
+packages/worker/src/routes/user.ts
+  s_e17f5d600222d6::t_7f4bcd9b5b81e4 66-68
+packages/worker/test/billing-route.test.ts
+  s_e17f5d600222d6::t_aeccba2f014868 105-128
+  s_e17f5d600222d6::t_cd592731f8be79 261-291
+  s_e17f5d600222d6::t_db25f2b7ff4232 32-34,104,129-199,201-227,259-260,301-306,319,374,379-383,409-413
+  s_e17f5d600222d6::t_430de5986e7ab6 200,228-258,408,414-423
+packages/worker/src/lib/stripe.ts
+  s_e17f5d600222d6::t_7f4bcd9b5b81e4 65
+packages/worker/src/routes/billing.ts
+  s_e17f5d600222d6::t_7f4bcd9b5b81e4 9-25,186,230,233-237,240,245-248,252-253,267-290,292-295,297-336,345-369,372-374,386,388-390,404,406-414,423
+  s_e17f5d600222d6::t_cd592731f8be79 375-385
+  s_e17f5d600222d6::t_c971fed83fc3b8 75-76,78,83,87,91,101-127,387,405,415-422
+  s_e17f5d600222d6::t_56edec6a9a2f2f 98,177-178
+  s_e17f5d600222d6::t_45659b06ac20fd 291
+  s_e17f5d600222d6::t_5b14afb49ed801 2,26-27,74
+  s_e17f5d600222d6::t_430de5986e7ab6 254,296,370-371,391-403
+  s_e17f5d600222d6::t_6bdf376aa4eae8 337-344
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "2a7e3f6f94f9387bd6c2db3368d7c9a4e6d4cf99",
+  "prompts": {},
+  "sessions": {
+    "s_e17f5d600222d6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e1385-21bc-7cd3-835e-a7072f9a8092",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
