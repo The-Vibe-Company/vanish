@@ -29,7 +29,9 @@ describe('billing routes', () => {
   it('records upgrade clicks without storing checkout-sensitive data', async () => {
     const apiKey = await addUser(db, 'user1', 'free');
     const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
-      expect(String(init?.body)).toContain('metadata%5Bvanish_user_id%5D=user1');
+      const body = String(init?.body);
+      expect(body).toContain('metadata%5Bvanish_user_id%5D=user1');
+      expect(body).toContain('subscription_data%5Bmetadata%5D%5Bvanish_user_id%5D=user1');
       return Response.json({ id: 'cs_test', url: 'https://stripe.test/checkout' });
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -99,6 +101,194 @@ describe('billing routes', () => {
     expect(retry.status).toBe(200);
     expect(db.events).toHaveLength(1);
   });
+
+  it('creates billing portal sessions through bearer auth without URL keys', async () => {
+    const apiKey = await addUser(db, 'user1', 'pro', {
+      stripe_customer_id: 'cus_test',
+      stripe_subscription_id: 'sub_test',
+    });
+    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = String(init?.body);
+      expect(body).toContain('customer=cus_test');
+      expect(body).toContain('return_url=https%3A%2F%2Fvanish.sh%2Fdashboard%23billing');
+      expect(body).not.toContain('vnsh_');
+      return Response.json({ url: 'https://stripe.test/portal' });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const response = await request(env, '/billing/portal', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ url: 'https://stripe.test/portal' });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it('records subscription-created upgrades from subscription metadata', async () => {
+    await addUser(db, 'user1', 'free');
+    const user = db.users.get('user1')!;
+    const body = JSON.stringify({
+      type: 'customer.subscription.created',
+      data: {
+        object: {
+          id: 'sub_test',
+          status: 'active',
+          customer: 'cus_test',
+          metadata: { vanish_user_id: 'user1' },
+        },
+      },
+    });
+    const signature = await createStripeSignature(body, env.STRIPE_WEBHOOK_SECRET!);
+
+    const response = await request(env, '/webhooks/stripe', {
+      method: 'POST',
+      headers: { 'Stripe-Signature': signature },
+      body,
+    });
+
+    expect(response.status).toBe(200);
+    expect(user.tier).toBe('pro');
+    expect(user.stripe_customer_id).toBe('cus_test');
+    expect(user.stripe_subscription_id).toBe('sub_test');
+    expect(db.events).toEqual([
+      expect.objectContaining({
+        name: 'upgrade_completed',
+        user_id: 'user1',
+        properties: JSON.stringify({
+          tier: 'pro',
+          checkout_provider: 'stripe',
+          subscription_status: 'active',
+        }),
+      }),
+    ]);
+  });
+
+  it('repairs a free user when an existing subscription becomes active', async () => {
+    await addUser(db, 'user1', 'free', {
+      stripe_customer_id: 'cus_test',
+      stripe_subscription_id: 'sub_test',
+    });
+    const user = db.users.get('user1')!;
+    const body = JSON.stringify({
+      type: 'customer.subscription.updated',
+      data: {
+        object: {
+          id: 'sub_test',
+          status: 'active',
+          customer: 'cus_test',
+          metadata: {},
+        },
+      },
+    });
+    const signature = await createStripeSignature(body, env.STRIPE_WEBHOOK_SECRET!);
+
+    const response = await request(env, '/webhooks/stripe', {
+      method: 'POST',
+      headers: { 'Stripe-Signature': signature },
+      body,
+    });
+
+    expect(response.status).toBe(200);
+    expect(user.tier).toBe('pro');
+    expect(user.stripe_customer_id).toBe('cus_test');
+    expect(user.stripe_subscription_id).toBe('sub_test');
+    expect(db.events).toHaveLength(1);
+  });
+
+  it('downgrades recoverable inactive subscriptions without unlinking them', async () => {
+    await addUser(db, 'user1', 'pro', {
+      stripe_customer_id: 'cus_test',
+      stripe_subscription_id: 'sub_test',
+    });
+    const user = db.users.get('user1')!;
+    const body = JSON.stringify({
+      type: 'customer.subscription.updated',
+      data: {
+        object: {
+          id: 'sub_test',
+          status: 'unpaid',
+          customer: 'cus_test',
+          metadata: {},
+        },
+      },
+    });
+    const signature = await createStripeSignature(body, env.STRIPE_WEBHOOK_SECRET!);
+
+    const response = await request(env, '/webhooks/stripe', {
+      method: 'POST',
+      headers: { 'Stripe-Signature': signature },
+      body,
+    });
+
+    expect(response.status).toBe(200);
+    expect(user.tier).toBe('free');
+    expect(user.stripe_customer_id).toBe('cus_test');
+    expect(user.stripe_subscription_id).toBe('sub_test');
+  });
+
+  it('downgrades deleted subscriptions and clears the subscription link', async () => {
+    await addUser(db, 'user1', 'pro', {
+      stripe_customer_id: 'cus_test',
+      stripe_subscription_id: 'sub_test',
+    });
+    const user = db.users.get('user1')!;
+    const body = JSON.stringify({
+      type: 'customer.subscription.deleted',
+      data: {
+        object: {
+          id: 'sub_test',
+          status: 'canceled',
+          customer: 'cus_test',
+          metadata: {},
+        },
+      },
+    });
+    const signature = await createStripeSignature(body, env.STRIPE_WEBHOOK_SECRET!);
+
+    const response = await request(env, '/webhooks/stripe', {
+      method: 'POST',
+      headers: { 'Stripe-Signature': signature },
+      body,
+    });
+
+    expect(response.status).toBe(200);
+    expect(user.tier).toBe('free');
+    expect(user.stripe_customer_id).toBe('cus_test');
+    expect(user.stripe_subscription_id).toBeNull();
+  });
+
+  it('ignores stale inactive events for old subscriptions', async () => {
+    await addUser(db, 'user1', 'pro', {
+      stripe_customer_id: 'cus_new',
+      stripe_subscription_id: 'sub_new',
+    });
+    const user = db.users.get('user1')!;
+    const body = JSON.stringify({
+      type: 'customer.subscription.deleted',
+      data: {
+        object: {
+          id: 'sub_old',
+          status: 'canceled',
+          customer: 'cus_old',
+          metadata: { vanish_user_id: 'user1' },
+        },
+      },
+    });
+    const signature = await createStripeSignature(body, env.STRIPE_WEBHOOK_SECRET!);
+
+    const response = await request(env, '/webhooks/stripe', {
+      method: 'POST',
+      headers: { 'Stripe-Signature': signature },
+      body,
+    });
+
+    expect(response.status).toBe(200);
+    expect(user.tier).toBe('pro');
+    expect(user.stripe_customer_id).toBe('cus_new');
+    expect(user.stripe_subscription_id).toBe('sub_new');
+  });
 });
 
 function request(env: Env, path: string, init?: RequestInit) {
@@ -108,7 +298,12 @@ function request(env: Env, path: string, init?: RequestInit) {
   } as unknown as ExecutionContext);
 }
 
-async function addUser(db: BillingDB, id: string, tier: Tier): Promise<string> {
+async function addUser(
+  db: BillingDB,
+  id: string,
+  tier: Tier,
+  overrides: Partial<User> = {}
+): Promise<string> {
   const apiKey = `vnsh_${id}`;
   const keyHash = await hashApiKey(apiKey);
   const user: User = {
@@ -121,6 +316,7 @@ async function addUser(db: BillingDB, id: string, tier: Tier): Promise<string> {
     stripe_subscription_id: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+    ...overrides,
   };
   db.users.set(id, user);
   db.apiKeys.set(keyHash, user);
@@ -175,9 +371,16 @@ class BillingStatement {
       return (this.db.apiKeys.get(keyHash) || null) as T | null;
     }
 
-    if (sql.includes('SELECT tier, stripe_customer_id, stripe_subscription_id FROM users')) {
+    if (sql.includes('FROM users WHERE id = ?')) {
       const [userId] = this.args as [string];
       return (this.db.users.get(userId) || null) as T | null;
+    }
+
+    if (sql.includes('FROM users WHERE stripe_subscription_id = ?')) {
+      const [subscriptionId] = this.args as [string];
+      const user = Array.from(this.db.users.values())
+        .find(candidate => candidate.stripe_subscription_id === subscriptionId);
+      return (user || null) as T | null;
     }
 
     return null;
@@ -197,6 +400,27 @@ class BillingStatement {
         user.stripe_customer_id = customerId;
         user.stripe_subscription_id = subscriptionId;
         user.tier = 'pro';
+        user.updated_at = new Date().toISOString();
+      }
+      return;
+    }
+
+    if (sql.includes("UPDATE users SET tier = 'free', stripe_subscription_id = NULL")) {
+      const [userId] = this.args as [string];
+      const user = this.db.users.get(userId);
+      if (user) {
+        user.tier = 'free';
+        user.stripe_subscription_id = null;
+        user.updated_at = new Date().toISOString();
+      }
+      return;
+    }
+
+    if (sql.includes("UPDATE users SET tier = 'free'")) {
+      const [userId] = this.args as [string];
+      const user = this.db.users.get(userId);
+      if (user) {
+        user.tier = 'free';
         user.updated_at = new Date().toISOString();
       }
       return;

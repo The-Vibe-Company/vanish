@@ -63,6 +63,9 @@ user.get('/me', async (c) => {
     email: currentUser.email,
     tier: currentUser.tier,
     created_at: currentUser.created_at,
+    billing: {
+      has_billing_account: currentUser.stripe_customer_id !== null,
+    },
     stats: {
       total_uploads: uploadStats?.total_uploads || 0,
       total_sites: siteStats?.total_sites || 0,

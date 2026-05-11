@@ -1703,6 +1703,19 @@ code { font-family: var(--mono); }
           '<a class="btn solid btn-lg" href="' + attr(checkoutUrl) + '">Upgrade to Pro <span class="btn-arrow">→</span></a>' +
           '<div class="bh-pro-meta">cancel anytime · billed via Stripe</div>' +
         '</div>';
+    } else if (me.tier === 'pro' && me.billing && me.billing.has_billing_account && !SELF_HOSTED) {
+      proCard =
+        '<div class="bh-pro">' +
+          '<div class="bh-pro-head"><span class="dot dot-gold"></span><span>Pro</span><span class="bh-pro-price">active</span></div>' +
+          '<ul class="bh-pro-list">' +
+            '<li><span class="bh-check">✓</span> Custom <code>*.vanish.sh</code> slugs</li>' +
+            '<li><span class="bh-check">✓</span> 30-day retention by default, up to 365 with <code>--days</code></li>' +
+            '<li><span class="bh-check">✓</span> 1 GB storage · 1 GB max file</li>' +
+            '<li><span class="bh-check">✓</span> 200 requests / hour</li>' +
+          '</ul>' +
+          '<button class="btn solid btn-lg" data-action="manage-billing">Manage billing <span class="btn-arrow">→</span></button>' +
+          '<div class="bh-pro-meta">billing managed via Stripe</div>' +
+        '</div>';
     }
 
     var features = [
@@ -1977,6 +1990,18 @@ code { font-family: var(--mono); }
             toast('error: ' + ((r && r.error) || 'failed'));
           });
         }
+      });
+      return;
+    }
+    if (action === 'manage-billing') {
+      apiFetch('/billing/portal', { method: 'POST' }).then(function(r) {
+        if (r && r.url) {
+          window.location.assign(r.url);
+        } else {
+          toast('error: ' + ((r && r.error) || 'failed'));
+        }
+      }).catch(function(e) {
+        toast('error: ' + ((e && e.message) || 'failed'));
       });
       return;
     }
