@@ -1,9 +1,29 @@
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import type { Env } from '../types.js';
 import { StripeClient, verifyWebhookSignature } from '../lib/stripe.js';
 import { logProductEvent } from '../lib/events.js';
 
 const billing = new Hono<{ Bindings: Env }>();
+
+const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing'];
+const INACTIVE_SUBSCRIPTION_STATUSES = ['past_due', 'unpaid', 'canceled', 'incomplete_expired'];
+
+type BillingUserRecord = {
+  id: string;
+  tier: string;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+};
+
+type StripeSubscriptionPayload = {
+  id?: unknown;
+  status?: unknown;
+  customer?: unknown;
+  metadata?: unknown;
+};
+
+type BillingContext = Context<{ Bindings: Env }>;
 
 /**
  * GET /billing/checkout - Create a Stripe Checkout session and redirect.
@@ -51,36 +71,60 @@ billing.get('/billing/checkout', async (c) => {
   return c.redirect(session.url);
 });
 
-/**
- * GET /billing/portal - Redirect to Stripe Customer Portal.
- * Requires authentication + existing Stripe customer.
- */
-billing.get('/billing/portal', async (c) => {
+async function createBillingPortalUrl(c: BillingContext): Promise<
+  { ok: true; url: string } | { ok: false; response: Response }
+> {
   if (c.env.SELF_HOSTED === 'true') {
-    return c.json({ error: 'Billing is not available on self-hosted instances' }, 404);
+    return { ok: false, response: c.json({ error: 'Billing is not available on self-hosted instances' }, 404) };
   }
 
   const user = c.get('user');
   if (!user) {
-    return c.json({ error: 'Authentication required' }, 401);
+    return { ok: false, response: c.json({ error: 'Authentication required' }, 401) };
   }
 
   if (!user.stripe_customer_id) {
-    return c.json({ error: 'No billing account found. Upgrade first: vanish upgrade' }, 400);
+    return { ok: false, response: c.json({ error: 'No billing account found. Upgrade first: vanish upgrade' }, 400) };
   }
 
   if (!c.env.STRIPE_SECRET_KEY) {
-    return c.json({ error: 'Stripe not configured' }, 503);
+    return { ok: false, response: c.json({ error: 'Stripe not configured' }, 503) };
   }
 
   const stripe = new StripeClient(c.env.STRIPE_SECRET_KEY);
 
   const session = await stripe.createPortalSession({
     customerId: user.stripe_customer_id,
-    returnUrl: c.env.BASE_URL + '/billing/portal-return',
+    returnUrl: c.env.BASE_URL + '/dashboard#billing',
   });
 
-  return c.redirect(session.url);
+  return { ok: true, url: session.url };
+}
+
+/**
+ * GET /billing/portal - Redirect to Stripe Customer Portal.
+ * Requires authentication + existing Stripe customer.
+ */
+billing.get('/billing/portal', async (c) => {
+  const result = await createBillingPortalUrl(c);
+  if (!result.ok) {
+    return result.response;
+  }
+
+  return c.redirect(result.url);
+});
+
+/**
+ * POST /billing/portal - Create a Stripe Customer Portal session.
+ * Used by the dashboard so API keys stay in Authorization headers, not URLs.
+ */
+billing.post('/billing/portal', async (c) => {
+  const result = await createBillingPortalUrl(c);
+  if (!result.ok) {
+    return result.response;
+  }
+
+  return c.json({ url: result.url });
 });
 
 /**
@@ -130,7 +174,8 @@ billing.get('/billing/portal-return', (c) => {
 </style></head>
 <body>
   <h1>Billing updated</h1>
-  <p>Your billing changes have been saved. You can close this tab.</p>
+  <p>Your billing changes have been saved.</p>
+  <p><a href="/dashboard#billing">Back to dashboard</a></p>
 </body></html>`);
 });
 
@@ -138,6 +183,7 @@ billing.get('/billing/portal-return', (c) => {
  * POST /webhooks/stripe - Handle Stripe webhook events.
  * Events handled:
  *   - checkout.session.completed: link Stripe customer to user, upgrade to Pro
+ *   - customer.subscription.created: reconcile active subscription state
  *   - customer.subscription.deleted: downgrade to Free
  *   - customer.subscription.updated: handle status changes
  */
@@ -181,80 +227,31 @@ billing.post('/webhooks/stripe', async (c) => {
       }
 
       const currentUser = await c.env.DB.prepare(`
-        SELECT tier, stripe_customer_id, stripe_subscription_id
+        SELECT id, tier, stripe_customer_id, stripe_subscription_id
         FROM users
         WHERE id = ?
-      `).bind(userId).first<{
-        tier: string;
-        stripe_customer_id: string | null;
-        stripe_subscription_id: string | null;
-      }>();
-      const alreadyRecorded = currentUser?.tier === 'pro' &&
-        currentUser.stripe_customer_id === customerId &&
-        currentUser.stripe_subscription_id === subscriptionId;
+      `).bind(userId).first<BillingUserRecord>();
 
-      // Link Stripe customer + subscription to user, upgrade to Pro
-      await c.env.DB.prepare(`
-        UPDATE users
-        SET stripe_customer_id = ?, stripe_subscription_id = ?, tier = 'pro', updated_at = datetime('now')
-        WHERE id = ?
-      `).bind(customerId, subscriptionId, userId).run();
-
-      if (!alreadyRecorded) {
-        await logProductEvent(c.env, {
-          name: 'upgrade_completed',
-          userId,
-          properties: {
-            tier: 'pro',
-            checkout_provider: 'stripe',
-            subscription_status: 'active',
-          },
-        });
+      if (!currentUser) {
+        console.error(`Webhook: checkout.session.completed for unknown user ${userId}`);
+        break;
       }
 
+      await upgradeUserToPro(c.env, currentUser, customerId, subscriptionId, 'active');
       console.log(`User ${userId} upgraded to Pro (customer: ${customerId})`);
       break;
     }
 
-    case 'customer.subscription.deleted': {
-      const subscription = event.data.object;
-      const subscriptionId = subscription.id as string;
-
-      // Downgrade user to free
-      await c.env.DB.prepare(`
-        UPDATE users
-        SET tier = 'free', stripe_subscription_id = NULL, updated_at = datetime('now')
-        WHERE stripe_subscription_id = ?
-      `).bind(subscriptionId).run();
-
-      console.log(`Subscription ${subscriptionId} cancelled - user downgraded to free`);
+    case 'customer.subscription.created':
+    case 'customer.subscription.updated': {
+      const subscription = event.data.object as StripeSubscriptionPayload;
+      await reconcileSubscription(c.env, subscription);
       break;
     }
 
-    case 'customer.subscription.updated': {
-      const subscription = event.data.object;
-      const subscriptionId = subscription.id as string;
-      const status = subscription.status as string;
-
-      // If subscription becomes inactive (past_due, unpaid, etc.), downgrade
-      if (['past_due', 'unpaid', 'canceled', 'incomplete_expired'].includes(status)) {
-        await c.env.DB.prepare(`
-          UPDATE users
-          SET tier = 'free', updated_at = datetime('now')
-          WHERE stripe_subscription_id = ?
-        `).bind(subscriptionId).run();
-
-        console.log(`Subscription ${subscriptionId} status ${status} - downgraded to free`);
-      } else if (status === 'active') {
-        // Re-upgrade if subscription becomes active again
-        await c.env.DB.prepare(`
-          UPDATE users
-          SET tier = 'pro', updated_at = datetime('now')
-          WHERE stripe_subscription_id = ?
-        `).bind(subscriptionId).run();
-
-        console.log(`Subscription ${subscriptionId} active - upgraded to pro`);
-      }
+    case 'customer.subscription.deleted': {
+      const subscription = event.data.object as StripeSubscriptionPayload;
+      await downgradeSubscription(c.env, subscription, 'canceled', true);
       break;
     }
 
@@ -267,3 +264,160 @@ billing.post('/webhooks/stripe', async (c) => {
 });
 
 export default billing;
+
+async function reconcileSubscription(env: Env, subscription: StripeSubscriptionPayload): Promise<void> {
+  const subscriptionId = typeof subscription.id === 'string' ? subscription.id : '';
+  const customerId = typeof subscription.customer === 'string' ? subscription.customer : '';
+  const status = typeof subscription.status === 'string' ? subscription.status : '';
+
+  if (!subscriptionId || !status) {
+    console.error('Webhook: subscription event missing id or status');
+    return;
+  }
+
+  if (ACTIVE_SUBSCRIPTION_STATUSES.includes(status)) {
+    if (!customerId) {
+      console.error(`Webhook: active subscription ${subscriptionId} missing customer`);
+      return;
+    }
+
+    const user = await findUserForSubscription(env, subscription);
+    if (!user) {
+      console.error(`Webhook: active subscription ${subscriptionId} could not be linked to a user`);
+      return;
+    }
+
+    await upgradeUserToPro(env, user, customerId, subscriptionId, status);
+    console.log(`Subscription ${redactIdentifier(subscriptionId)} status ${status} - user ${redactIdentifier(user.id)} upgraded to pro`);
+    return;
+  }
+
+  if (INACTIVE_SUBSCRIPTION_STATUSES.includes(status)) {
+    await downgradeSubscription(env, subscription, status, false);
+  }
+}
+
+async function findUserForSubscription(
+  env: Env,
+  subscription: StripeSubscriptionPayload
+): Promise<BillingUserRecord | null> {
+  const subscriptionId = typeof subscription.id === 'string' ? subscription.id : '';
+  const metadataUserId = readMetadataUserId(subscription.metadata);
+
+  if (subscriptionId) {
+    const bySubscription = await env.DB.prepare(`
+      SELECT id, tier, stripe_customer_id, stripe_subscription_id
+      FROM users
+      WHERE stripe_subscription_id = ?
+    `).bind(subscriptionId).first<BillingUserRecord>();
+
+    if (bySubscription) {
+      return bySubscription;
+    }
+  }
+
+  if (!metadataUserId) {
+    return null;
+  }
+
+  return env.DB.prepare(`
+    SELECT id, tier, stripe_customer_id, stripe_subscription_id
+    FROM users
+    WHERE id = ?
+  `).bind(metadataUserId).first<BillingUserRecord>();
+}
+
+async function upgradeUserToPro(
+  env: Env,
+  user: BillingUserRecord,
+  customerId: string,
+  subscriptionId: string,
+  subscriptionStatus: string
+): Promise<void> {
+  const currentUser = await env.DB.prepare(`
+    SELECT id, tier, stripe_customer_id, stripe_subscription_id
+    FROM users
+    WHERE id = ?
+  `).bind(user.id).first<BillingUserRecord>();
+  const alreadyRecorded = currentUser?.tier === 'pro' &&
+    currentUser.stripe_customer_id === customerId &&
+    currentUser.stripe_subscription_id === subscriptionId;
+
+  await env.DB.prepare(`
+    UPDATE users
+    SET stripe_customer_id = ?, stripe_subscription_id = ?, tier = 'pro', updated_at = datetime('now')
+    WHERE id = ?
+  `).bind(customerId, subscriptionId, user.id).run();
+
+  if (alreadyRecorded) {
+    return;
+  }
+
+  await logProductEvent(env, {
+    name: 'upgrade_completed',
+    userId: user.id,
+    properties: {
+      tier: 'pro',
+      checkout_provider: 'stripe',
+      subscription_status: subscriptionStatus,
+    },
+  });
+}
+
+async function downgradeSubscription(
+  env: Env,
+  subscription: StripeSubscriptionPayload,
+  status: string,
+  clearSubscriptionLink: boolean
+): Promise<void> {
+  const subscriptionId = typeof subscription.id === 'string' ? subscription.id : '';
+
+  if (!subscriptionId) {
+    console.error('Webhook: inactive subscription event missing id');
+    return;
+  }
+
+  const user = await env.DB.prepare(`
+    SELECT id, tier, stripe_customer_id, stripe_subscription_id
+    FROM users
+    WHERE stripe_subscription_id = ?
+  `).bind(subscriptionId).first<BillingUserRecord>();
+
+  if (!user) {
+    console.error(`Webhook: inactive subscription ${redactIdentifier(subscriptionId)} did not match the current user subscription`);
+    return;
+  }
+
+  if (clearSubscriptionLink) {
+    await env.DB.prepare(`
+      UPDATE users
+      SET tier = 'free', stripe_subscription_id = NULL, updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(user.id).run();
+  } else {
+    await env.DB.prepare(`
+      UPDATE users
+      SET tier = 'free', updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(user.id).run();
+  }
+
+  console.log(`Subscription ${redactIdentifier(subscriptionId)} status ${status} - user ${redactIdentifier(user.id)} downgraded to free`);
+}
+
+function readMetadataUserId(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== 'object') {
+    return null;
+  }
+
+  const value = (metadata as Record<string, unknown>).vanish_user_id;
+  return typeof value === 'string' && value ? value : null;
+}
+
+function redactIdentifier(value: string): string {
+  if (value.length <= 8) {
+    return '<redacted>';
+  }
+
+  return `${value.slice(0, 4)}...${value.slice(-4)}`;
+}

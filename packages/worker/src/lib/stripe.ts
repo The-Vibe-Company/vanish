@@ -62,6 +62,7 @@ export class StripeClient {
 
     for (const [key, value] of Object.entries(params.metadata)) {
       body[`metadata[${key}]`] = value;
+      body[`subscription_data[metadata][${key}]`] = value;
     }
 
     const data = await this.request('POST', '/checkout/sessions', body);
