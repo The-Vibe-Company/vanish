@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.18](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.17...@vanish/worker-v0.1.18) (2026-05-11)
+
+
+### Bug Fixes
+
+* **billing:** reconcile active stripe subscriptions ([#54](https://github.com/The-Vibe-Company/vanish/issues/54)) ([3137fc7](https://github.com/The-Vibe-Company/vanish/commit/3137fc7502d0734346a106ab7b5cbaa1e2b9ea47))
+
 ## [0.1.17](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.16...@vanish/worker-v0.1.17) (2026-05-10)
 
 
