@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.19](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.18...@vanish/worker-v0.1.19) (2026-05-28)
+
+
+### Features
+
+* **worker:** add branded expiry overlay ([#56](https://github.com/The-Vibe-Company/vanish/issues/56)) ([4638b2a](https://github.com/The-Vibe-Company/vanish/commit/4638b2aa3db458e5673b4ac9bdc482a2d50b3fd2))
+
 ## [0.1.18](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.17...@vanish/worker-v0.1.18) (2026-05-11)
 
 
