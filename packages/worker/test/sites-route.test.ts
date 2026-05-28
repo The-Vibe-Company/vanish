@@ -52,6 +52,68 @@ describe('site routes', () => {
     expect(await asset.text()).toBe('window.ok = true;');
   });
 
+  it('adds Vanish branding to browser navigations for site HTML', async () => {
+    const draft = await createSite(env, {
+      rootPath: 'index.html',
+      fileCount: 1,
+      totalBytes: 11,
+    });
+    await uploadSiteFile(env, draft.id, draft.token, 'index.html', '<h1>ok</h1>');
+    await request(env, `/sites/${draft.id}/publish`, {
+      method: 'POST',
+      headers: { 'X-Site-Token': draft.token },
+    });
+
+    const response = await request(env, `/s/${draft.id}/`, {
+      headers: browserHeaders(),
+    });
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toContain('text/html');
+    expect(response.headers.get('Vary')).toContain('Sec-Fetch-Dest');
+    expect(html).toContain('<h1>ok</h1>');
+    expect(html).toContain('id="vanish-overlay"');
+    expect(html).toContain('Vanishes ');
+    expect(html).toContain('vanish.sh');
+
+    const raw = await request(env, `/s/${draft.id}/?raw=1`, {
+      headers: browserHeaders(),
+    });
+    expect(await raw.text()).toBe('<h1>ok</h1>');
+  });
+
+  it('serves a branded browser viewer for non-HTML site roots', async () => {
+    const draft = await createSite(env, {
+      rootPath: 'report.pdf',
+      fileCount: 1,
+      totalBytes: 6,
+    });
+    await uploadSiteFile(env, draft.id, draft.token, 'report.pdf', '%PDF-1');
+    await request(env, `/sites/${draft.id}/publish`, {
+      method: 'POST',
+      headers: { 'X-Site-Token': draft.token },
+    });
+
+    const response = await request(env, `/s/${draft.id}/`, {
+      headers: browserHeaders(),
+    });
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toContain('text/html');
+    expect(html).toContain('<iframe');
+    expect(html).toContain('report.pdf');
+    expect(html).toContain('?raw=1');
+    expect(html).toContain('id="vanish-overlay"');
+
+    const raw = await request(env, `/s/${draft.id}/?raw=1`, {
+      headers: browserHeaders(),
+    });
+    expect(raw.headers.get('Content-Type')).toContain('application/pdf');
+    expect(await raw.text()).toBe('%PDF-1');
+  });
+
   it('refuses publish when the declared root was not uploaded', async () => {
     const draft = await createSite(env, {
       rootPath: 'index.html',
@@ -415,6 +477,15 @@ async function addUser(db: FakeDB, id: string, tier: Tier): Promise<string> {
 
 function authHeaders(apiKey: string | undefined, headers: Record<string, string> = {}): Record<string, string> {
   return apiKey ? { ...headers, Authorization: `Bearer ${apiKey}` } : headers;
+}
+
+function browserHeaders(headers: Record<string, string> = {}): Record<string, string> {
+  return {
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    ...headers,
+  };
 }
 
 async function request(env: Env, path: string, init?: RequestInit) {
