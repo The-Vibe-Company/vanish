@@ -58,6 +58,42 @@ describe('upload and serve routes', () => {
     expect(served.status).toBe(200);
     expect(served.headers.get('Content-Disposition')).toContain('attachment;');
   });
+
+  it('serves a branded browser viewer for document uploads without changing raw bytes', async () => {
+    const body = await new Response('%PDF-1').arrayBuffer();
+    const expiresAt = '2030-01-02T03:04:05.000Z';
+    bucket.objects.set('doc123', { body, contentType: 'application/pdf' });
+    db.uploads.set('doc123', {
+      id: 'doc123',
+      user_id: 'user1',
+      filename: 'report.pdf',
+      content_type: 'application/pdf',
+      size_bytes: body.byteLength,
+      expires_at: expiresAt,
+      created_at: new Date().toISOString(),
+      deleted_at: null,
+    });
+
+    const viewer = await request(env, '/f/doc123.pdf', {
+      headers: browserHeaders(),
+    });
+    const html = await viewer.text();
+
+    expect(viewer.status).toBe(200);
+    expect(viewer.headers.get('Content-Type')).toContain('text/html');
+    expect(viewer.headers.get('Vary')).toContain('Sec-Fetch-Dest');
+    expect(html).toContain('<iframe');
+    expect(html).toContain('report.pdf');
+    expect(html).toContain('?raw=1');
+    expect(html).toContain('Vanishes 2030-01-02 03:04 UTC');
+    expect(html).toContain('id="vanish-overlay"');
+
+    const raw = await request(env, '/f/doc123.pdf?raw=1', {
+      headers: browserHeaders(),
+    });
+    expect(raw.headers.get('Content-Type')).toContain('application/pdf');
+    expect(await raw.text()).toBe('%PDF-1');
+  });
 });
 
 function request(env: Env, path: string, init?: RequestInit) {
@@ -65,6 +101,15 @@ function request(env: Env, path: string, init?: RequestInit) {
     waitUntil: () => undefined,
     passThroughOnException: () => undefined,
   } as unknown as ExecutionContext);
+}
+
+function browserHeaders(headers: Record<string, string> = {}): Record<string, string> {
+  return {
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    ...headers,
+  };
 }
 
 class UploadBucket {

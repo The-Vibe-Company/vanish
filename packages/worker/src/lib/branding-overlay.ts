@@ -1,0 +1,248 @@
+interface OverlayOptions {
+  baseUrl: string;
+  expiresAt: string | null;
+}
+
+interface HtmlOverlayOptions extends OverlayOptions {
+  request: Request;
+}
+
+interface ViewerOptions extends OverlayOptions {
+  request: Request;
+  filename: string;
+  contentType: string;
+}
+
+export function isHtmlContent(contentType: string | null): boolean {
+  return /^text\/html(?:\s*;|$)/i.test(contentType || '');
+}
+
+export async function maybeAddBrandingOverlay(
+  body: ReadableStream | null,
+  headers: Headers,
+  options: HtmlOverlayOptions,
+): Promise<Response> {
+  addBrowserNegotiationVary(headers);
+
+  if (!body || !isBrowserNavigation(options.request) || !isHtmlContent(headers.get('Content-Type'))) {
+    return new Response(body, { headers });
+  }
+
+  const html = await new Response(body).text();
+  const enhanced = injectBrandingOverlay(html, options);
+  const encoded = new TextEncoder().encode(enhanced);
+  headers.set('Content-Length', String(encoded.byteLength));
+
+  return new Response(encoded, { headers });
+}
+
+export function shouldServeBrandingViewer(request: Request, contentType: string | null, forceViewer = false): boolean {
+  return isBrowserNavigation(request) && (forceViewer || !isHtmlContent(contentType));
+}
+
+export function brandedViewerResponse(headers: Headers, options: ViewerOptions): Response {
+  const body = buildViewerHtml(options);
+  const encoded = new TextEncoder().encode(body);
+  const viewerHeaders = new Headers();
+  viewerHeaders.set('Content-Type', 'text/html; charset=utf-8');
+  viewerHeaders.set('Content-Length', String(encoded.byteLength));
+  viewerHeaders.set('X-Content-Type-Options', 'nosniff');
+  viewerHeaders.set('X-Robots-Tag', headers.get('X-Robots-Tag') || 'noindex, nofollow, noarchive');
+  viewerHeaders.set('Referrer-Policy', headers.get('Referrer-Policy') || 'no-referrer');
+  viewerHeaders.set('Cache-Control', headers.get('Cache-Control') || 'public, max-age=300');
+  viewerHeaders.set('Access-Control-Allow-Origin', headers.get('Access-Control-Allow-Origin') || '*');
+  viewerHeaders.set('Link', headers.get('Link') || '<mailto:abuse@vanish.sh>; rel="abuse"');
+  addBrowserNegotiationVary(viewerHeaders);
+
+  return new Response(encoded, { headers: viewerHeaders });
+}
+
+export function injectBrandingOverlay(html: string, options: OverlayOptions): string {
+  const overlay = buildOverlayMarkup(options);
+  const closingBody = /<\/body\s*>/i;
+
+  if (closingBody.test(html)) {
+    return html.replace(closingBody, `${overlay}</body>`);
+  }
+
+  return html + overlay;
+}
+
+function isBrowserNavigation(request: Request): boolean {
+  if (request.method !== 'GET') {
+    return false;
+  }
+
+  const url = new URL(request.url);
+  if (url.searchParams.get('raw') === '1') {
+    return false;
+  }
+
+  const destination = request.headers.get('Sec-Fetch-Dest')?.toLowerCase();
+  if (destination && destination !== 'document') {
+    return false;
+  }
+
+  const mode = request.headers.get('Sec-Fetch-Mode')?.toLowerCase();
+  if (destination === 'document' || mode === 'navigate') {
+    return true;
+  }
+
+  const accept = request.headers.get('Accept')?.toLowerCase() || '';
+  return accept.includes('text/html');
+}
+
+function buildViewerHtml(options: ViewerOptions): string {
+  const rawUrl = buildRawUrl(options.request.url);
+  const mediaType = options.contentType.split(';', 1)[0].trim().toLowerCase();
+  const escapedFilename = escapeHtml(options.filename || 'download');
+  const preview = buildPreviewMarkup(rawUrl, mediaType, escapedFilename);
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapedFilename} - vanish</title>
+  <style>
+    html,body{margin:0;min-height:100%;background:#f5f7fb;color:#121417;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    .viewer{min-height:100vh;display:grid;grid-template-rows:auto 1fr}
+    .bar{height:48px;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:0 14px;border-bottom:1px solid #dde3ec;background:rgba(255,255,255,.88);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+    .name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:650;color:#171a1f}
+    .actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+    .actions a{box-sizing:border-box;min-height:30px;display:inline-flex;align-items:center;border:1px solid #c8d1de;border-radius:7px;padding:6px 10px;color:#111827;background:#fff;text-decoration:none;font-size:12px;font-weight:650}
+    main{min-height:0}
+    iframe,.media{display:block;width:100%;height:calc(100vh - 48px);border:0;background:#fff}
+    img.media,video.media{object-fit:contain;background:#111827}
+    .fallback{min-height:calc(100vh - 48px);display:grid;place-items:center;padding:32px;box-sizing:border-box}
+    .fallback-inner{max-width:460px;text-align:center}
+    .fallback h1{margin:0 0 10px;font-size:22px;line-height:1.2}
+    .fallback p{margin:0 0 18px;color:#4b5563;font-size:14px;line-height:1.5}
+    .download{display:inline-flex;align-items:center;min-height:38px;border-radius:8px;background:#111827;color:#fff;padding:0 14px;text-decoration:none;font-size:14px;font-weight:700}
+    @media (prefers-color-scheme:dark){
+      html,body{background:#111827;color:#f8fafc}
+      .bar{border-bottom-color:#263244;background:rgba(17,24,39,.88)}
+      .name{color:#f8fafc}
+      .actions a{border-color:#374151;background:#1f2937;color:#f8fafc}
+      iframe{background:#fff}
+      .fallback p{color:#cbd5e1}
+      .download{background:#f8fafc;color:#111827}
+    }
+  </style>
+</head>
+<body>
+  <div class="viewer">
+    <header class="bar">
+      <div class="name">${escapedFilename}</div>
+      <div class="actions"><a href="${escapeHtml(rawUrl)}" download>Original file</a></div>
+    </header>
+    <main>${preview}</main>
+  </div>
+  ${buildOverlayMarkup(options)}
+</body>
+</html>`;
+}
+
+function buildPreviewMarkup(rawUrl: string, mediaType: string, filename: string): string {
+  const escapedUrl = escapeHtml(rawUrl);
+
+  if (mediaType.startsWith('image/')) {
+    return `<img class="media" src="${escapedUrl}" alt="${filename}">`;
+  }
+
+  if (mediaType.startsWith('video/')) {
+    return `<video class="media" src="${escapedUrl}" controls playsinline></video>`;
+  }
+
+  if (
+    mediaType === 'application/pdf' ||
+    mediaType === 'application/json' ||
+    mediaType === 'application/xml' ||
+    mediaType === 'text/xml' ||
+    mediaType.startsWith('text/')
+  ) {
+    return `<iframe src="${escapedUrl}" title="${filename}"></iframe>`;
+  }
+
+  return `<section class="fallback">
+    <div class="fallback-inner">
+      <h1>Download ${filename}</h1>
+      <p>This file type cannot be previewed reliably in every browser, so Vanish is keeping the original file untouched.</p>
+      <a class="download" href="${escapedUrl}" download>Open original file</a>
+    </div>
+  </section>`;
+}
+
+function buildRawUrl(input: string): string {
+  const url = new URL(input);
+  url.searchParams.set('raw', '1');
+  return url.toString();
+}
+
+function buildOverlayMarkup(options: OverlayOptions): string {
+  const homeUrl = normalizeHomeUrl(options.baseUrl);
+  const expiryLabel = formatExpiryLabel(options.expiresAt);
+  const datetime = options.expiresAt ? ` datetime="${escapeHtml(options.expiresAt)}"` : '';
+
+  return `
+<div id="vanish-overlay" aria-label="Vanish temporary share information" style="all:initial;position:fixed;right:max(12px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom));z-index:2147483647;display:block;pointer-events:none;">
+  <a href="${escapeHtml(homeUrl)}" target="_blank" rel="noopener noreferrer" style="all:initial;box-sizing:border-box;display:flex;align-items:center;gap:8px;min-height:34px;max-width:min(320px,calc(100vw - 24px));padding:8px 10px 8px 12px;border:1px solid rgba(255,255,255,.22);border-radius:8px;background:rgba(12,14,18,.86);box-shadow:0 14px 42px rgba(0,0,0,.28),0 2px 8px rgba(0,0,0,.22);color:#f7f7f2;font:500 12px/1.25 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;text-decoration:none;letter-spacing:0;backdrop-filter:blur(16px) saturate(140%);-webkit-backdrop-filter:blur(16px) saturate(140%);pointer-events:auto;">
+    <span style="all:initial;box-sizing:border-box;display:inline-block;width:7px;height:7px;border-radius:50%;background:#67e8a5;box-shadow:0 0 0 3px rgba(103,232,165,.16);flex:0 0 auto;"></span>
+    <time${datetime} style="all:initial;display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#f7f7f2;font:500 12px/1.25 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;letter-spacing:0;">${escapeHtml(expiryLabel)}</time>
+    <span aria-hidden="true" style="all:initial;display:block;width:1px;height:14px;background:rgba(255,255,255,.18);flex:0 0 auto;"></span>
+    <span style="all:initial;display:block;color:#cbd5e1;font:700 12px/1.25 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;letter-spacing:0;white-space:nowrap;">vanish.sh</span>
+  </a>
+</div>`;
+}
+
+function normalizeHomeUrl(baseUrl: string): string {
+  try {
+    const url = new URL(baseUrl);
+    url.pathname = '/';
+    url.search = '';
+    url.hash = '';
+    return url.toString();
+  } catch {
+    return 'https://vanish.sh/';
+  }
+}
+
+function addBrowserNegotiationVary(headers: Headers): void {
+  const existing = headers.get('Vary');
+  const values = new Set(
+    (existing || '')
+      .split(',')
+      .map(value => value.trim())
+      .filter(Boolean),
+  );
+  values.add('Accept');
+  values.add('Sec-Fetch-Dest');
+  values.add('Sec-Fetch-Mode');
+  headers.set('Vary', Array.from(values).join(', '));
+}
+
+function formatExpiryLabel(expiresAt: string | null): string {
+  if (!expiresAt) {
+    return 'No expiry';
+  }
+
+  const date = new Date(expiresAt);
+  if (Number.isNaN(date.getTime())) {
+    return 'Expiry date unavailable';
+  }
+
+  const yyyy = String(date.getUTCFullYear());
+  const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(date.getUTCDate()).padStart(2, '0');
+  const hh = String(date.getUTCHours()).padStart(2, '0');
+  const min = String(date.getUTCMinutes()).padStart(2, '0');
+  return `Vanishes ${yyyy}-${mm}-${dd} ${hh}:${min} UTC`;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}

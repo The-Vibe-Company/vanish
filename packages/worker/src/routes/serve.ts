@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Env, Upload } from '../types.js';
 import { isExpired } from '../lib/expiry.js';
+import { brandedViewerResponse, maybeAddBrandingOverlay, shouldServeBrandingViewer } from '../lib/branding-overlay.js';
 
 const serve = new Hono<{ Bindings: Env }>();
 
@@ -37,19 +38,35 @@ serve.get('/f/:id{.+}', async (c) => {
   }
 
   const headers = new Headers();
-  headers.set('Content-Type', upload.content_type || 'application/octet-stream');
+  const contentType = upload.content_type || 'application/octet-stream';
+  headers.set('Content-Type', contentType);
   headers.set('Content-Length', String(upload.size_bytes));
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
   headers.set('Cache-Control', 'public, max-age=3600');
-  const disposition = isActiveContent(upload.content_type, upload.filename) ? 'attachment' : 'inline';
+  const isAttachment = isActiveContent(contentType, upload.filename);
+  const disposition = isAttachment ? 'attachment' : 'inline';
   headers.set('Content-Disposition', `${disposition}; filename="${escapeHeaderFilename(upload.filename)}"`);
   headers.set('Link', '<mailto:abuse@vanish.sh>; rel="abuse"');
 
   // CORS for embedding in GitHub/GitLab
   headers.set('Access-Control-Allow-Origin', '*');
 
-  return new Response(object.body, { headers });
+  if (shouldServeBrandingViewer(c.req.raw, contentType, isAttachment)) {
+    return brandedViewerResponse(headers, {
+      request: c.req.raw,
+      baseUrl: c.env.BASE_URL,
+      expiresAt: upload.expires_at,
+      filename: upload.filename,
+      contentType: isAttachment ? 'application/octet-stream' : contentType,
+    });
+  }
+
+  return maybeAddBrandingOverlay(object.body, headers, {
+    request: c.req.raw,
+    baseUrl: c.env.BASE_URL,
+    expiresAt: upload.expires_at,
+  });
 });
 
 // DELETE /f/:id — requires auth and ownership
