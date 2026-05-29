@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.21](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.20...@vanish/worker-v0.1.21) (2026-05-29)
+
+
+### Features
+
+* **worker:** improve branding overlay readability ([#60](https://github.com/The-Vibe-Company/vanish/issues/60)) ([a28f8bf](https://github.com/The-Vibe-Company/vanish/commit/a28f8bf6d38e57ce8bf69be251c762766c66fb6d))
+
 ## [0.1.20](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.19...@vanish/worker-v0.1.20) (2026-05-29)
 
 
