@@ -1,0 +1,24 @@
+packages/worker/src/lib/branding-overlay.ts
+  s_22c488b92e8922::t_910a7f6ab2068f 185-186,189-200,204,263-275,278
+  s_22c488b92e8922::t_53ede296b48fba 243-262
+packages/worker/test/upload-route.test.ts
+  s_22c488b92e8922::t_3d63509f52f9a3 88-89,92-93
+packages/worker/test/sites-route.test.ts
+  s_22c488b92e8922::t_748cfdf585b601 78-79,81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "53b777d688482307198a4d3d32d02060015daacb",
+  "prompts": {},
+  "sessions": {
+    "s_22c488b92e8922": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e6a8c-743a-7e41-b646-d5ffc8888644",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
