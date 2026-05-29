@@ -74,6 +74,8 @@ describe('site routes', () => {
     expect(response.headers.get('Vary')).toContain('Sec-Fetch-Dest');
     expect(html).toContain('<h1>ok</h1>');
     expect(html).toContain('id="vanish-overlay"');
+    expect(html).toContain('id="vanish-overlay-dismiss"');
+    expect(html).toContain("localStorage.setItem(k,'1')");
     expect(html).toContain('Vanishes ');
     expect(html).toContain('vanish.sh');
 

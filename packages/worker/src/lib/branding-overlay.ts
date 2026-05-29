@@ -186,13 +186,17 @@ function buildOverlayMarkup(options: OverlayOptions): string {
 
   return `
 <div id="vanish-overlay" aria-label="Vanish temporary share information" style="all:initial;position:fixed;right:max(12px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom));z-index:2147483647;display:block;pointer-events:none;">
-  <a href="${escapeHtml(homeUrl)}" target="_blank" rel="noopener noreferrer" style="all:initial;box-sizing:border-box;display:flex;align-items:center;gap:8px;min-height:34px;max-width:min(320px,calc(100vw - 24px));padding:8px 10px 8px 12px;border:1px solid rgba(255,255,255,.22);border-radius:8px;background:rgba(12,14,18,.86);box-shadow:0 14px 42px rgba(0,0,0,.28),0 2px 8px rgba(0,0,0,.22);color:#f7f7f2;font:500 12px/1.25 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;text-decoration:none;letter-spacing:0;backdrop-filter:blur(16px) saturate(140%);-webkit-backdrop-filter:blur(16px) saturate(140%);pointer-events:auto;">
-    <span style="all:initial;box-sizing:border-box;display:inline-block;width:7px;height:7px;border-radius:50%;background:#67e8a5;box-shadow:0 0 0 3px rgba(103,232,165,.16);flex:0 0 auto;"></span>
-    <time${datetime} style="all:initial;display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#f7f7f2;font:500 12px/1.25 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;letter-spacing:0;">${escapeHtml(expiryLabel)}</time>
-    <span aria-hidden="true" style="all:initial;display:block;width:1px;height:14px;background:rgba(255,255,255,.18);flex:0 0 auto;"></span>
-    <span style="all:initial;display:block;color:#cbd5e1;font:700 12px/1.25 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;letter-spacing:0;white-space:nowrap;">vanish.sh</span>
-  </a>
-</div>`;
+  <div style="all:initial;box-sizing:border-box;display:flex;align-items:center;gap:6px;min-height:34px;max-width:min(352px,calc(100vw - 24px));padding:8px 8px 8px 12px;border:1px solid rgba(255,255,255,.22);border-radius:8px;background:rgba(12,14,18,.86);box-shadow:0 14px 42px rgba(0,0,0,.28),0 2px 8px rgba(0,0,0,.22);backdrop-filter:blur(16px) saturate(140%);-webkit-backdrop-filter:blur(16px) saturate(140%);pointer-events:auto;">
+    <a href="${escapeHtml(homeUrl)}" target="_blank" rel="noopener noreferrer" style="all:initial;box-sizing:border-box;display:flex;align-items:center;gap:8px;min-width:0;color:#f7f7f2;font:500 12px/1.25 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;text-decoration:none;letter-spacing:0;cursor:pointer;">
+      <span style="all:initial;box-sizing:border-box;display:inline-block;width:7px;height:7px;border-radius:50%;background:#67e8a5;box-shadow:0 0 0 3px rgba(103,232,165,.16);flex:0 0 auto;"></span>
+      <time${datetime} style="all:initial;display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#f7f7f2;font:500 12px/1.25 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;letter-spacing:0;">${escapeHtml(expiryLabel)}</time>
+      <span aria-hidden="true" style="all:initial;display:block;width:1px;height:14px;background:rgba(255,255,255,.18);flex:0 0 auto;"></span>
+      <span style="all:initial;display:block;color:#cbd5e1;font:700 12px/1.25 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;letter-spacing:0;white-space:nowrap;">vanish.sh</span>
+    </a>
+    <button id="vanish-overlay-dismiss" type="button" aria-label="Hide Vanish overlay" title="Hide Vanish overlay" style="all:initial;box-sizing:border-box;display:grid;place-items:center;width:22px;height:22px;border-radius:6px;color:#cbd5e1;background:transparent;font:700 14px/1 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;cursor:pointer;flex:0 0 auto;">&times;</button>
+  </div>
+</div>
+<script>(function(){var o=document.getElementById('vanish-overlay');if(!o)return;var k='vanish-overlay:hidden:'+location.origin+location.pathname;try{if(localStorage.getItem(k)==='1'){o.style.display='none';return;}}catch(e){}var b=document.getElementById('vanish-overlay-dismiss');if(!b)return;b.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();o.style.display='none';try{localStorage.setItem(k,'1');}catch(_){};});})();</script>`;
 }
 
 function normalizeHomeUrl(baseUrl: string): string {
