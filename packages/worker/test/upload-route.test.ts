@@ -85,9 +85,12 @@ describe('upload and serve routes', () => {
     expect(html).toContain('<iframe');
     expect(html).toContain('report.pdf');
     expect(html).toContain('?raw=1');
-    expect(html).toContain('Vanishes 2030-01-02 03:04 UTC');
+    expect(html).toContain('Vanishes in ');
+    expect(html).toContain('Jan 2, 03:04 UTC');
     expect(html).toContain('id="vanish-overlay"');
     expect(html).toContain('id="vanish-overlay-dismiss"');
+    expect(html).toContain('id="vanish-overlay-countdown"');
+    expect(html).toContain('id="vanish-overlay-date"');
     expect(html).toContain("localStorage.setItem(k,'1')");
 
     const raw = await request(env, '/f/doc123.pdf?raw=1', {
