@@ -75,8 +75,10 @@ describe('site routes', () => {
     expect(html).toContain('<h1>ok</h1>');
     expect(html).toContain('id="vanish-overlay"');
     expect(html).toContain('id="vanish-overlay-dismiss"');
+    expect(html).toContain('id="vanish-overlay-countdown"');
+    expect(html).toContain('id="vanish-overlay-date"');
     expect(html).toContain("localStorage.setItem(k,'1')");
-    expect(html).toContain('Vanishes ');
+    expect(html).toContain('Vanishes in ');
     expect(html).toContain('vanish.sh');
 
     const raw = await request(env, `/s/${draft.id}/?raw=1`, {
