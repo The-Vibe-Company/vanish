@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.20](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.19...@vanish/worker-v0.1.20) (2026-05-29)
+
+
+### Features
+
+* **worker:** allow hiding branding overlay ([#58](https://github.com/The-Vibe-Company/vanish/issues/58)) ([0142997](https://github.com/The-Vibe-Company/vanish/commit/01429976cecdf709366d27b7f3e8488add7f6fb5))
+
 ## [0.1.19](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.18...@vanish/worker-v0.1.19) (2026-05-28)
 
 
