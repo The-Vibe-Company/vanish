@@ -3,6 +3,12 @@ name: Release
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      skip_d1_migrations:
+        description: Skip D1 migrations for a manual worker deploy.
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -47,7 +53,7 @@ jobs:
 
   deploy-worker:
     needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+    if: github.event_name == 'workflow_dispatch' || needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -60,6 +66,7 @@ jobs:
       - run: npm ci
 
       - name: Run D1 migrations
+        if: github.event_name != 'workflow_dispatch' || inputs.skip_d1_migrations == false
         run: npx wrangler d1 migrations apply vanish-db --remote
         working-directory: packages/worker
         env:
