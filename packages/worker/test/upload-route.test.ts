@@ -59,7 +59,7 @@ describe('upload and serve routes', () => {
     expect(served.headers.get('Content-Disposition')).toContain('attachment;');
   });
 
-  it('serves a branded browser viewer for document uploads without changing raw bytes', async () => {
+  it('serves document uploads as original bytes for browser navigations', async () => {
     const body = await new Response('%PDF-1').arrayBuffer();
     const expiresAt = '2030-01-02T03:04:05.000Z';
     bucket.objects.set('doc123', { body, contentType: 'application/pdf' });
@@ -77,27 +77,11 @@ describe('upload and serve routes', () => {
     const viewer = await request(env, '/f/doc123.pdf', {
       headers: browserHeaders(),
     });
-    const html = await viewer.text();
 
     expect(viewer.status).toBe(200);
-    expect(viewer.headers.get('Content-Type')).toContain('text/html');
-    expect(viewer.headers.get('Vary')).toContain('Sec-Fetch-Dest');
-    expect(html).toContain('<iframe');
-    expect(html).toContain('report.pdf');
-    expect(html).toContain('?raw=1');
-    expect(html).toContain('Vanishes in ');
-    expect(html).toContain('Jan 2, 03:04 UTC');
-    expect(html).toContain('id="vanish-overlay"');
-    expect(html).toContain('id="vanish-overlay-dismiss"');
-    expect(html).toContain('id="vanish-overlay-countdown"');
-    expect(html).toContain('id="vanish-overlay-date"');
-    expect(html).toContain("localStorage.setItem(k,'1')");
-
-    const raw = await request(env, '/f/doc123.pdf?raw=1', {
-      headers: browserHeaders(),
-    });
-    expect(raw.headers.get('Content-Type')).toContain('application/pdf');
-    expect(await raw.text()).toBe('%PDF-1');
+    expect(viewer.headers.get('Content-Type')).toContain('application/pdf');
+    expect(viewer.headers.get('Vary')).toBeNull();
+    expect(await viewer.text()).toBe('%PDF-1');
   });
 });
 

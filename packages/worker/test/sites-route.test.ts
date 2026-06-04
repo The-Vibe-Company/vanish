@@ -52,7 +52,7 @@ describe('site routes', () => {
     expect(await asset.text()).toBe('window.ok = true;');
   });
 
-  it('adds Vanish branding to browser navigations for site HTML', async () => {
+  it('serves site HTML unchanged for browser navigations', async () => {
     const draft = await createSite(env, {
       rootPath: 'index.html',
       fileCount: 1,
@@ -71,23 +71,11 @@ describe('site routes', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toContain('text/html');
-    expect(response.headers.get('Vary')).toContain('Sec-Fetch-Dest');
-    expect(html).toContain('<h1>ok</h1>');
-    expect(html).toContain('id="vanish-overlay"');
-    expect(html).toContain('id="vanish-overlay-dismiss"');
-    expect(html).toContain('id="vanish-overlay-countdown"');
-    expect(html).toContain('id="vanish-overlay-date"');
-    expect(html).toContain("localStorage.setItem(k,'1')");
-    expect(html).toContain('Vanishes in ');
-    expect(html).toContain('vanish.sh');
-
-    const raw = await request(env, `/s/${draft.id}/?raw=1`, {
-      headers: browserHeaders(),
-    });
-    expect(await raw.text()).toBe('<h1>ok</h1>');
+    expect(response.headers.get('Vary')).toBeNull();
+    expect(html).toBe('<h1>ok</h1>');
   });
 
-  it('serves a branded browser viewer for non-HTML site roots', async () => {
+  it('serves non-HTML site roots unchanged for browser navigations', async () => {
     const draft = await createSite(env, {
       rootPath: 'report.pdf',
       fileCount: 1,
@@ -102,20 +90,11 @@ describe('site routes', () => {
     const response = await request(env, `/s/${draft.id}/`, {
       headers: browserHeaders(),
     });
-    const html = await response.text();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('Content-Type')).toContain('text/html');
-    expect(html).toContain('<iframe');
-    expect(html).toContain('report.pdf');
-    expect(html).toContain('?raw=1');
-    expect(html).toContain('id="vanish-overlay"');
-
-    const raw = await request(env, `/s/${draft.id}/?raw=1`, {
-      headers: browserHeaders(),
-    });
-    expect(raw.headers.get('Content-Type')).toContain('application/pdf');
-    expect(await raw.text()).toBe('%PDF-1');
+    expect(response.headers.get('Content-Type')).toContain('application/pdf');
+    expect(response.headers.get('Vary')).toBeNull();
+    expect(await response.text()).toBe('%PDF-1');
   });
 
   it('refuses publish when the declared root was not uploaded', async () => {

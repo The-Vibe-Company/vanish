@@ -8,7 +8,6 @@ import { guessContentType } from '../lib/content-type.js';
 import { ensureStorageAvailable } from '../lib/storage.js';
 import { normalizeSitePath, normalizeSiteSlug } from '../lib/site-path.js';
 import { buildSiteUrl, getSiteIdentifierFromHost, supportsPathSiteUrls } from '../lib/site-url.js';
-import { brandedViewerResponse, maybeAddBrandingOverlay, shouldServeBrandingViewer } from '../lib/branding-overlay.js';
 import { getRateLimitIdentifier } from '../lib/rate-limit.js';
 import { hasProductEvent, logProductEvent, productEventsEnabled } from '../lib/events.js';
 import { rateLimitMiddleware } from '../middleware/rate-limit.js';
@@ -874,21 +873,7 @@ async function serveSite(c: AppContext, identifier: string, pathname: string): P
 
   c.executionCtx.waitUntil(logSiteFirstServed(c.env, site));
 
-  if (shouldServeBrandingViewer(c.req.raw, contentType)) {
-    return brandedViewerResponse(headers, {
-      request: c.req.raw,
-      baseUrl: c.env.BASE_URL,
-      expiresAt: site.expires_at,
-      filename: file.path.split('/').pop() || site.name,
-      contentType,
-    });
-  }
-
-  return maybeAddBrandingOverlay(object.body, headers, {
-    request: c.req.raw,
-    baseUrl: c.env.BASE_URL,
-    expiresAt: site.expires_at,
-  });
+  return new Response(object.body, { headers });
 }
 
 function authorizeSiteMutation(

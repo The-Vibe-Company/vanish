@@ -1,7 +1,6 @@
 import { Hono } from 'hono';
 import type { Env, Upload } from '../types.js';
 import { isExpired } from '../lib/expiry.js';
-import { brandedViewerResponse, maybeAddBrandingOverlay, shouldServeBrandingViewer } from '../lib/branding-overlay.js';
 
 const serve = new Hono<{ Bindings: Env }>();
 
@@ -52,21 +51,7 @@ serve.get('/f/:id{.+}', async (c) => {
   // CORS for embedding in GitHub/GitLab
   headers.set('Access-Control-Allow-Origin', '*');
 
-  if (shouldServeBrandingViewer(c.req.raw, contentType, isAttachment)) {
-    return brandedViewerResponse(headers, {
-      request: c.req.raw,
-      baseUrl: c.env.BASE_URL,
-      expiresAt: upload.expires_at,
-      filename: upload.filename,
-      contentType: isAttachment ? 'application/octet-stream' : contentType,
-    });
-  }
-
-  return maybeAddBrandingOverlay(object.body, headers, {
-    request: c.req.raw,
-    baseUrl: c.env.BASE_URL,
-    expiresAt: upload.expires_at,
-  });
+  return new Response(object.body, { headers });
 });
 
 // DELETE /f/:id — requires auth and ownership
