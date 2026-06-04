@@ -1,0 +1,19 @@
+.github/workflows/release.yml
+  s_8218285686ce93::t_8903f231f30f3a 6-11,56,69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "0d2573069d9d32080ad84bc85bc26c3e6b3a6f10",
+  "prompts": {},
+  "sessions": {
+    "s_8218285686ce93": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e91ed-6dbf-7dd1-85a9-8ed5d29ebcf9",
+        "model": "gpt-5.5"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
