@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.22](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.21...@vanish/worker-v0.1.22) (2026-06-04)
+
+
+### Bug Fixes
+
+* **worker:** remove branding overlay ([f9a60d9](https://github.com/The-Vibe-Company/vanish/commit/f9a60d98690ef043f18ad1a632501a3306553c20))
+
 ## [0.1.21](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.20...@vanish/worker-v0.1.21) (2026-05-29)
 
 
