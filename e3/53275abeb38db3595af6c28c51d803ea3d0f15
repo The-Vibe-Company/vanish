@@ -1,0 +1,63 @@
+packages/worker/test/billing-route.test.ts
+  s_ce7a446508f9a7::t_aaaff5cdeb6ee1 21,62
+.github/workflows/release.yml
+  s_ce7a446508f9a7::t_f7572933c487a3 77-78
+  s_ce7a446508f9a7::t_c6dcc9308eb2d4 84,94-100
+.env.example
+  s_ce7a446508f9a7::t_aaaff5cdeb6ee1 13
+packages/worker/migrations/0002_site_activity_and_expiry_indexes.sql
+  s_ce7a446508f9a7::t_c0aab9fbc3b1cf 1-27
+packages/worker/src/types.ts
+  s_ce7a446508f9a7::t_aaaff5cdeb6ee1 13
+  s_ce7a446508f9a7::t_315612b8984c7a 55
+packages/worker/src/routes/dashboard.ts
+  s_ce7a446508f9a7::t_aaaff5cdeb6ee1 1977,1982,2460-2461
+  s_ce7a446508f9a7::t_b62bfb6822aa75 1970-1972
+packages/worker/test/sites-route.test.ts
+  s_ce7a446508f9a7::t_ab3adeb1f49fc9 200-215
+  s_ce7a446508f9a7::t_0b59cf922ecc18 152-172,526,533,808-811,826,874-876
+  s_ce7a446508f9a7::t_127b8d608fa827 749-758,833-840,877-878
+  s_ce7a446508f9a7::t_aa6fb058edce25 698,701-703
+  s_ce7a446508f9a7::t_bd0208f0bfac38 841
+  s_ce7a446508f9a7::t_89a1e1f37976ae 879
+packages/worker/test/dashboard-route.test.ts
+  s_ce7a446508f9a7::t_23777e28a10efb 30-31
+  s_ce7a446508f9a7::t_c204f8f8d5d6bc 32-33
+packages/worker/src/routes/user.ts
+  s_ce7a446508f9a7::t_aaaff5cdeb6ee1 29-30,40,83
+packages/worker/src/cron/cleanup.ts
+  s_ce7a446508f9a7::t_3a4585a2f8ac07 86,97-130
+packages/worker/src/routes/billing.ts
+  s_ce7a446508f9a7::t_aaaff5cdeb6ee1 60
+packages/cli/src/lib/api-client.ts
+  s_ce7a446508f9a7::t_aaaff5cdeb6ee1 73
+packages/worker/src/routes/sites.ts
+  s_ce7a446508f9a7::t_a3a1a2f322fd9f 426-427,486-490,498-500,504-511,536-537,612-613,660-663,1231,1233-1238
+  s_ce7a446508f9a7::t_c6dcc9308eb2d4 447
+  s_ce7a446508f9a7::t_aa6fb058edce25 1213-1230
+packages/worker/wrangler.toml
+  s_ce7a446508f9a7::t_aaaff5cdeb6ee1 28-29
+packages/worker/src/db/schema.sql
+  s_ce7a446508f9a7::t_c0aab9fbc3b1cf 44-46,61,70-75,119-121,146-147,158-159
+  s_ce7a446508f9a7::t_7db75428338041 160
+.github/workflows/ci.yml
+  s_ce7a446508f9a7::t_f7572933c487a3 62-63,69-70
+packages/worker/test/cleanup.test.ts
+  s_ce7a446508f9a7::t_fb68d449601d9c 1-141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "e353275abeb38db3595af6c28c51d803ea3d0f15",
+  "prompts": {},
+  "sessions": {
+    "s_ce7a446508f9a7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f97bd-7268-7052-a9f0-860973c38e35",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
