@@ -1162,7 +1162,8 @@ function normalizeChannel(input: string): string | null {
 async function getSiteByChannel(env: Env, userId: string, channel: string): Promise<Site | null> {
   return env.DB.prepare(`
     SELECT s.id, s.user_id, s.name, s.root_path, s.slug, s.upload_token, s.size_bytes,
-           s.file_count, s.expected_file_count, s.expires_at, s.published_at, s.created_at, s.deleted_at
+           s.file_count, s.expected_file_count, s.expires_at, s.published_at, s.created_at,
+           s.last_activity_at, s.deleted_at
     FROM site_channels sc
     JOIN sites s ON s.id = sc.site_id
     WHERE sc.user_id = ?
@@ -1176,7 +1177,7 @@ async function getSiteByChannel(env: Env, userId: string, channel: string): Prom
 async function getSiteBySlug(env: Env, slug: string): Promise<Site | null> {
   return env.DB.prepare(`
     SELECT id, user_id, name, root_path, slug, upload_token, size_bytes, file_count, expected_file_count,
-           expires_at, published_at, created_at, deleted_at
+           expires_at, published_at, created_at, last_activity_at, deleted_at
     FROM sites
     WHERE slug = ? AND deleted_at IS NULL
     LIMIT 1
@@ -1209,7 +1210,7 @@ async function getSiteByIdentifier(env: Env, identifier: string): Promise<Site |
 async function getPublishedSiteByIdentifier(env: Env, identifier: string): Promise<Site | null> {
   const idMatch = await env.DB.prepare(`
     SELECT id, user_id, name, root_path, slug, upload_token, size_bytes, file_count, expected_file_count,
-           expires_at, published_at, created_at, deleted_at
+           expires_at, published_at, created_at, last_activity_at, deleted_at
     FROM sites
     WHERE id = ?
       AND deleted_at IS NULL
@@ -1222,7 +1223,7 @@ async function getPublishedSiteByIdentifier(env: Env, identifier: string): Promi
 
   return env.DB.prepare(`
     SELECT id, user_id, name, root_path, slug, upload_token, size_bytes, file_count, expected_file_count,
-           expires_at, published_at, created_at, deleted_at
+           expires_at, published_at, created_at, last_activity_at, deleted_at
     FROM sites
     WHERE slug = ?
       AND deleted_at IS NULL
@@ -1336,7 +1337,7 @@ function siteToJson(baseUrl: string) {
 async function getSite(env: Env, id: string): Promise<Site | null> {
   return env.DB.prepare(`
     SELECT id, user_id, name, root_path, slug, upload_token, size_bytes, file_count, expected_file_count,
-           expires_at, published_at, created_at, deleted_at
+           expires_at, published_at, created_at, last_activity_at, deleted_at
     FROM sites
     WHERE id = ? AND deleted_at IS NULL
   `).bind(id).first<Site>();

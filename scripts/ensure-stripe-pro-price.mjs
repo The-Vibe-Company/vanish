@@ -44,7 +44,6 @@ if (!proPrice) {
 }
 
 assertProPrice(proPrice);
-await retireLegacyCheckoutPrice(seedPrice, proPrice.id);
 process.stdout.write(proPrice.id);
 
 async function stripeRequest(path, init = {}) {
@@ -72,59 +71,5 @@ function assertProPrice(price) {
     price.recurring?.interval !== 'month'
   ) {
     throw new Error('Resolved Stripe price is not a recurring 10 EUR monthly price');
-  }
-}
-
-async function retireLegacyCheckoutPrice(legacyPrice, proPriceId) {
-  if (legacyPrice.id === proPriceId) {
-    return;
-  }
-
-  if (legacyPrice.active) {
-    await stripeRequest(`/prices/${encodeURIComponent(legacyPrice.id)}`, {
-      method: 'POST',
-      body: new URLSearchParams({ active: 'false' }),
-    });
-  }
-
-  const sessionIds = [];
-  let startingAfter;
-  do {
-    const params = new URLSearchParams({ status: 'open', limit: '100' });
-    if (startingAfter) {
-      params.set('starting_after', startingAfter);
-    }
-    const page = await stripeRequest(`/checkout/sessions?${params}`);
-
-    for (const session of page.data || []) {
-      const lineItems = await stripeRequest(
-        `/checkout/sessions/${encodeURIComponent(session.id)}/line_items?limit=100`
-      );
-      if (lineItems.data?.some(item => item.price?.id === legacyPrice.id)) {
-        sessionIds.push(session.id);
-      }
-    }
-
-    startingAfter = page.has_more ? page.data?.at(-1)?.id : undefined;
-    if (page.has_more && !startingAfter) {
-      throw new Error('Stripe checkout session pagination did not return a cursor');
-    }
-  } while (startingAfter);
-
-  for (const sessionId of sessionIds) {
-    try {
-      await stripeRequest(`/checkout/sessions/${encodeURIComponent(sessionId)}/expire`, {
-        method: 'POST',
-      });
-    } catch (err) {
-      const session = await stripeRequest(`/checkout/sessions/${encodeURIComponent(sessionId)}`);
-      if (session.status !== 'complete' && session.status !== 'expired') {
-        throw err;
-      }
-    }
-  }
-
-  if (sessionIds.length > 0) {
-    process.stderr.write(`Expired ${sessionIds.length} open legacy Checkout session(s).\n`);
   }
 }
