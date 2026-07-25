@@ -1,0 +1,19 @@
+packages/worker/test/stripe-price-script.test.ts
+  s_ce7a446508f9a7::t_bc736b2531d29d 11,22-32,39,43,45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "e361ba10df6f418f51eac65019eeb600fb73951f",
+  "prompts": {},
+  "sessions": {
+    "s_ce7a446508f9a7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f97bd-7268-7052-a9f0-860973c38e35",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
