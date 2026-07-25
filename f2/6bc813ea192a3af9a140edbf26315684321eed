@@ -1,0 +1,30 @@
+packages/worker/src/routes/sites.ts
+  s_ce7a446508f9a7::t_7e48da96873b28 487-490,494
+packages/worker/test/sites-route.test.ts
+  s_ce7a446508f9a7::t_e6ed16f032d6c8 824-835
+  s_ce7a446508f9a7::t_2fdb97f0307403 199-233,588,596-598
+packages/worker/test/stripe-price-script.test.ts
+  s_ce7a446508f9a7::t_5759c3a7eac532 1-64
+packages/worker/migrations/0002_site_activity_and_expiry_indexes.sql
+  s_ce7a446508f9a7::t_7e48da96873b28 4-11
+scripts/ensure-stripe-pro-price.mjs
+  s_ce7a446508f9a7::t_49b4f76ced77d5 115-124
+  s_ce7a446508f9a7::t_7e48da96873b28 47,77-114,125-129
+  s_ce7a446508f9a7::t_6d07b228e1b75e 130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "f26bc813ea192a3af9a140edbf26315684321eed",
+  "prompts": {},
+  "sessions": {
+    "s_ce7a446508f9a7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f97bd-7268-7052-a9f0-860973c38e35",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
