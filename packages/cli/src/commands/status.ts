@@ -32,7 +32,10 @@ export async function statusCommand(options: { json?: boolean }): Promise<void> 
     }
 
     console.log(`Active uploads: ${me.stats.total_uploads}`);
-    console.log(`Active sites: ${me.stats.total_sites || 0}`);
+    console.log(`Published sites: ${me.stats.total_sites || 0}`);
+    if (me.stats.total_site_drafts) {
+      console.log(`Site drafts: ${me.stats.total_site_drafts} (${formatBytes(me.stats.draft_site_bytes || 0)} used, auto-cleaned after 6h)`);
+    }
     console.log(`Active bundles: ${me.stats.total_bundles || 0}`);
     console.log(`Max file size: ${formatBytes(me.limits.maxFileSize)}`);
     if (me.limits.maxSiteSize) {

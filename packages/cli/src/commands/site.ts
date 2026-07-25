@@ -102,10 +102,10 @@ export async function siteCommand(folder: string, options: SiteOptions): Promise
       fail('Error: --update requires login. Use: vanish login', options, 'update_requires_auth');
     }
     if (options.slug) {
-      fail('Error: --slug requires a Pro account. Login and upgrade with: vanish login && vanish upgrade', options, 'slug_requires_pro');
+      fail('Error: --slug requires a paid account. Login and upgrade with: vanish login && vanish upgrade', options, 'slug_requires_pro');
     }
     if (options.days) {
-      fail('Error: --days requires a Pro account. Login and upgrade with: vanish login && vanish upgrade', options, 'days_requires_pro');
+      fail('Error: --days requires a paid account. Login and upgrade with: vanish login && vanish upgrade', options, 'days_requires_pro');
     }
     if (totalBytes > ANONYMOUS_SITE_MAX_BYTES) {
       fail(`Error: Anonymous sites are limited to ${formatBytes(ANONYMOUS_SITE_MAX_BYTES)}. This folder is ${formatBytes(totalBytes)}.`, options, 'site_too_large');
@@ -120,7 +120,7 @@ export async function siteCommand(folder: string, options: SiteOptions): Promise
         fail(`Error: Site too large for ${me.tier}. Max ${formatBytes(maxSiteSize)}, folder is ${formatBytes(totalBytes)}.`, options, 'site_too_large');
       }
       if ((options.slug || options.days) && me.tier !== 'pro') {
-        fail(`Error: ${options.slug ? '--slug' : '--days'} requires a Pro account. Current tier: ${me.tier}.`, options, 'pro_required');
+        fail(`Error: ${options.slug ? '--slug' : '--days'} requires a paid account. Current tier: ${me.tier}.`, options, 'pro_required');
       }
       if (!isUpdate && me.limits.maxTotalStorage && me.stats.total_bytes + totalBytes > me.limits.maxTotalStorage) {
         fail(

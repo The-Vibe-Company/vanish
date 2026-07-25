@@ -7,7 +7,7 @@ export async function getActiveStorageBytes(env: Env, userId: string): Promise<n
     FROM uploads
     WHERE user_id = ?
       AND deleted_at IS NULL
-      AND (expires_at IS NULL OR expires_at > datetime('now'))
+      AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))
   `).bind(userId).first<{ total_bytes: number }>();
 
   const sites = await env.DB.prepare(`
@@ -15,7 +15,7 @@ export async function getActiveStorageBytes(env: Env, userId: string): Promise<n
     FROM sites
     WHERE user_id = ?
       AND deleted_at IS NULL
-      AND (expires_at IS NULL OR expires_at > datetime('now'))
+      AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))
   `).bind(userId).first<{ total_bytes: number }>();
 
   let bundleBytes = 0;

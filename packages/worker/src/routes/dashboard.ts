@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Env } from '../types.js';
-import { TIER_LIMITS } from '../types.js';
+import { PLAN_PRICES_EUR, TIER_LIMITS } from '../types.js';
 
 const dashboard = new Hono<{ Bindings: Env }>();
 
@@ -12,7 +12,7 @@ dashboard.get('/dashboard', (c) => {
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="referrer" content="no-referrer">
 <title>vanish · dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -664,8 +664,9 @@ code { font-family: var(--mono); }
 .cu-key { color: var(--accent); }
 
 /* Billing */
-.billing-hero { display: grid; grid-template-columns: 1.4fr 1fr; gap: 1rem; margin-bottom: 2.5rem; }
-@media (max-width: 980px) { .billing-hero { grid-template-columns: 1fr; } }
+.billing-hero { margin-bottom: 1rem; }
+.billing-plans { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-bottom: 2.5rem; }
+@media (max-width: 820px) { .billing-plans { grid-template-columns: 1fr; } }
 .bh-current { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 1.4rem 1.5rem; }
 .bh-tag { font-size: .65rem; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-mute); }
 .bh-tier {
@@ -678,6 +679,7 @@ code { font-family: var(--mono); }
 .bh-l { font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; color: var(--fg-mute); }
 .bh-v { color: var(--fg-bright); font-size: .92rem; margin: .2rem 0 .4rem; font-variant-numeric: tabular-nums; }
 .bh-of { color: var(--fg-dim); font-size: .72rem; }
+.bh-storage-note { color: var(--fg-dim); font-size: .7rem; margin-top: 1rem; padding-top: .8rem; border-top: 1px solid var(--hairline); }
 .bh-pro {
   background: linear-gradient(180deg, var(--accent-soft), var(--bg-card) 60%);
   border: 1px solid var(--accent-dim);
@@ -692,7 +694,6 @@ code { font-family: var(--mono); }
 .bh-pro-list code { color: var(--accent); }
 .bh-check { color: var(--accent); }
 .bh-pro-meta { color: var(--fg-mute); font-size: .68rem; text-align: center; }
-
 .billing-features h2, .set-section h2 {
   color: var(--fg-white); font-size: .9rem; font-weight: 500; margin-bottom: 1rem;
   padding-bottom: .55rem; border-bottom: 1px solid var(--hairline);
@@ -700,7 +701,7 @@ code { font-family: var(--mono); }
 }
 .bf-table { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: var(--bg-card); }
 .bf-row {
-  display: grid; grid-template-columns: 1.2fr 1fr 1.2fr;
+  display: grid; grid-template-columns: 1.25fr .8fr 1fr;
   align-items: center; padding: .7rem 1rem;
   border-bottom: 1px solid var(--hairline);
   font-size: .78rem;
@@ -1017,6 +1018,7 @@ body::before {
 .stat-card:first-child .stat-label,
 .stat-card:first-child .stat-sub { color: #f4f0e7; }
 .stat-card:first-child .stat-value { color: #f4f0e7; }
+.stat-card:first-child .stat-detail { color: rgba(244,240,231,.82); }
 .stat-card:first-child .pbar { background: rgba(244,240,231,.24); }
 .stat-card:first-child .pbar-fill { background: var(--red); }
 .stat-label {
@@ -1035,6 +1037,7 @@ body::before {
   letter-spacing: -.035em;
 }
 .stat-sub { color: var(--fg-dim); font-size: .73rem; }
+.stat-detail { margin-top: .55rem; color: var(--fg-dim); font-family: var(--mono); font-size: .58rem; line-height: 1.45; }
 .pbar { height: 5px; background: var(--bg-2); border-radius: 0; }
 .pbar-accent { background: var(--accent); }
 .ov-section { margin-bottom: 3rem; }
@@ -1308,13 +1311,22 @@ body:has(.login-screen) { background: #1649e8; }
 }
 @media (max-width: 760px) {
   .app { grid-template-columns: 1fr; }
-  .main { padding: 2rem 1rem 4rem; }
+  .main {
+    min-width: 0;
+    padding:
+      1.5rem max(1rem, env(safe-area-inset-right))
+      max(5rem, calc(4rem + env(safe-area-inset-bottom)))
+      max(1rem, env(safe-area-inset-left));
+  }
   .sidebar {
     position: sticky;
     top: 0;
     z-index: 50;
     height: auto;
-    padding: .75rem 1rem;
+    padding:
+      max(.7rem, env(safe-area-inset-top))
+      max(1rem, env(safe-area-inset-right))
+      .65rem max(1rem, env(safe-area-inset-left));
   }
   .sb-brand { padding: 0 0 .6rem; margin: 0; border: 0; }
   .sb-wordmark { font-size: 1.25rem; }
@@ -1334,37 +1346,124 @@ body:has(.login-screen) { background: #1649e8; }
     font-size: .74rem;
   }
   .sb-item.active { box-shadow: 3px 3px 0 #11110f; }
-  .page-head { min-height: 84px; margin-bottom: 1.6rem; }
-  .page-title { font-size: 3.5rem; }
+  .page-head { min-height: 0; margin-bottom: 1.6rem; padding-bottom: 1rem; align-items: flex-start; }
+  .page-title { font-size: 2.9rem; line-height: .88; }
+  .page-sub { line-height: 1.55; }
+  .page-head-actions { width: 100%; }
+  .page-head-actions .btn { flex: 1; justify-content: center; min-height: 44px; }
   .ov-grid { gap: .75rem; }
   .stat-card { min-height: 138px; }
   .stat-value { font-size: 2.8rem; }
   .filter-bar { align-items: stretch; }
-  .filter-tools { width: 100%; flex-wrap: wrap; }
-  .search { flex: 1; }
+  .tabs {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: .2rem;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { min-height: 44px; flex: 0 0 auto; }
+  .filter-tools { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .search { min-width: 0; }
   .search input { width: 100%; min-width: 130px; }
+  .sort { min-height: 44px; max-width: 150px; }
+  .view-toggle button { min-width: 44px; min-height: 44px; display: grid; place-items: center; }
   .site-main { grid-template-columns: auto 1fr auto; gap: .7rem; padding: .75rem; }
   .site-time { display: none; }
-  .files-list { overflow-x: auto; }
-  .files-head, .file-row { min-width: 800px; }
-  .keys-list { overflow-x: auto; }
-  .keys-head, .key-row { min-width: 760px; }
+  .sd-grid { grid-template-columns: 1fr 1fr; }
+  .sd-actions .btn, .sd-actions a { min-height: 44px; }
+  .files-list, .keys-list { overflow: visible; border: 0; background: transparent; display: grid; gap: .75rem; }
+  .files-head, .keys-head { display: none; }
+  .file-row, .key-row {
+    min-width: 0;
+    border: 1px solid #11110f;
+    border-radius: 3px;
+    padding: 1rem;
+    background: #fffdf7;
+  }
+  .file-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .55rem 1rem;
+  }
+  .file-name { grid-column: 1 / -1; padding-bottom: .6rem; border-bottom: 1px solid var(--hairline); }
+  .file-row > [data-label], .key-row > [data-label] {
+    display: flex;
+    flex-direction: column;
+    gap: .1rem;
+    min-width: 0;
+  }
+  .file-row > [data-label]::before, .key-row > [data-label]::before {
+    content: attr(data-label);
+    color: var(--fg-mute);
+    font-family: var(--mono);
+    font-size: .58rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+  .file-actions { grid-column: 1 / -1; justify-self: stretch; justify-content: flex-end; padding-top: .45rem; }
+  .file-actions .iconbtn { width: 44px; height: 44px; }
+  .fb-limit { width: 100%; padding-left: 2rem; }
+  .key-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .7rem 1rem;
+  }
+  .key-name { grid-column: 1 / -1; padding-bottom: .6rem; border-bottom: 1px solid var(--hairline); }
+  .key-prefix { overflow: hidden; }
+  .key-actions { grid-column: 1 / -1; justify-self: stretch; display: flex; justify-content: flex-end; }
+  .key-actions .btn { min-height: 44px; }
+  .billing-plans { grid-template-columns: 1fr; }
+  .bf-head { display: none; }
+  .bf-row:not(.bf-head) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .7rem;
+    padding: .9rem;
+  }
+  .bf-row:not(.bf-head) .bf-k { grid-column: 1 / -1; color: #11110f; font-weight: 600; }
+  .bf-row [data-plan]::before {
+    content: attr(data-plan);
+    display: block;
+    margin-bottom: .18rem;
+    color: var(--fg-mute);
+    font-family: var(--mono);
+    font-size: .56rem;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+  }
+  .modal { width: calc(100vw - 2rem); max-height: calc(100svh - 2rem); overflow-y: auto; border-width: 6px; }
   .login-screen { padding: 2rem 1.25rem; }
   .login-screen::before, .login-screen::after { height: 560px; }
 }
 @media (max-width: 520px) {
-  .ov-grid { grid-template-columns: 1fr 1fr; }
-  .stat-card { min-height: 125px; padding: 1rem; }
-  .stat-value { font-size: 2.35rem; }
+  .main { padding-top: 1.2rem; }
+  .ov-grid { grid-template-columns: 1fr; }
+  .stat-card { min-height: 118px; padding: 1rem; }
+  .stat-value { font-size: 2.7rem; }
   .ov-two-col { gap: .8rem; }
+  .ov-card { padding: 1rem; }
   .expiring-row { grid-template-columns: 1fr auto; }
   .er-mid { display: none; }
   .er-time { align-items: flex-start; }
   .er-actions { justify-content: flex-end; }
-  .billing-hero, .bh-stats { grid-template-columns: 1fr; }
+  .bh-stats { grid-template-columns: 1fr; }
+  .bh-current, .bh-pro { padding: 1.1rem; }
+  .bh-tier { align-items: flex-start; flex-direction: column; gap: .2rem; }
+  .bf-row:not(.bf-head) { grid-template-columns: 1fr; }
+  .bf-row:not(.bf-head) .bf-k { grid-column: 1; }
+  .site-main { grid-template-columns: 1fr auto; }
+  .site-thumb { display: none; }
+  .site-sub { gap: .35rem; }
+  .sd-grid { grid-template-columns: 1fr; }
+  .filter-tools { grid-template-columns: 1fr; }
+  .sort, .view-toggle { max-width: none; width: 100%; }
+  .view-toggle button { flex: 1; }
   .set-row { grid-template-columns: 1fr; gap: .6rem; }
   .set-row-r { justify-content: flex-start; }
   .set-readonly { text-align: left; }
+}
+@media (pointer: coarse) {
+  .btn, .iconbtn, .sb-signout, .search-clear { min-height: 44px; }
+  .iconbtn { min-width: 44px; }
 }
 </style>
 </head>
@@ -1377,6 +1476,7 @@ body:has(.login-screen) { background: #1649e8; }
   var BASE_URL = ${JSON.stringify(baseUrl)};
   var SELF_HOSTED = ${JSON.stringify(selfHosted)};
   var TIER_LIMITS = ${JSON.stringify(TIER_LIMITS)};
+  var PLAN_PRICES_EUR = ${JSON.stringify(PLAN_PRICES_EUR)};
 
   // — State —
   var apiKey = localStorage.getItem('vanish_api_key');
@@ -1606,8 +1706,8 @@ body:has(.login-screen) { background: #1649e8; }
         throw new Error('unauthorized');
       }
       state.me = rs[0];
-      state.sites = (rs[1].sites || []).map(normalizeSite);
-      state.uploads = (rs[2].uploads || []).map(normalizeUpload);
+      state.sites = (rs[1].sites || []).filter(function(s) { return !s.deleted; }).map(normalizeSite);
+      state.uploads = (rs[2].uploads || []).filter(function(u) { return !u.deleted; }).map(normalizeUpload);
       state.keys = (rs[3].keys || []);
       refreshTimerBuckets();
       render();
@@ -1643,6 +1743,7 @@ body:has(.login-screen) { background: #1649e8; }
       created: createdAt || 0,
       expires: expiresAt || 0,
       published_at: parseSqlDate(s.published_at),
+      draft: !s.published_at,
       hasExpiry: expiresAt != null,
       expired: expiresAt != null && expiresAt <= Date.now()
     };
@@ -1725,8 +1826,8 @@ body:has(.login-screen) { background: #1649e8; }
       upgradeHtml =
         '<button class="sb-upgrade" data-action="nav" data-section="billing">' +
           '<div class="sb-upgrade-head"><span class="dot dot-gold dot-pulse"></span><span>Upgrade to Pro</span></div>' +
-          '<div class="sb-upgrade-body">Custom slugs · 1 GB · 365-day retention</div>' +
-          '<div class="sb-upgrade-cta">€2/mo <span class="sb-arrow">→</span></div>' +
+          '<div class="sb-upgrade-body">10 GB · 5,000 files per site · 365-day retention</div>' +
+          '<div class="sb-upgrade-cta">€' + PLAN_PRICES_EUR.pro + '/mo <span class="sb-arrow">→</span></div>' +
         '</button>';
     }
 
@@ -1761,7 +1862,8 @@ body:has(.login-screen) { background: #1649e8; }
   // — Overview —
   function renderOverview() {
     var me = state.me;
-    var liveSites = state.sites.filter(function(s) { return !s.expired; });
+    var liveSites = state.sites.filter(function(s) { return !s.draft && !s.expired; });
+    var draftSites = state.sites.filter(function(s) { return s.draft && !s.expired; });
     var liveFiles = state.uploads.filter(function(f) { return !f.expired; });
     var lim = TIER_LIMITS[me.tier] || TIER_LIMITS.free;
     var totalBytes = me.stats.total_bytes || 0;
@@ -1808,7 +1910,7 @@ body:has(.login-screen) { background: #1649e8; }
       }).join('') + '</div>';
     }
 
-    var latest = state.sites.slice().sort(function(a, b) { return b.created - a.created; }).slice(0, 4);
+    var latest = liveSites.slice().sort(function(a, b) { return b.created - a.created; }).slice(0, 4);
     var recentHtml;
     if (latest.length === 0) {
       recentHtml = '<div class="empty subtle"><span class="empty-mark">∅</span>no mini-sites yet. publish one with <code>vanish site ./demo</code></div>';
@@ -1844,11 +1946,11 @@ body:has(.login-screen) { background: #1649e8; }
     }).join('') + '</div>';
 
     var proBanner = '';
-    if (me.tier !== 'pro' && !SELF_HOSTED) {
+    if (me.tier === 'free' && !SELF_HOSTED) {
       proBanner =
         '<button class="ov-pro-banner" data-action="nav" data-section="billing">' +
-          '<span>Unlock custom slugs and 365-day retention</span>' +
-          '<span class="ov-pro-arrow">€2/mo →</span>' +
+          '<span>Unlock 10 GB, custom slugs and 365-day retention</span>' +
+          '<span class="ov-pro-arrow">€' + PLAN_PRICES_EUR.pro + '/mo →</span>' +
         '</button>';
     }
 
@@ -1864,22 +1966,24 @@ body:has(.login-screen) { background: #1649e8; }
           '<div class="stat-label">Storage used</div>' +
           '<div class="stat-value">' + fmtBytes(totalBytes) + '</div>' +
           '<div class="stat-sub">' + (storageMax ? fmtBytes(storageMax) + ' total' : 'no limit') + '</div>' +
+          '<div class="stat-detail">' + fmtBytes(me.stats.published_site_bytes || 0) + ' published · ' +
+            fmtBytes(me.stats.draft_site_bytes || 0) + ' drafts</div>' +
           storageHtml +
         '</div>' +
         '<div class="stat-card">' +
-          '<div class="stat-label">Live mini-sites</div>' +
+          '<div class="stat-label">Published sites</div>' +
           '<div class="stat-value">' + liveSites.length + '</div>' +
-          '<div class="stat-sub">' + (state.sites.length - liveSites.length) + ' expired</div>' +
+          '<div class="stat-sub">public and currently live</div>' +
+        '</div>' +
+        '<div class="stat-card">' +
+          '<div class="stat-label">Upload drafts</div>' +
+          '<div class="stat-value">' + draftSites.length + '</div>' +
+          '<div class="stat-sub">' + fmtBytes(me.stats.draft_site_bytes || 0) + ' · cleaned after 6h</div>' +
         '</div>' +
         '<div class="stat-card">' +
           '<div class="stat-label">Live files</div>' +
           '<div class="stat-value">' + liveFiles.length + '</div>' +
           '<div class="stat-sub">' + (state.uploads.length - liveFiles.length) + ' expired</div>' +
-        '</div>' +
-        '<div class="stat-card">' +
-          '<div class="stat-label">Active API keys</div>' +
-          '<div class="stat-value">' + state.keys.filter(function(k) { return !k.revoked; }).length + '</div>' +
-          '<div class="stat-sub">' + state.keys.length + ' total · max 10</div>' +
         '</div>' +
       '</div>' +
 
@@ -1911,6 +2015,7 @@ body:has(.login-screen) { background: #1649e8; }
   // — Sites —
   function siteStatus(s) {
     if (s.expired) return 'expired';
+    if (s.draft) return 'draft';
     if (s.hasExpiry && (s.expires - Date.now()) < 6 * 3600 * 1000) return 'expiring';
     return 'live';
   }
@@ -1919,6 +2024,7 @@ body:has(.login-screen) { background: #1649e8; }
     var counts = {
       all: sites.length,
       live: sites.filter(function(s) { return siteStatus(s) === 'live'; }).length,
+      draft: sites.filter(function(s) { return siteStatus(s) === 'draft'; }).length,
       expiring: sites.filter(function(s) { return siteStatus(s) === 'expiring'; }).length,
       expired: sites.filter(function(s) { return siteStatus(s) === 'expired'; }).length
     };
@@ -1933,7 +2039,7 @@ body:has(.login-screen) { background: #1649e8; }
       return (b.created || 0) - (a.created || 0);
     });
 
-    var tabsHtml = ['all','live','expiring','expired'].map(function(f) {
+    var tabsHtml = ['all','live','draft','expiring','expired'].map(function(f) {
       var active = f === state.sitesFilter ? ' active' : '';
       return '<button class="tab' + active + '" data-action="sites-filter" data-filter="' + f + '">' +
         f + '<span class="tab-count">' + counts[f] + '</span></button>';
@@ -1952,7 +2058,7 @@ body:has(.login-screen) { background: #1649e8; }
       '<header class="page-head">' +
         '<div>' +
           '<h1 class="page-title">Sites</h1>' +
-          '<p class="page-sub">' + counts.live + ' live · ' + counts.expiring + ' expiring · ' + counts.expired + ' expired</p>' +
+          '<p class="page-sub">' + counts.live + ' published · ' + counts.draft + ' drafts · ' + counts.expiring + ' expiring</p>' +
         '</div>' +
       '</header>' +
       '<div class="filter-bar">' +
@@ -1977,12 +2083,16 @@ body:has(.login-screen) { background: #1649e8; }
     var status = siteStatus(s);
     var open = !!state.sitesOpen[s.id];
     var label = s.slug || s.name || s.id;
-    var pillTone = status === 'live' ? 'green' : status === 'expiring' ? 'gold' : 'mute';
-    var dotTone = status === 'live' ? 'green' : status === 'expiring' ? 'gold' : 'mute';
+    var pillTone = status === 'live' ? 'green' : (status === 'expiring' || status === 'draft') ? 'gold' : 'mute';
+    var dotTone = status === 'live' ? 'green' : (status === 'expiring' || status === 'draft') ? 'gold' : 'mute';
     var pulse = status !== 'expired' ? ' dot-pulse' : '';
     var timeHtml;
     if (s.expired) {
       timeHtml = '<div class="site-time-label">expired</div><div class="site-time-val expired"' + countdownAttr(s.expires, 'ago') + '>' + fmtAgo(s.expires) + '</div>';
+    } else if (s.draft) {
+      var cleanupAt = s.created + 6 * 3600 * 1000;
+      timeHtml = '<div class="site-time-label">draft cleanup</div><div class="site-time-val expiring"' +
+        countdownAttr(cleanupAt, 'until', 'expiring') + '>' + fmtTimeUntil(cleanupAt - Date.now()) + '</div>';
     } else if (!s.hasExpiry) {
       timeHtml = '<div class="site-time-label">retention</div><div class="site-time-val">∞</div>';
     } else {
@@ -1993,9 +2103,11 @@ body:has(.login-screen) { background: #1649e8; }
       detail =
         '<div class="site-detail">' +
           '<div class="sd-grid">' +
-            '<div class="sd-field"><div class="sd-label">URL</div>' +
-              '<button class="sd-url" data-action="copy" data-text="' + attr(s.url) + '" data-msg="URL copied">' + escapeHtml(s.url) + '</button>' +
-            '</div>' +
+            (s.draft ?
+              '<div class="sd-field"><div class="sd-label">Status</div><div class="sd-val">Unpublished upload draft</div></div>' :
+              '<div class="sd-field"><div class="sd-label">URL</div>' +
+                '<button class="sd-url" data-action="copy" data-text="' + attr(s.url) + '" data-msg="URL copied">' + escapeHtml(s.url) + '</button>' +
+              '</div>') +
             '<div class="sd-field"><div class="sd-label">ID</div><code class="sd-mono">' + escapeHtml(s.id) + '</code></div>' +
             '<div class="sd-field"><div class="sd-label">Files</div><div class="sd-val">' + s.file_count + '</div></div>' +
             '<div class="sd-field"><div class="sd-label">Size</div><div class="sd-val">' + fmtBytes(s.size_bytes) + '</div></div>' +
@@ -2003,9 +2115,10 @@ body:has(.login-screen) { background: #1649e8; }
             '<div class="sd-field"><div class="sd-label">Created</div><div class="sd-val">' + fmtDate(s.created) + ' · ' + fmtAgo(s.created) + '</div></div>' +
           '</div>' +
           '<div class="sd-actions">' +
-            '<button class="btn ghost btn-sm" data-action="copy" data-text="' + attr(s.url) + '" data-msg="URL copied">Copy URL</button>' +
-            '<button class="btn ghost btn-sm" data-action="copy" data-text="' + attr('vanish site ./local --update ' + s.id) + '" data-msg="Update command copied">Copy update cmd</button>' +
-            '<a class="btn ghost btn-sm" href="' + attr(s.url) + '" target="_blank" rel="noopener">Open ↗</a>' +
+            (s.draft ? '' :
+              '<button class="btn ghost btn-sm" data-action="copy" data-text="' + attr(s.url) + '" data-msg="URL copied">Copy URL</button>' +
+              '<button class="btn ghost btn-sm" data-action="copy" data-text="' + attr('vanish site ./local --update ' + s.id) + '" data-msg="Update command copied">Copy update cmd</button>' +
+              '<a class="btn ghost btn-sm" href="' + attr(s.url) + '" target="_blank" rel="noopener">Open ↗</a>') +
             '<div class="sd-spacer"></div>' +
             (s.expired ? '' : '<button class="btn danger-ghost btn-sm" data-action="delete-site" data-id="' + attr(s.id) + '" data-name="' + attr(label) + '">Delete</button>') +
           '</div>' +
@@ -2135,10 +2248,10 @@ body:has(.login-screen) { background: #1649e8; }
     var md = '![' + f.name + '](' + f.url + ')';
     return '<div class="file-row' + (expired ? ' expired' : '') + '">' +
       '<div class="file-name">' + fileIconSvg(f.kind) + '<span class="fn">' + escapeHtml(f.name) + '</span></div>' +
-      '<div class="file-mime"><code>' + escapeHtml(f.mime) + '</code></div>' +
-      '<div>' + fmtBytes(f.bytes) + '</div>' +
-      '<div class="dim">' + fmtAgo(f.created) + '</div>' +
-      '<div>' + timeCell + '</div>' +
+      '<div class="file-mime" data-label="Type"><code>' + escapeHtml(f.mime) + '</code></div>' +
+      '<div class="file-size" data-label="Size">' + fmtBytes(f.bytes) + '</div>' +
+      '<div class="file-uploaded dim" data-label="Uploaded">' + fmtAgo(f.created) + '</div>' +
+      '<div class="file-expiry" data-label="Expires">' + timeCell + '</div>' +
       '<div class="file-actions">' +
         '<button class="iconbtn" title="Copy URL" data-action="copy" data-text="' + attr(f.url) + '" data-msg="URL copied">' +
           '<svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 1v6h6V1H3zM7 7v2H1V3h2"/></svg>' +
@@ -2200,10 +2313,10 @@ body:has(.login-screen) { background: #1649e8; }
         keys.map(function(k) {
           var lastUsed = k.last_used_at ? fmtAgo(parseSqlDate(k.last_used_at)) : 'never used';
           return '<div class="key-row' + (k.revoked ? ' revoked' : '') + '">' +
-            '<div class="key-name">' + escapeHtml(k.name) + '</div>' +
-            '<div class="key-prefix"><code>' + escapeHtml(k.prefix) + '…</code><span class="key-mask">' + '•'.repeat(40) + '</span></div>' +
-            '<div class="dim">' + fmtAgo(parseSqlDate(k.created_at)) + '</div>' +
-            '<div class="' + (k.last_used_at ? '' : 'dim') + '">' + lastUsed + '</div>' +
+            '<div class="key-name" data-label="Name">' + escapeHtml(k.name) + '</div>' +
+            '<div class="key-prefix" data-label="Prefix"><code>' + escapeHtml(k.prefix) + '…</code><span class="key-mask">' + '•'.repeat(40) + '</span></div>' +
+            '<div class="key-created dim" data-label="Created">' + fmtAgo(parseSqlDate(k.created_at)) + '</div>' +
+            '<div class="key-used ' + (k.last_used_at ? '' : 'dim') + '" data-label="Last used">' + lastUsed + '</div>' +
             '<div class="key-actions">' +
               (k.revoked ? '<span class="pill pill-mute">revoked</span>' :
                 '<button class="btn danger-ghost btn-sm" data-action="revoke-key" data-prefix="' + attr(k.prefix) + '">Revoke</button>') +
@@ -2273,39 +2386,36 @@ body:has(.login-screen) { background: #1649e8; }
     var pct = storageMax ? Math.min(100, Math.round((liveBytes / storageMax) * 100)) : 0;
     var tone = pct > 85 ? 'red' : 'accent';
 
-    var proCard = '';
-    if (me.tier !== 'pro' && !SELF_HOSTED) {
-      var checkoutUrl = '/billing/checkout?key=' + encodeURIComponent(apiKey || '');
-      proCard =
-        '<div class="bh-pro">' +
-          '<div class="bh-pro-head"><span class="dot dot-gold dot-pulse"></span><span>Pro</span><span class="bh-pro-price">€2<span>/mo</span></span></div>' +
-          '<ul class="bh-pro-list">' +
-            '<li><span class="bh-check">✓</span> Custom <code>*.vanish.sh</code> slugs</li>' +
-            '<li><span class="bh-check">✓</span> 30-day retention by default, up to 365 with <code>--days</code></li>' +
-            '<li><span class="bh-check">✓</span> 1 GB storage · 1 GB max file</li>' +
-            '<li><span class="bh-check">✓</span> 200 requests / hour</li>' +
-          '</ul>' +
-          '<a class="btn solid btn-lg" href="' + attr(checkoutUrl) + '">Upgrade to Pro <span class="btn-arrow">→</span></a>' +
-          '<div class="bh-pro-meta">cancel anytime · billed via Stripe</div>' +
-        '</div>';
-    } else if (me.tier === 'pro' && me.billing && me.billing.has_billing_account && !SELF_HOSTED) {
-      proCard =
-        '<div class="bh-pro">' +
-          '<div class="bh-pro-head"><span class="dot dot-gold"></span><span>Pro</span><span class="bh-pro-price">active</span></div>' +
-          '<ul class="bh-pro-list">' +
-            '<li><span class="bh-check">✓</span> Custom <code>*.vanish.sh</code> slugs</li>' +
-            '<li><span class="bh-check">✓</span> 30-day retention by default, up to 365 with <code>--days</code></li>' +
-            '<li><span class="bh-check">✓</span> 1 GB storage · 1 GB max file</li>' +
-            '<li><span class="bh-check">✓</span> 200 requests / hour</li>' +
-          '</ul>' +
-          '<button class="btn solid btn-lg" data-action="manage-billing">Manage billing <span class="btn-arrow">→</span></button>' +
-          '<div class="bh-pro-meta">billing managed via Stripe</div>' +
-        '</div>';
+    function planCard() {
+      if (SELF_HOSTED) return '';
+      var planLim = TIER_LIMITS.pro;
+      var active = me.tier === 'pro';
+      var cta = active
+        ? (me.billing && me.billing.has_billing_account
+          ? '<button class="btn solid btn-lg" data-action="manage-billing">Manage billing <span class="btn-arrow">→</span></button>'
+          : '')
+        : '<button class="btn solid btn-lg" data-action="upgrade-plan" data-tier="pro">Choose Pro <span class="btn-arrow">→</span></button>';
+      return '<div class="bh-pro">' +
+        '<div class="bh-pro-head"><span class="dot dot-gold dot-pulse"></span><span>Pro' +
+          (active ? ' · active' : '') + '</span><span class="bh-pro-price">€' + PLAN_PRICES_EUR.pro + '<span>/mo</span></span></div>' +
+        '<ul class="bh-pro-list">' +
+          '<li><span class="bh-check">✓</span> Custom <code>*.vanish.sh</code> slugs</li>' +
+          '<li><span class="bh-check">✓</span> Up to 365 days with <code>--days</code></li>' +
+          '<li><span class="bh-check">✓</span> ' + fmtBytes(planLim.maxTotalStorage) + ' total storage</li>' +
+          '<li><span class="bh-check">✓</span> ' + planLim.rateLimit + ' requests / hour</li>' +
+        '</ul>' +
+        cta +
+        '<div class="bh-pro-meta">cancel anytime · billed via Stripe</div>' +
+      '</div>';
     }
 
+    var planCards = planCard();
+    var currentName = me.tier === 'pro' ? 'Pro' : me.tier === 'free' ? 'Free' : 'Anonymous';
+    var currentPrice = PLAN_PRICES_EUR[me.tier] ? '€' + PLAN_PRICES_EUR[me.tier] + ' / month' : '€0';
+
     var features = [
-      { k: 'Custom subdomains', free: 'random readable', pro: 'pick any *.vanish.sh slug', highlight: true },
-      { k: 'Retention', free: retentionLabel('free'), pro: retentionLabel('pro') + ' default · up to 365d', highlight: true },
+      { k: 'Custom subdomains', free: 'random readable', pro: 'pick a slug', highlight: true },
+      { k: 'Retention', free: retentionLabel('free'), pro: 'up to 365d', highlight: true },
       { k: 'Total storage', free: fmtBytes(TIER_LIMITS.free.maxTotalStorage), pro: fmtBytes(TIER_LIMITS.pro.maxTotalStorage) },
       { k: 'Max file size', free: fmtBytes(TIER_LIMITS.free.maxFileSize), pro: fmtBytes(TIER_LIMITS.pro.maxFileSize) },
       { k: 'Files per site', free: String(TIER_LIMITS.free.maxSiteFiles), pro: String(TIER_LIMITS.pro.maxSiteFiles) },
@@ -2314,8 +2424,8 @@ body:has(.login-screen) { background: #1649e8; }
     var featuresHtml = features.map(function(f) {
       return '<div class="bf-row' + (f.highlight ? ' bf-highlight' : '') + '">' +
         '<div class="bf-k">' + escapeHtml(f.k) + '</div>' +
-        '<div class="bf-free">' + escapeHtml(f.free) + '</div>' +
-        '<div class="bf-pro">' + escapeHtml(f.pro) + '</div>' +
+        '<div class="bf-free" data-plan="Free">' + escapeHtml(f.free) + '</div>' +
+        '<div class="bf-pro" data-plan="Pro">' + escapeHtml(f.pro) + '</div>' +
       '</div>';
     }).join('');
 
@@ -2336,22 +2446,24 @@ body:has(.login-screen) { background: #1649e8; }
       '<div class="billing-hero">' +
         '<div class="bh-current">' +
           '<div class="bh-tag">your plan</div>' +
-          '<div class="bh-tier">' + (me.tier === 'pro' ? 'Pro' : me.tier === 'free' ? 'Free' : 'Anonymous') +
-            '<span class="bh-price">' + (me.tier === 'pro' ? '€2 / month' : '€0') + '</span></div>' +
+          '<div class="bh-tier">' + currentName +
+            '<span class="bh-price">' + currentPrice + '</span></div>' +
           '<div class="bh-stats">' +
             '<div><div class="bh-l">storage</div><div class="bh-v">' + fmtBytes(liveBytes) +
               (storageMax ? ' <span class="bh-of">of ' + fmtBytes(storageMax) + '</span>' : '') + '</div>' + storageBar + '</div>' +
             '<div><div class="bh-l">retention</div><div class="bh-v">' + retentionLabel(me.tier) + '</div></div>' +
             '<div><div class="bh-l">rate limit</div><div class="bh-v">' + lim.rateLimit + '<span class="bh-of">/hour</span></div></div>' +
           '</div>' +
+          '<div class="bh-storage-note">' + fmtBytes(me.stats.published_site_bytes || 0) + ' published sites · ' +
+            fmtBytes(me.stats.draft_site_bytes || 0) + ' drafts · ' + fmtBytes(me.stats.upload_bytes || 0) + ' files</div>' +
           hostedNote +
         '</div>' +
-        proCard +
       '</div>' +
+      (planCards ? '<div class="billing-plans">' + planCards + '</div>' : '') +
       '<section class="billing-features">' +
         '<h2>What\\'s in each plan</h2>' +
         '<div class="bf-table">' +
-          '<div class="bf-row bf-head"><div></div><div>Free</div><div class="bf-pro-col">Pro <span class="bf-pro-price">€2 / month</span></div></div>' +
+          '<div class="bf-row bf-head"><div></div><div>Free</div><div class="bf-pro-col">Pro <span class="bf-pro-price">€' + PLAN_PRICES_EUR.pro + ' / month</span></div></div>' +
           featuresHtml +
         '</div>' +
       '</section>' +
@@ -2586,6 +2698,22 @@ body:has(.login-screen) { background: #1649e8; }
           toast('error: ' + ((r && r.error) || 'failed'));
         }
       }).catch(function(e) {
+        toast('error: ' + ((e && e.message) || 'failed'));
+      });
+      return;
+    }
+    if (action === 'upgrade-plan') {
+      var targetTier = el.getAttribute('data-tier');
+      el.disabled = true;
+      apiFetch('/billing/checkout?tier=' + encodeURIComponent(targetTier), { method: 'POST' }).then(function(r) {
+        if (r && r.url) {
+          window.location.assign(r.url);
+        } else {
+          el.disabled = false;
+          toast('error: ' + ((r && r.error) || 'failed'));
+        }
+      }).catch(function(e) {
+        el.disabled = false;
         toast('error: ' + ((e && e.message) || 'failed'));
       });
       return;

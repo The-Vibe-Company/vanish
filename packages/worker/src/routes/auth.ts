@@ -120,7 +120,7 @@ auth.post('/auth/cli/confirm', async (c) => {
   await c.env.DB.prepare(`
     UPDATE auth_sessions
     SET api_key = ?, username = ?
-    WHERE session_id = ? AND expires_at > datetime('now')
+    WHERE session_id = ? AND datetime(expires_at) > datetime('now')
   `).bind(
     JSON.stringify({
       status: 'ready',
@@ -286,7 +286,7 @@ auth.get('/auth/callback', async (c) => {
     const sessionUpdate = await c.env.DB.prepare(`
       UPDATE auth_sessions
       SET api_key = ?, username = ?
-      WHERE session_id = ? AND expires_at > datetime('now')
+      WHERE session_id = ? AND datetime(expires_at) > datetime('now')
     `).bind(
       JSON.stringify({
         status: 'authorized',
@@ -434,7 +434,7 @@ auth.get('/auth/poll', async (c) => {
   }
 
   const result = await c.env.DB.prepare(
-    'SELECT api_key, username FROM auth_sessions WHERE session_id = ? AND expires_at > datetime(\'now\')'
+    'SELECT api_key, username FROM auth_sessions WHERE session_id = ? AND datetime(expires_at) > datetime(\'now\')'
   ).bind(session).first<{ api_key: string; username: string }>();
 
   if (!result || !result.api_key) {
@@ -471,7 +471,7 @@ auth.get('/auth/poll', async (c) => {
 
 async function readCliAuthSession(env: Env, session: string): Promise<CliAuthSession | null> {
   const result = await env.DB.prepare(
-    'SELECT api_key FROM auth_sessions WHERE session_id = ? AND expires_at > datetime(\'now\')'
+    'SELECT api_key FROM auth_sessions WHERE session_id = ? AND datetime(expires_at) > datetime(\'now\')'
   ).bind(session).first<{ api_key: string }>();
 
   return result?.api_key ? parseCliAuthSession(result.api_key) : null;

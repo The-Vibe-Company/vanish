@@ -9,6 +9,7 @@ const BATCH_SIZE = 100;
 export async function handleCleanup(env: Env): Promise<void> {
   let totalDeleted = 0;
   let totalSitesDeleted = 0;
+  let totalDraftsDeleted = 0;
   let totalBundlesDeleted = 0;
   let totalPendingObjectsDeleted = 0;
 
@@ -17,7 +18,7 @@ export async function handleCleanup(env: Env): Promise<void> {
     const expired = await env.DB.prepare(`
       SELECT id FROM uploads
       WHERE expires_at IS NOT NULL
-        AND expires_at < datetime('now')
+        AND datetime(expires_at) < datetime('now')
         AND deleted_at IS NULL
       LIMIT ?
     `).bind(BATCH_SIZE).all<{ id: string }>();
@@ -50,7 +51,7 @@ export async function handleCleanup(env: Env): Promise<void> {
     const expiredSites = await env.DB.prepare(`
       SELECT id FROM sites
       WHERE expires_at IS NOT NULL
-        AND expires_at < datetime('now')
+        AND datetime(expires_at) < datetime('now')
         AND deleted_at IS NULL
       LIMIT ?
     `).bind(BATCH_SIZE).all<{ id: string }>();
@@ -76,12 +77,47 @@ export async function handleCleanup(env: Env): Promise<void> {
     }
   }
 
+  // Drafts are temporary upload workspaces. A failed or interrupted publish
+  // should not consume a user's quota for the full retention period.
+  while (true) {
+    const abandonedDrafts = await env.DB.prepare(`
+      SELECT id FROM sites
+      WHERE published_at IS NULL
+        AND created_at < datetime('now', '-6 hours')
+        AND deleted_at IS NULL
+      LIMIT ?
+    `).bind(BATCH_SIZE).all<{ id: string }>();
+
+    if (!abandonedDrafts.results || abandonedDrafts.results.length === 0) {
+      break;
+    }
+
+    const draftIds = abandonedDrafts.results.map(r => r.id);
+    for (const draftId of draftIds) {
+      await deleteSiteFiles(env, draftId);
+    }
+
+    await env.DB.batch(draftIds.map(draftId =>
+      env.DB.prepare(`
+        UPDATE sites
+        SET deleted_at = datetime('now'), upload_token = NULL, size_bytes = 0, file_count = 0
+        WHERE id = ?
+      `).bind(draftId)
+    ));
+
+    totalDraftsDeleted += draftIds.length;
+
+    if (draftIds.length < BATCH_SIZE) {
+      break;
+    }
+  }
+
   try {
     while (true) {
       const expiredBundles = await env.DB.prepare(`
         SELECT id FROM bundles
         WHERE expires_at IS NOT NULL
-          AND expires_at < datetime('now')
+          AND datetime(expires_at) < datetime('now')
           AND deleted_at IS NULL
         LIMIT ?
       `).bind(BATCH_SIZE).all<{ id: string }>();
@@ -114,12 +150,12 @@ export async function handleCleanup(env: Env): Promise<void> {
 
   // Also clean up expired auth sessions
   await env.DB.prepare(`
-    DELETE FROM auth_sessions WHERE expires_at < datetime('now')
+    DELETE FROM auth_sessions WHERE datetime(expires_at) < datetime('now')
   `).run();
 
   try {
     await env.DB.prepare(`
-      DELETE FROM idempotency_keys WHERE expires_at < datetime('now')
+      DELETE FROM idempotency_keys WHERE datetime(expires_at) < datetime('now')
     `).run();
   } catch (err) {
     if (!isMissingTableError(err, 'idempotency_keys')) {
@@ -156,7 +192,8 @@ export async function handleCleanup(env: Env): Promise<void> {
 
   console.log(
     `Cleanup complete: ${totalDeleted} expired uploads deleted, ` +
-    `${totalSitesDeleted} expired sites deleted, ${totalBundlesDeleted} expired bundles deleted, ` +
+    `${totalSitesDeleted} expired sites deleted, ${totalDraftsDeleted} abandoned site drafts deleted, ` +
+    `${totalBundlesDeleted} expired bundles deleted, ` +
     `${totalPendingObjectsDeleted} pending objects deleted`
   );
 }

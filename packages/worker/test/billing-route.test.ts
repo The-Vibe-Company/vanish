@@ -32,6 +32,7 @@ describe('billing routes', () => {
       const body = String(init?.body);
       expect(body).toContain('metadata%5Bvanish_user_id%5D=user1');
       expect(body).toContain('subscription_data%5Bmetadata%5D%5Bvanish_user_id%5D=user1');
+      expect(body).toContain('metadata%5Bvanish_tier%5D=pro');
       return Response.json({ id: 'cs_test', url: 'https://stripe.test/checkout' });
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -47,10 +48,30 @@ describe('billing routes', () => {
       expect.objectContaining({
         name: 'upgrade_clicked',
         user_id: 'user1',
-        properties: JSON.stringify({ tier: 'free', checkout_provider: 'stripe' }),
+        properties: JSON.stringify({ tier: 'free', target_tier: 'pro', checkout_provider: 'stripe' }),
       }),
     ]);
     expect(db.events[0].properties).not.toContain('price_test');
+  });
+
+  it('creates a Pro checkout and returns JSON to the dashboard', async () => {
+    const apiKey = await addUser(db, 'user1', 'free');
+    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = String(init?.body);
+      expect(body).toContain('line_items%5B0%5D%5Bprice%5D=price_test');
+      expect(body).toContain('metadata%5Bvanish_tier%5D=pro');
+      expect(body).toContain('subscription_data%5Bmetadata%5D%5Bvanish_tier%5D=pro');
+      return Response.json({ id: 'cs_pro', url: 'https://stripe.test/pro-checkout' });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const response = await request(env, '/billing/checkout?tier=pro', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ url: 'https://stripe.test/pro-checkout' });
   });
 
   it('records completed upgrades without leaking Stripe customer identifiers', async () => {
@@ -394,12 +415,12 @@ class BillingStatement {
     }
 
     if (sql.includes('UPDATE users SET stripe_customer_id = ?')) {
-      const [customerId, subscriptionId, userId] = this.args as [string, string, string];
+      const [customerId, subscriptionId, tier, userId] = this.args as [string, string, Tier, string];
       const user = this.db.users.get(userId);
       if (user) {
         user.stripe_customer_id = customerId;
         user.stripe_subscription_id = subscriptionId;
-        user.tier = 'pro';
+        user.tier = tier;
         user.updated_at = new Date().toISOString();
       }
       return;

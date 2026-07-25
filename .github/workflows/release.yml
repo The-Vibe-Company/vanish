@@ -65,6 +65,13 @@ jobs:
 
       - run: npm ci
 
+      - name: Resolve the Pro Stripe price
+        id: stripe-price
+        run: echo "price_id=$(node scripts/ensure-stripe-pro-price.mjs)" >> "$GITHUB_OUTPUT"
+        env:
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_PRICE_ID: ${{ secrets.STRIPE_PRICE_ID }}
+
       - name: Run D1 migrations
         if: github.event_name != 'workflow_dispatch' || inputs.skip_d1_migrations == false
         run: npx wrangler d1 migrations apply vanish-db --remote
@@ -90,4 +97,4 @@ jobs:
           echo "${{ secrets.GH_OAUTH_CLIENT_SECRET }}" | npx wrangler secret put GITHUB_CLIENT_SECRET
           echo "${{ secrets.STRIPE_SECRET_KEY }}" | npx wrangler secret put STRIPE_SECRET_KEY
           echo "${{ secrets.STRIPE_WEBHOOK_SECRET }}" | npx wrangler secret put STRIPE_WEBHOOK_SECRET
-          echo "${{ secrets.STRIPE_PRICE_ID }}" | npx wrangler secret put STRIPE_PRICE_ID
+          echo "${{ steps.stripe-price.outputs.price_id }}" | npx wrangler secret put STRIPE_PRICE_ID

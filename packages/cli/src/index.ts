@@ -35,7 +35,7 @@ program
   .option('--json', 'Output as JSON')
   .option('--md', 'Output as Markdown image link')
   .option('--no-clipboard', 'Do not copy URL to clipboard')
-  .option('--days <days>', 'Custom retention in days (Pro only, 1-365)', parseInt)
+  .option('--days <days>', 'Custom retention in days (paid plans, 1-365)', parseInt)
   .option('--idempotency-key <key>', 'Stable key for safe agent retries')
   .action(uploadCommand);
 
@@ -45,9 +45,9 @@ program
   .argument('<folder>', 'folder to publish')
   .requiredOption('--root <file>', 'Root file to serve at /, relative to the folder')
   .option('--update <site>', 'Replace an existing owned site by ID or slug')
-  .option('--slug <slug>', 'Custom vanish.sh subdomain slug (Pro only)')
+  .option('--slug <slug>', 'Custom vanish.sh subdomain slug (paid plans)')
   .option('--channel <channel>', 'Owned stable channel that creates or updates the same site URL')
-  .option('--days <days>', 'Custom retention in days (Pro only, 1-365)', parseInt)
+  .option('--days <days>', 'Custom retention in days (paid plans, 1-365)', parseInt)
   .option('--dry-run', 'Inspect and print the site manifest without uploading')
   .option('--verify', 'Fetch the published root and referenced assets after publish')
   .option('--idempotency-key <key>', 'Stable key for safe agent retries')
@@ -82,9 +82,9 @@ sites
 
 sites
   .command('extend')
-  .description('Extend a Pro mini-site expiry')
+  .description('Extend a paid-plan mini-site expiry')
   .argument('<site>', 'site ID or slug')
-  .requiredOption('--days <days>', 'Custom retention in days (Pro only, 1-365)', parseInt)
+  .requiredOption('--days <days>', 'Custom retention in days (paid plans, 1-365)', parseInt)
   .option('--json', 'Output as JSON')
   .action(siteExtendCommand);
 
@@ -101,7 +101,7 @@ program
   .argument('<files...>', 'files to include')
   .option('--json', 'Output as JSON')
   .option('--no-clipboard', 'Do not copy URL to clipboard')
-  .option('--days <days>', 'Custom retention in days (Pro only, 1-365)', parseInt)
+  .option('--days <days>', 'Custom retention in days (paid plans, 1-365)', parseInt)
   .option('--idempotency-key <key>', 'Stable key for safe agent retries')
   .option('--name <name>', 'Bundle display name')
   .action(bundleCommand);
@@ -142,7 +142,7 @@ program
 
 program
   .command('upgrade')
-  .description('Upgrade to Pro for 1GB uploads and up to 365-day retention (2 EUR/month)')
+  .description('Upgrade to Pro for 10GB storage and up to 365-day retention (10 EUR/month)')
   .action(async () => {
     const { loadConfig } = await import('./lib/config.js');
     const config = loadConfig();

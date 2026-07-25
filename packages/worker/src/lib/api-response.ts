@@ -64,7 +64,7 @@ export async function getIdempotentReplay(
     WHERE scope = ?
       AND owner = ?
       AND idempotency_key = ?
-      AND expires_at > datetime('now')
+      AND datetime(expires_at) > datetime('now')
   `).bind(scope, owner, key).first<{ status: number; response_json: string }>();
 
   if (!row) {
@@ -95,7 +95,7 @@ export async function reserveIdempotencyKey(
     WHERE scope = ?
       AND owner = ?
       AND idempotency_key = ?
-      AND expires_at <= datetime('now')
+      AND datetime(expires_at) <= datetime('now')
   `).bind(scope, owner, key).run();
 
   const inProgressBody = structuredError(

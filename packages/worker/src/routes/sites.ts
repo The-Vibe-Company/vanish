@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { customAlphabet, nanoid } from 'nanoid';
 import type { Env, Site, SiteFile, Tier } from '../types.js';
-import { BLOCKED_EXTENSIONS, TIER_LIMITS } from '../types.js';
+import { BLOCKED_EXTENSIONS, TIER_LIMITS, isPaidTier } from '../types.js';
 import { calculateExpiry, isExpired } from '../lib/expiry.js';
 import { guessContentType } from '../lib/content-type.js';
 import { ensureStorageAvailable } from '../lib/storage.js';
@@ -124,21 +124,21 @@ sites.post('/sites', rateLimitMiddleware, async (c) => {
     }
     if (!limits.customTtl) {
       return c.json({
-        error: `Custom TTL is only available for Pro tier. Current tier: ${tier}.`,
+        error: `Custom TTL is only available on paid plans. Current tier: ${tier}.`,
         hint: user ? 'Upgrade with: vanish upgrade' : 'Login and upgrade with: vanish login && vanish upgrade',
       }, 403);
     }
-    if (customDays > TIER_LIMITS.pro.maxCustomExpiryDays) {
+    if (customDays > limits.maxCustomExpiryDays) {
       return c.json({
-        error: `Maximum custom TTL is ${TIER_LIMITS.pro.maxCustomExpiryDays} days.`,
+        error: `Maximum custom TTL is ${limits.maxCustomExpiryDays} days.`,
       }, 400);
     }
   }
 
   let slug: string | null;
   if (payload.slug) {
-    if (tier !== 'pro' || !user) {
-      return c.json({ error: 'Custom vanish.sh slugs are only available for Pro accounts' }, 403);
+    if (!isPaidTier(tier) || !user) {
+      return c.json({ error: 'Custom vanish.sh slugs are only available on paid plans' }, 403);
     }
 
     slug = await validateSiteSlug(c.env, payload.slug);
@@ -354,9 +354,9 @@ sites.post('/sites/:id/replacements', async (c) => {
     }, 413);
   }
 
-  if ((payload.slug || payload.days !== undefined) && user.tier !== 'pro') {
+  if ((payload.slug || payload.days !== undefined) && !isPaidTier(user.tier)) {
     return c.json({
-      error: `${payload.slug ? 'Custom vanish.sh slugs' : 'Custom TTL'} are only available for Pro accounts`,
+      error: `${payload.slug ? 'Custom vanish.sh slugs' : 'Custom TTL'} are only available on paid plans`,
     }, 403);
   }
 
@@ -711,7 +711,7 @@ sites.get('/sites', async (c) => {
     WHERE user_id = ?
   `;
   if (activeOnly) {
-    query += ` AND deleted_at IS NULL AND (expires_at IS NULL OR expires_at > datetime('now'))`;
+    query += ` AND deleted_at IS NULL AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))`;
   }
   query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`;
 
@@ -1024,6 +1024,7 @@ async function validateSiteConfigPatch(
   if (!user) {
     return { ok: false, error: 'Authentication required', status: 403 };
   }
+  const limits = TIER_LIMITS[user.tier];
 
   let rootPath = site.root_path;
   if (payload.rootPath !== undefined) {
@@ -1043,8 +1044,8 @@ async function validateSiteConfigPatch(
 
   let slug = site.slug;
   if (payload.slug !== undefined) {
-    if (user.tier !== 'pro') {
-      return { ok: false, error: 'Custom vanish.sh slugs are only available for Pro accounts', status: 403 };
+    if (!isPaidTier(user.tier)) {
+      return { ok: false, error: 'Custom vanish.sh slugs are only available on paid plans', status: 403 };
     }
 
     const normalizedSlug = await validateSiteSlug(c.env, payload.slug);
@@ -1069,13 +1070,13 @@ async function validateSiteConfigPatch(
     if (!customDays) {
       return { ok: false, error: 'days must be a positive integer', status: 400 };
     }
-    if (user.tier !== 'pro') {
-      return { ok: false, error: 'Custom TTL is only available for Pro tier', status: 403 };
+    if (!limits.customTtl) {
+      return { ok: false, error: 'Custom TTL is only available on paid plans', status: 403 };
     }
-    if (customDays > TIER_LIMITS.pro.maxCustomExpiryDays) {
+    if (customDays > limits.maxCustomExpiryDays) {
       return {
         ok: false,
-        error: `Maximum custom TTL is ${TIER_LIMITS.pro.maxCustomExpiryDays} days.`,
+        error: `Maximum custom TTL is ${limits.maxCustomExpiryDays} days.`,
         status: 400,
       };
     }
@@ -1125,7 +1126,7 @@ async function getSiteByChannel(env: Env, userId: string, channel: string): Prom
     WHERE sc.user_id = ?
       AND sc.channel = ?
       AND s.deleted_at IS NULL
-      AND (s.expires_at IS NULL OR s.expires_at > datetime('now'))
+      AND (s.expires_at IS NULL OR datetime(s.expires_at) > datetime('now'))
     LIMIT 1
   `).bind(userId, channel).first<Site>();
 }

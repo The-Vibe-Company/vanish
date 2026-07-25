@@ -384,7 +384,7 @@ const html = `<!doctype html>
   .pricing{background:var(--cream)}
   .pricing-head{display:flex;justify-content:space-between;align-items:end;gap:3rem}
   .pricing-note{max-width:380px;color:var(--muted)}
-  .plans{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;margin-top:4.5rem}
+  .plans{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1.2rem;margin-top:4.5rem}
   .plan{
     min-height:390px;
     padding:2rem;
@@ -456,6 +456,7 @@ const html = `<!doctype html>
     .hero-copy{max-width:760px}
     .artifact{margin:0 auto}
     .artifact-caption{right:1rem}
+    .plans{grid-template-columns:1fr 1fr}
     .use-strip{grid-template-columns:1fr 1fr}
     .use:nth-child(2){border-right:0}
      .use:nth-child(-n+2){border-bottom:1px solid rgba(17,17,15,.55)}
@@ -630,7 +631,7 @@ const html = `<!doctype html>
           <div class="section-kicker">Simple pricing</div>
           <h2 class="section-title">Free now.<br>Keep it longer when needed.</h2>
         </div>
-        <p class="pricing-note">Try Vanish without an account. Sign in for more room, or go Pro for custom names and longer-lived links.</p>
+        <p class="pricing-note">Start free, or go Pro when your sites need more room.</p>
       </div>
       <div class="plans">
         <article class="plan reveal">
@@ -644,12 +645,13 @@ const html = `<!doctype html>
           <button class="plan-cta" data-copy="Publish the current static site with Vanish. Identify the site folder and its entry HTML file, then run: npx vanish-cli site [folder] --root [entry-file]. Return the public URL."><span>Try it with my agent</span><span>↗</span></button>
         </article>
         <article class="plan pro reveal">
-          <div class="plan-top"><h3 class="plan-name">Pro</h3><span class="plan-price">€2 / month</span></div>
+          <div class="plan-top"><h3 class="plan-name">Pro</h3><span class="plan-price">€10 / month</span></div>
           <ul>
             <li>Custom vanish.sh addresses</li>
-            <li>Up to 1 GB of storage</li>
+            <li>Up to 10 GB of storage</li>
+            <li>Up to 5,000 files per site</li>
             <li>Keep links for up to 365 days</li>
-            <li>Update content without changing the URL</li>
+            <li>500 requests per hour</li>
           </ul>
           <a class="plan-cta" href="/auth/github?redirect=/dashboard"><span>Get Pro</span><span>↗</span></a>
         </article>

@@ -13,6 +13,7 @@ export interface Env {
 }
 
 export type Tier = 'anonymous' | 'free' | 'pro';
+export type PaidTier = Extract<Tier, 'pro'>;
 
 export interface User {
   id: string;
@@ -109,16 +110,24 @@ export const TIER_LIMITS = {
   },
   pro: {
     maxFileSize: 1024 * 1024 * 1024, // 1 GB
-    maxSiteSize: 1024 * 1024 * 1024, // bounded by total storage
-    maxSiteFiles: 1000,
-    maxTotalStorage: 1024 * 1024 * 1024, // 1 GB total
+    maxSiteSize: 10 * 1024 * 1024 * 1024, // bounded by total storage
+    maxSiteFiles: 5000,
+    maxTotalStorage: 10 * 1024 * 1024 * 1024, // 10 GB total
     maxExpiryHours: 30 * 24, // 30 days default
     maxCustomExpiryDays: 365,
-    rateLimit: 200,
+    rateLimit: 500,
     imageOnly: false,
     customTtl: true,
   },
 } as const;
+
+export const PLAN_PRICES_EUR: Record<PaidTier, number> = {
+  pro: 10,
+};
+
+export function isPaidTier(tier: Tier): tier is PaidTier {
+  return tier === 'pro';
+}
 
 // Blocked executable file extensions
 export const BLOCKED_EXTENSIONS = new Set([

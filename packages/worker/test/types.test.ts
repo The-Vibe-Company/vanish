@@ -29,10 +29,11 @@ describe('TIER_LIMITS', () => {
     expect(TIER_LIMITS.free.maxSiteFiles).toBe(500);
   });
 
-  it('pro tier has 1GB total storage', () => {
-    expect(TIER_LIMITS.pro.maxTotalStorage).toBe(1024 * 1024 * 1024);
-    expect(TIER_LIMITS.pro.maxSiteSize).toBe(1024 * 1024 * 1024);
-    expect(TIER_LIMITS.pro.maxSiteFiles).toBe(1000);
+  it('pro tier has 10GB total storage', () => {
+    expect(TIER_LIMITS.pro.maxTotalStorage).toBe(10 * 1024 * 1024 * 1024);
+    expect(TIER_LIMITS.pro.maxSiteSize).toBe(10 * 1024 * 1024 * 1024);
+    expect(TIER_LIMITS.pro.maxSiteFiles).toBe(5000);
+    expect(TIER_LIMITS.pro.rateLimit).toBe(500);
   });
 
   it('anonymous tier expires in 24 hours', () => {
@@ -59,7 +60,7 @@ describe('TIER_LIMITS', () => {
     expect(TIER_LIMITS.pro.imageOnly).toBe(false);
   });
 
-  it('only pro tier allows custom TTL', () => {
+  it('pro allows custom TTL', () => {
     expect(TIER_LIMITS.anonymous.customTtl).toBe(false);
     expect(TIER_LIMITS.free.customTtl).toBe(false);
     expect(TIER_LIMITS.pro.customTtl).toBe(true);
