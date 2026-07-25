@@ -1,0 +1,40 @@
+vanish-connect-upgrade/SKILL.md
+  s_ce7a446508f9a7::t_4396e5a3bd0ea0 57
+packages/worker/src/routes/sites.ts
+  s_ce7a446508f9a7::t_be996c31772b4a 450-451,472,483-515,517-529,749,1262-1263,1265-1268,1270,1275-1291,1326
+packages/cli/src/lib/api-client.ts
+  s_ce7a446508f9a7::t_4396e5a3bd0ea0 106
+vanish-publish-site/SKILL.md
+  s_ce7a446508f9a7::t_4396e5a3bd0ea0 96
+packages/worker/test/dashboard-route.test.ts
+  s_ce7a446508f9a7::t_8af566cd945c31 34-36
+packages/cli/src/commands/status.ts
+  s_ce7a446508f9a7::t_4396e5a3bd0ea0 35
+vanish-upload-files/SKILL.md
+  s_ce7a446508f9a7::t_4396e5a3bd0ea0 81
+packages/worker/test/sites-route.test.ts
+  s_ce7a446508f9a7::t_92508ad80543ee 173-198,568-575,704,707-713,797-801,866-868
+  s_ce7a446508f9a7::t_95127cc16639da 385
+CLAUDE.md
+  s_ce7a446508f9a7::t_0eb4c7dfad3212 75
+packages/worker/src/routes/dashboard.ts
+  s_ce7a446508f9a7::t_4396e5a3bd0ea0 1735,1745,2097,2404-2408,2422-2424
+packages/cli/test/status.test.ts
+  s_ce7a446508f9a7::t_2e10b63f7edcb7 1-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "58161d5de80458d01a61f1c601e2c7d8476d22ff",
+  "prompts": {},
+  "sessions": {
+    "s_ce7a446508f9a7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f97bd-7268-7052-a9f0-860973c38e35",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
