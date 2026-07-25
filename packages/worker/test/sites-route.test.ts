@@ -149,6 +149,88 @@ describe('site routes', () => {
     expect(await extra.json()).toMatchObject({ maxFiles: 1 });
   });
 
+  it('rolls back an uploaded object when cleanup claims the draft mid-upload', async () => {
+    const draft = await createSite(env, {
+      rootPath: 'index.html',
+      fileCount: 1,
+      totalBytes: 12,
+    });
+    bucket.afterPut = () => {
+      db.sites.get(draft.id)!.deleted_at = new Date().toISOString();
+    };
+
+    const response = await request(env, `/sites/${draft.id}/files?path=index.html`, {
+      method: 'PUT',
+      headers: { 'X-Site-Token': draft.token, 'Content-Type': 'text/html' },
+      body: '<h1>late</h1>',
+    });
+
+    expect(response.status).toBe(410);
+    expect(bucket.objects.size).toBe(0);
+    expect(db.siteFiles.size).toBe(0);
+  });
+
+  it('keeps published content and quota metadata stable when an overwrite loses the publish race', async () => {
+    const draft = await createSite(env, {
+      rootPath: 'index.html',
+      fileCount: 1,
+      totalBytes: 32,
+    });
+    await uploadSiteFile(env, draft.id, draft.token, 'index.html', '<h1>stable</h1>');
+    const originalSize = db.sites.get(draft.id)!.size_bytes;
+    bucket.afterPut = () => {
+      const site = db.sites.get(draft.id)!;
+      site.published_at = new Date().toISOString();
+      site.upload_token = null;
+    };
+
+    const response = await request(env, `/sites/${draft.id}/files?path=index.html`, {
+      method: 'PUT',
+      headers: { 'X-Site-Token': draft.token, 'Content-Type': 'text/html' },
+      body: '<h1>late overwrite</h1>',
+    });
+
+    expect(response.status).toBe(409);
+    expect(db.sites.get(draft.id)!.size_bytes).toBe(originalSize);
+    expect(bucket.objects.size).toBe(1);
+    expect(await (await request(env, `/s/${draft.id}/`)).text()).toBe('<h1>stable</h1>');
+  });
+
+  it('queues the version actually displaced by an overlapping same-path upload', async () => {
+    const draft = await createSite(env, {
+      rootPath: 'index.html',
+      fileCount: 1,
+      totalBytes: 64,
+    });
+    await uploadSiteFile(env, draft.id, draft.token, 'index.html', 'initial');
+
+    let releaseSlowPut!: () => void;
+    bucket.pauseNextPut = new Promise(resolve => {
+      releaseSlowPut = resolve;
+    });
+    const slowUpload = request(env, `/sites/${draft.id}/files?path=index.html`, {
+      method: 'PUT',
+      headers: { 'X-Site-Token': draft.token, 'Content-Type': 'text/plain' },
+      body: 'slow second writer',
+    });
+    await vi.waitFor(() => expect(bucket.objects.size).toBe(2));
+
+    const fastUpload = await request(env, `/sites/${draft.id}/files?path=index.html`, {
+      method: 'PUT',
+      headers: { 'X-Site-Token': draft.token, 'Content-Type': 'text/plain' },
+      body: 'fast first commit',
+    });
+    expect(fastUpload.status).toBe(200);
+    const displacedKey = db.siteFiles.get(`${draft.id}:index.html`)!.r2_key;
+
+    releaseSlowPut();
+    expect((await slowUpload).status).toBe(200);
+    const activeKey = db.siteFiles.get(`${draft.id}:index.html`)!.r2_key;
+
+    expect(activeKey).not.toBe(displacedKey);
+    expect(db.pendingR2Deletions.has(displacedKey)).toBe(true);
+  });
+
   it('allows draft cleanup with the site token', async () => {
     const draft = await createSite(env, {
       rootPath: 'index.html',
@@ -176,6 +258,22 @@ describe('site routes', () => {
     }, key);
     await uploadSiteFile(env, draft.id, draft.token, 'index.html', '<h1>old</h1>', key);
     await uploadSiteFile(env, draft.id, draft.token, 'old.js', 'old', key);
+    for (let index = 0; index < 1001; index++) {
+      const path = `legacy/file-${index}.txt`;
+      const r2Key = `sites/${draft.id}/${path}`;
+      db.siteFiles.set(`${draft.id}:${path}`, {
+        site_id: draft.id,
+        path,
+        content_type: 'text/plain',
+        size_bytes: 1,
+        r2_key: r2Key,
+        created_at: new Date().toISOString(),
+      });
+      bucket.objects.set(r2Key, {
+        body: new TextEncoder().encode('x').buffer,
+        contentType: 'text/plain',
+      });
+    }
     const oldKeys = Array.from(bucket.objects.keys());
     await request(env, `/sites/${draft.id}/publish`, {
       method: 'POST',
@@ -319,7 +417,7 @@ describe('site routes', () => {
     expect(publish.status).toBe(200);
     expect(bucket.objects.has(oldKey)).toBe(true);
     expect(db.pendingR2Deletions.has(oldKey)).toBe(true);
-    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to delete pending R2 object'), expect.any(Error));
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to delete 1 pending R2 object'), expect.any(Error));
     errorSpy.mockRestore();
   });
 
@@ -486,12 +584,18 @@ async function request(env: Env, path: string, init?: RequestInit) {
 class FakeBucket {
   objects = new Map<string, { body: ArrayBuffer; contentType?: string }>();
   failDeletes = new Set<string>();
+  afterPut?: () => void;
+  pauseNextPut?: Promise<void>;
 
   async put(key: string, body: ArrayBuffer, options?: R2PutOptions): Promise<void> {
     this.objects.set(key, {
       body,
       contentType: options?.httpMetadata?.contentType,
     });
+    this.afterPut?.();
+    const pause = this.pauseNextPut;
+    this.pauseNextPut = undefined;
+    await pause;
   }
 
   async get(key: string): Promise<{ body: ReadableStream | null } | null> {
@@ -500,11 +604,15 @@ class FakeBucket {
     return { body: new Response(object.body).body };
   }
 
-  async delete(key: string): Promise<void> {
-    if (this.failDeletes.has(key)) {
-      throw new Error(`delete failed: ${key}`);
+  async delete(keyOrKeys: string | string[]): Promise<void> {
+    const keys = Array.isArray(keyOrKeys) ? keyOrKeys : [keyOrKeys];
+    const failedKey = keys.find(key => this.failDeletes.has(key));
+    if (failedKey) {
+      throw new Error(`delete failed: ${failedKey}`);
     }
-    this.objects.delete(key);
+    for (const key of keys) {
+      this.objects.delete(key);
+    }
   }
 }
 
@@ -632,10 +740,16 @@ class FakeStatement {
       return { total_bytes: 0 } as T;
     }
 
-    if (sql.includes('SELECT size_bytes FROM site_files')) {
+    if (sql.includes('SELECT size_bytes, r2_key FROM site_files')) {
       const [siteId, path] = this.args as [string, string];
       const file = this.db.siteFiles.get(`${siteId}:${path}`);
-      return (file ? { size_bytes: file.size_bytes } : null) as T | null;
+      return (file ? { size_bytes: file.size_bytes, r2_key: file.r2_key } : null) as T | null;
+    }
+
+    if (sql.includes('SELECT r2_key FROM site_files') && sql.includes('path = ?')) {
+      const [siteId, path] = this.args as [string, string];
+      const file = this.db.siteFiles.get(`${siteId}:${path}`);
+      return (file ? { r2_key: file.r2_key } : null) as T | null;
     }
 
     if (sql.includes('SELECT path FROM site_files')) {
@@ -656,11 +770,12 @@ class FakeStatement {
     const sql = normalizeSql(this.sql);
 
     if (sql.includes('SELECT r2_key FROM site_files WHERE site_id = ?')) {
-      const [siteId] = this.args as [string];
+      const [siteId, after = '', limit = Number.MAX_SAFE_INTEGER] = this.args as [string, string?, number?];
       return {
         results: Array.from(this.db.siteFiles.values())
-          .filter(file => file.site_id === siteId)
-          .slice(0, 100) as T[],
+          .filter(file => file.site_id === siteId && file.r2_key > after)
+          .sort((a, b) => a.r2_key.localeCompare(b.r2_key))
+          .slice(0, limit) as T[],
       };
     }
 
@@ -706,9 +821,35 @@ class FakeStatement {
       return;
     }
 
+    if (sql.includes('INSERT OR IGNORE INTO pending_r2_deletions') &&
+        sql.includes('SELECT site_files.r2_key') &&
+        sql.includes('site_files.path = ?')) {
+      const [siteId, path, guardSiteId] = this.args as [string, string, string];
+      const site = this.db.sites.get(guardSiteId);
+      const file = this.db.siteFiles.get(`${siteId}:${path}`);
+      if (site && site.deleted_at === null && site.published_at === null && file) {
+        this.db.pendingR2Deletions.add(file.r2_key);
+      }
+      return;
+    }
+
+    if (sql.includes('INSERT OR IGNORE INTO pending_r2_deletions') && sql.includes('SELECT r2_key FROM site_files')) {
+      const [siteId] = this.args as [string];
+      for (const file of this.db.siteFiles.values()) {
+        if (file.site_id === siteId) {
+          this.db.pendingR2Deletions.add(file.r2_key);
+        }
+      }
+      return;
+    }
+
     if (sql.includes('INSERT OR IGNORE INTO pending_r2_deletions')) {
       const [key] = this.args as [string];
-      this.db.pendingR2Deletions.add(key);
+      const siteId = this.args[2] as string | undefined;
+      const site = siteId ? this.db.sites.get(siteId) : null;
+      if (key && (!sql.includes('published_at IS NULL') || (site && site.deleted_at === null && site.published_at === null))) {
+        this.db.pendingR2Deletions.add(key);
+      }
       return;
     }
 
@@ -755,6 +896,10 @@ class FakeStatement {
 
     if (sql.includes('INSERT OR REPLACE INTO site_files')) {
       const [siteId, path, contentType, sizeBytes, r2Key] = this.args as [string, string, string, number, string];
+      const site = this.db.sites.get(siteId);
+      if (sql.includes('WHERE EXISTS') && (!site || site.deleted_at !== null || site.published_at !== null)) {
+        return;
+      }
       this.db.siteFiles.set(`${siteId}:${path}`, {
         site_id: siteId,
         path,
@@ -769,10 +914,21 @@ class FakeStatement {
     if (sql.includes('UPDATE sites SET size_bytes =')) {
       const [siteId] = this.args as [string];
       const site = this.db.sites.get(siteId);
-      if (!site) return;
+      if (!site ||
+          (sql.includes('deleted_at IS NULL') && site.deleted_at !== null) ||
+          (sql.includes('published_at IS NULL') && site.published_at !== null)) return;
       const files = Array.from(this.db.siteFiles.values()).filter(file => file.site_id === siteId);
       site.size_bytes = files.reduce((sum, file) => sum + file.size_bytes, 0);
       site.file_count = files.length;
+      return;
+    }
+
+    if (sql.includes("UPDATE sites SET last_activity_at = datetime('now')")) {
+      const [siteId] = this.args as [string];
+      const site = this.db.sites.get(siteId);
+      if (site && site.deleted_at === null && site.published_at === null) {
+        site.last_activity_at = new Date().toISOString();
+      }
       return;
     }
 
@@ -805,6 +961,12 @@ class FakeStatement {
           this.db.siteFiles.delete(`${siteId}:${file.path}`);
         }
       }
+      return;
+    }
+
+    if (sql === 'DELETE FROM site_files WHERE site_id = ? AND path = ?') {
+      const [siteId, path] = this.args as [string, string];
+      this.db.siteFiles.delete(`${siteId}:${path}`);
       return;
     }
 

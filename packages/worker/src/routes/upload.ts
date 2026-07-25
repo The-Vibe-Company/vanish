@@ -113,7 +113,7 @@ upload.post('/upload', async (c) => {
     ), 400);
   }
 
-  // Parse optional custom TTL (days) — pro tier only
+  // Parse optional custom TTL (days) — paid tiers only
   const daysParam = c.req.header('X-Expires-Days') || c.req.query('days');
   let customDays: number | undefined;
   if (daysParam !== undefined && daysParam !== null) {
@@ -124,13 +124,13 @@ upload.post('/upload', async (c) => {
     if (!limits.customTtl) {
       return c.json(structuredError(
         'custom_ttl_requires_pro',
-        `Custom TTL is only available for Pro tier. Current tier: ${tier}.`,
+        `Custom TTL is only available on paid plans. Current tier: ${tier}.`,
         403,
         { hint: 'Upgrade with: vanish upgrade', upgradeRequired: true },
       ), 403);
     }
-    if (parsed > TIER_LIMITS.pro.maxCustomExpiryDays) {
-      return c.json(structuredError('custom_ttl_too_long', `Maximum custom TTL is ${TIER_LIMITS.pro.maxCustomExpiryDays} days.`, 400), 400);
+    if (parsed > limits.maxCustomExpiryDays) {
+      return c.json(structuredError('custom_ttl_too_long', `Maximum custom TTL is ${limits.maxCustomExpiryDays} days.`, 400), 400);
     }
     customDays = parsed;
   }

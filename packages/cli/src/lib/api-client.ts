@@ -70,9 +70,13 @@ export interface MeResult {
   stats: {
     total_uploads: number;
     total_sites?: number;
+    published_sites?: number;
+    total_site_drafts?: number;
     total_bundles?: number;
     upload_bytes?: number;
     site_bytes?: number;
+    published_site_bytes?: number;
+    draft_site_bytes?: number;
     bundle_bytes?: number;
     total_bytes: number;
   };
@@ -99,6 +103,7 @@ export interface SiteInfo {
   url: string;
   expires_at: string | null;
   created_at: string;
+  last_activity_at?: string;
   published_at: string | null;
   expired: boolean;
   deleted: boolean;

@@ -41,6 +41,9 @@ CREATE TABLE IF NOT EXISTS uploads (
 
 CREATE INDEX IF NOT EXISTS idx_uploads_user ON uploads(user_id);
 CREATE INDEX IF NOT EXISTS idx_uploads_expires ON uploads(expires_at) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_uploads_expires_datetime
+  ON uploads(datetime(expires_at))
+  WHERE expires_at IS NOT NULL AND deleted_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS sites (
   id TEXT PRIMARY KEY,
@@ -55,6 +58,7 @@ CREATE TABLE IF NOT EXISTS sites (
   expires_at TEXT,
   published_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  last_activity_at TEXT NOT NULL DEFAULT (datetime('now')),
   deleted_at TEXT
 );
 
@@ -63,6 +67,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_sites_active_slug
   ON sites(slug)
   WHERE slug IS NOT NULL AND deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_sites_expires ON sites(expires_at) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_sites_expires_datetime
+  ON sites(datetime(expires_at))
+  WHERE expires_at IS NOT NULL AND deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_sites_draft_activity
+  ON sites(COALESCE(last_activity_at, created_at))
+  WHERE published_at IS NULL AND deleted_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS site_channels (
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -106,6 +116,9 @@ CREATE TABLE IF NOT EXISTS bundles (
 
 CREATE INDEX IF NOT EXISTS idx_bundles_user ON bundles(user_id);
 CREATE INDEX IF NOT EXISTS idx_bundles_expires ON bundles(expires_at) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_bundles_expires_datetime
+  ON bundles(datetime(expires_at))
+  WHERE expires_at IS NOT NULL AND deleted_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS bundle_files (
   bundle_id TEXT NOT NULL REFERENCES bundles(id) ON DELETE CASCADE,
@@ -130,6 +143,8 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
 );
 
 CREATE INDEX IF NOT EXISTS idx_idempotency_expires ON idempotency_keys(expires_at);
+CREATE INDEX IF NOT EXISTS idx_idempotency_expires_datetime
+  ON idempotency_keys(datetime(expires_at));
 
 -- Temporary sessions for CLI login flow
 CREATE TABLE IF NOT EXISTS auth_sessions (
@@ -139,6 +154,9 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   expires_at TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_datetime
+  ON auth_sessions(datetime(expires_at));
 
 -- Privacy-light product funnel events. Properties must never include filenames,
 -- paths, tokens, keys, email addresses, or content.

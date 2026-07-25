@@ -23,6 +23,7 @@ interface ProductEventInput {
 
 const SAFE_PROPERTY_KEYS = new Set([
   'tier',
+  'target_tier',
   'file_count',
   'total_bytes',
   'max_bytes',

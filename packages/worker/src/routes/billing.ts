@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import type { Env } from '../types.js';
+import type { Env, PaidTier, Tier } from '../types.js';
+import { TIER_LIMITS } from '../types.js';
 import { StripeClient, verifyWebhookSignature } from '../lib/stripe.js';
 import { logProductEvent } from '../lib/events.js';
 
@@ -11,7 +12,7 @@ const INACTIVE_SUBSCRIPTION_STATUSES = ['past_due', 'unpaid', 'canceled', 'incom
 
 type BillingUserRecord = {
   id: string;
-  tier: string;
+  tier: Tier;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
 };
@@ -26,10 +27,11 @@ type StripeSubscriptionPayload = {
 type BillingContext = Context<{ Bindings: Env }>;
 
 /**
- * GET /billing/checkout - Create a Stripe Checkout session and redirect.
+ * GET/POST /billing/checkout - Create a Stripe Checkout session.
+ * GET redirects for the CLI; POST returns JSON for the dashboard.
  * Requires authentication.
  */
-billing.get('/billing/checkout', async (c) => {
+billing.on(['GET', 'POST'], '/billing/checkout', async (c) => {
   if (c.env.SELF_HOSTED === 'true') {
     return c.json({ error: 'Billing is not available on self-hosted instances' }, 404);
   }
@@ -39,11 +41,24 @@ billing.get('/billing/checkout', async (c) => {
     return c.json({ error: 'Authentication required. Run: vanish login' }, 401);
   }
 
-  if (user.tier === 'pro') {
-    return c.json({ error: 'Already on Pro tier', tier: 'pro' }, 400);
+  const requestedTier = readCheckoutTier(c.req.query('tier'));
+  if (!requestedTier) {
+    return c.json({ error: 'Unknown plan. Choose pro.' }, 400);
   }
 
-  if (!c.env.STRIPE_SECRET_KEY || !c.env.STRIPE_PRICE_ID) {
+  if (user.tier === requestedTier) {
+    return c.json({ error: `Already on ${planName(requestedTier)} tier`, tier: requestedTier }, 400);
+  }
+  if (user.stripe_subscription_id) {
+    return c.json({
+      error: 'Use Manage billing to change an existing subscription.',
+      tier: user.tier,
+      manageBilling: true,
+    }, 409);
+  }
+
+  const priceId = c.env.STRIPE_PRO_PRICE_ID_EUR_10;
+  if (!c.env.STRIPE_SECRET_KEY || !priceId) {
     return c.json({ error: 'Stripe not configured' }, 503);
   }
 
@@ -51,11 +66,11 @@ billing.get('/billing/checkout', async (c) => {
   const baseUrl = c.env.BASE_URL;
 
   const session = await stripe.createCheckoutSession({
-    priceId: c.env.STRIPE_PRICE_ID,
+    priceId,
     customerId: user.stripe_customer_id || undefined,
     customerEmail: !user.stripe_customer_id ? (user.email || undefined) : undefined,
-    metadata: { vanish_user_id: user.id },
-    successUrl: `${baseUrl}/billing/success`,
+    metadata: { vanish_user_id: user.id, vanish_tier: requestedTier },
+    successUrl: `${baseUrl}/billing/success?tier=${requestedTier}`,
     cancelUrl: `${baseUrl}/billing/cancel`,
   });
 
@@ -64,11 +79,12 @@ billing.get('/billing/checkout', async (c) => {
     userId: user.id,
     properties: {
       tier: user.tier,
+      target_tier: requestedTier,
       checkout_provider: 'stripe',
     },
   });
 
-  return c.redirect(session.url);
+  return c.req.method === 'POST' ? c.json({ url: session.url }) : c.redirect(session.url);
 });
 
 async function createBillingPortalUrl(c: BillingContext): Promise<
@@ -131,18 +147,21 @@ billing.post('/billing/portal', async (c) => {
  * GET /billing/success - Shown after successful checkout.
  */
 billing.get('/billing/success', (c) => {
+  const tier = readCheckoutTier(c.req.query('tier')) || 'pro';
+  const limits = TIER_LIMITS[tier];
+  const storageGb = Math.round(limits.maxTotalStorage / (1024 * 1024 * 1024));
   return c.html(`<!DOCTYPE html>
 <html><head><title>vanish - Upgrade successful</title>
 <style>
   body { font-family: -apple-system, system-ui, sans-serif; max-width: 600px; margin: 80px auto; padding: 0 20px; text-align: center; }
 </style></head>
 <body>
-  <h1>Welcome to Pro!</h1>
+  <h1>Welcome to ${planName(tier)}!</h1>
   <p>Your account has been upgraded. You now have:</p>
   <ul style="text-align:left;display:inline-block;">
-    <li>1 GB max file size</li>
-    <li>Unlimited retention</li>
-    <li>200 uploads/hour</li>
+    <li>${storageGb} GB total storage</li>
+    <li>Up to ${limits.maxCustomExpiryDays} days retention</li>
+    <li>${limits.rateLimit} requests/hour</li>
   </ul>
   <p>You can close this tab and continue using <code>vanish</code>.</p>
 </body></html>`);
@@ -182,7 +201,7 @@ billing.get('/billing/portal-return', (c) => {
 /**
  * POST /webhooks/stripe - Handle Stripe webhook events.
  * Events handled:
- *   - checkout.session.completed: link Stripe customer to user, upgrade to Pro
+ *   - checkout.session.completed: link Stripe customer to user, activate the selected paid tier
  *   - customer.subscription.created: reconcile active subscription state
  *   - customer.subscription.deleted: downgrade to Free
  *   - customer.subscription.updated: handle status changes
@@ -218,6 +237,7 @@ billing.post('/webhooks/stripe', async (c) => {
     case 'checkout.session.completed': {
       const session = event.data.object;
       const userId = (session.metadata as Record<string, string>)?.vanish_user_id;
+      const paidTier = readMetadataTier(session.metadata) || 'pro';
       const customerId = session.customer as string;
       const subscriptionId = session.subscription as string;
 
@@ -237,8 +257,8 @@ billing.post('/webhooks/stripe', async (c) => {
         break;
       }
 
-      await upgradeUserToPro(c.env, currentUser, customerId, subscriptionId, 'active');
-      console.log(`User ${userId} upgraded to Pro (customer: ${customerId})`);
+      await setUserPaidTier(c.env, currentUser, customerId, subscriptionId, 'active', paidTier);
+      console.log(`User ${redactIdentifier(userId)} upgraded to ${paidTier}`);
       break;
     }
 
@@ -287,8 +307,9 @@ async function reconcileSubscription(env: Env, subscription: StripeSubscriptionP
       return;
     }
 
-    await upgradeUserToPro(env, user, customerId, subscriptionId, status);
-    console.log(`Subscription ${redactIdentifier(subscriptionId)} status ${status} - user ${redactIdentifier(user.id)} upgraded to pro`);
+    const paidTier = readMetadataTier(subscription.metadata) || 'pro';
+    await setUserPaidTier(env, user, customerId, subscriptionId, status, paidTier);
+    console.log(`Subscription ${redactIdentifier(subscriptionId)} status ${status} - user ${redactIdentifier(user.id)} set to ${paidTier}`);
     return;
   }
 
@@ -327,27 +348,28 @@ async function findUserForSubscription(
   `).bind(metadataUserId).first<BillingUserRecord>();
 }
 
-async function upgradeUserToPro(
+async function setUserPaidTier(
   env: Env,
   user: BillingUserRecord,
   customerId: string,
   subscriptionId: string,
-  subscriptionStatus: string
+  subscriptionStatus: string,
+  paidTier: PaidTier,
 ): Promise<void> {
   const currentUser = await env.DB.prepare(`
     SELECT id, tier, stripe_customer_id, stripe_subscription_id
     FROM users
     WHERE id = ?
   `).bind(user.id).first<BillingUserRecord>();
-  const alreadyRecorded = currentUser?.tier === 'pro' &&
+  const alreadyRecorded = currentUser?.tier === paidTier &&
     currentUser.stripe_customer_id === customerId &&
     currentUser.stripe_subscription_id === subscriptionId;
 
   await env.DB.prepare(`
     UPDATE users
-    SET stripe_customer_id = ?, stripe_subscription_id = ?, tier = 'pro', updated_at = datetime('now')
+    SET stripe_customer_id = ?, stripe_subscription_id = ?, tier = ?, updated_at = datetime('now')
     WHERE id = ?
-  `).bind(customerId, subscriptionId, user.id).run();
+  `).bind(customerId, subscriptionId, paidTier, user.id).run();
 
   if (alreadyRecorded) {
     return;
@@ -357,7 +379,7 @@ async function upgradeUserToPro(
     name: 'upgrade_completed',
     userId: user.id,
     properties: {
-      tier: 'pro',
+      tier: paidTier,
       checkout_provider: 'stripe',
       subscription_status: subscriptionStatus,
     },
@@ -412,6 +434,26 @@ function readMetadataUserId(metadata: unknown): string | null {
 
   const value = (metadata as Record<string, unknown>).vanish_user_id;
   return typeof value === 'string' && value ? value : null;
+}
+
+function readCheckoutTier(value: string | undefined): PaidTier | null {
+  if (!value) {
+    return 'pro';
+  }
+  return value === 'pro' ? value : null;
+}
+
+function readMetadataTier(metadata: unknown): PaidTier | null {
+  if (!metadata || typeof metadata !== 'object') {
+    return null;
+  }
+
+  const value = (metadata as Record<string, unknown>).vanish_tier;
+  return value === 'pro' ? value : null;
+}
+
+function planName(_tier: PaidTier): string {
+  return 'Pro';
 }
 
 function redactIdentifier(value: string): string {

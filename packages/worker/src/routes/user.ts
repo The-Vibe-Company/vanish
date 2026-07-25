@@ -21,18 +21,27 @@ user.get('/me', async (c) => {
     FROM uploads
     WHERE user_id = ?
       AND deleted_at IS NULL
-      AND (expires_at IS NULL OR expires_at > datetime('now'))
+      AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))
   `).bind(currentUser.id).first<{ total_uploads: number; total_bytes: number }>();
 
   const siteStats = await c.env.DB.prepare(`
     SELECT
       COUNT(*) as total_sites,
-      COALESCE(SUM(size_bytes), 0) as total_bytes
+      SUM(CASE WHEN published_at IS NOT NULL THEN 1 ELSE 0 END) as published_sites,
+      SUM(CASE WHEN published_at IS NULL THEN 1 ELSE 0 END) as total_site_drafts,
+      COALESCE(SUM(CASE WHEN published_at IS NOT NULL THEN size_bytes ELSE 0 END), 0) as published_bytes,
+      COALESCE(SUM(CASE WHEN published_at IS NULL THEN size_bytes ELSE 0 END), 0) as draft_bytes
     FROM sites
     WHERE user_id = ?
       AND deleted_at IS NULL
-      AND (expires_at IS NULL OR expires_at > datetime('now'))
-  `).bind(currentUser.id).first<{ total_sites: number; total_bytes: number }>();
+      AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))
+  `).bind(currentUser.id).first<{
+    total_sites: number;
+    published_sites: number;
+    total_site_drafts: number;
+    published_bytes: number;
+    draft_bytes: number;
+  }>();
 
   let bundleStats: { total_bundles: number; total_bytes: number } | null = null;
   try {
@@ -54,7 +63,9 @@ user.get('/me', async (c) => {
 
   const limits = TIER_LIMITS[currentUser.tier];
   const uploadBytes = uploadStats?.total_bytes || 0;
-  const siteBytes = siteStats?.total_bytes || 0;
+  const publishedSiteBytes = siteStats?.published_bytes || 0;
+  const draftSiteBytes = siteStats?.draft_bytes || 0;
+  const siteBytes = publishedSiteBytes + draftSiteBytes;
   const bundleBytes = bundleStats?.total_bytes || 0;
 
   return c.json({
@@ -69,9 +80,13 @@ user.get('/me', async (c) => {
     stats: {
       total_uploads: uploadStats?.total_uploads || 0,
       total_sites: siteStats?.total_sites || 0,
+      published_sites: siteStats?.published_sites || 0,
+      total_site_drafts: siteStats?.total_site_drafts || 0,
       total_bundles: bundleStats?.total_bundles || 0,
       upload_bytes: uploadBytes,
       site_bytes: siteBytes,
+      published_site_bytes: publishedSiteBytes,
+      draft_site_bytes: draftSiteBytes,
       bundle_bytes: bundleBytes,
       total_bytes: uploadBytes + siteBytes + bundleBytes,
     },
@@ -111,7 +126,7 @@ user.get('/uploads', async (c) => {
     WHERE user_id = ?
   `;
   if (activeOnly) {
-    query += ` AND deleted_at IS NULL AND (expires_at IS NULL OR expires_at > datetime('now'))`;
+    query += ` AND deleted_at IS NULL AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))`;
   }
   query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`;
 

@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { customAlphabet, nanoid } from 'nanoid';
 import type { Env, Site, SiteFile, Tier } from '../types.js';
-import { BLOCKED_EXTENSIONS, TIER_LIMITS } from '../types.js';
+import { BLOCKED_EXTENSIONS, TIER_LIMITS, isPaidTier } from '../types.js';
 import { calculateExpiry, isExpired } from '../lib/expiry.js';
 import { guessContentType } from '../lib/content-type.js';
 import { ensureStorageAvailable } from '../lib/storage.js';
@@ -124,21 +124,21 @@ sites.post('/sites', rateLimitMiddleware, async (c) => {
     }
     if (!limits.customTtl) {
       return c.json({
-        error: `Custom TTL is only available for Pro tier. Current tier: ${tier}.`,
+        error: `Custom TTL is only available on paid plans. Current tier: ${tier}.`,
         hint: user ? 'Upgrade with: vanish upgrade' : 'Login and upgrade with: vanish login && vanish upgrade',
       }, 403);
     }
-    if (customDays > TIER_LIMITS.pro.maxCustomExpiryDays) {
+    if (customDays > limits.maxCustomExpiryDays) {
       return c.json({
-        error: `Maximum custom TTL is ${TIER_LIMITS.pro.maxCustomExpiryDays} days.`,
+        error: `Maximum custom TTL is ${limits.maxCustomExpiryDays} days.`,
       }, 400);
     }
   }
 
   let slug: string | null;
   if (payload.slug) {
-    if (tier !== 'pro' || !user) {
-      return c.json({ error: 'Custom vanish.sh slugs are only available for Pro accounts' }, 403);
+    if (!isPaidTier(tier) || !user) {
+      return c.json({ error: 'Custom vanish.sh slugs are only available on paid plans' }, 403);
     }
 
     slug = await validateSiteSlug(c.env, payload.slug);
@@ -354,9 +354,9 @@ sites.post('/sites/:id/replacements', async (c) => {
     }, 413);
   }
 
-  if ((payload.slug || payload.days !== undefined) && user.tier !== 'pro') {
+  if ((payload.slug || payload.days !== undefined) && !isPaidTier(user.tier)) {
     return c.json({
-      error: `${payload.slug ? 'Custom vanish.sh slugs' : 'Custom TTL'} are only available for Pro accounts`,
+      error: `${payload.slug ? 'Custom vanish.sh slugs' : 'Custom TTL'} are only available on paid plans`,
     }, 403);
   }
 
@@ -423,6 +423,8 @@ sites.put('/sites/:id/files', async (c) => {
     return c.json({ error: auth.error }, auth.status);
   }
 
+  await touchSiteDraft(c.env, site.id);
+
   const rateLimit = await checkSiteMutationRateLimit(c, auth.tier, 'site-file', TIER_LIMITS[auth.tier].maxSiteFiles + TIER_LIMITS[auth.tier].rateLimit);
   if (!rateLimit.ok) {
     return c.json(rateLimit.body, 429);
@@ -442,10 +444,11 @@ sites.put('/sites/:id/files', async (c) => {
   if (body.byteLength === 0) {
     return c.json({ error: 'Empty file' }, 400);
   }
+  await touchSiteDraft(c.env, site.id);
 
   const existingFile = await c.env.DB.prepare(`
-    SELECT size_bytes FROM site_files WHERE site_id = ? AND path = ?
-  `).bind(site.id, path).first<{ size_bytes: number }>();
+    SELECT size_bytes, r2_key FROM site_files WHERE site_id = ? AND path = ?
+  `).bind(site.id, path).first<{ size_bytes: number; r2_key: string }>();
 
   if (!existingFile && site.file_count >= site.expected_file_count) {
     return c.json({
@@ -466,7 +469,7 @@ sites.put('/sites/:id/files', async (c) => {
   const contentType = c.req.header('Content-Type') === 'application/octet-stream'
     ? guessContentType(path)
     : c.req.header('Content-Type') || guessContentType(path);
-  const r2Key = `sites/${site.id}/${path}`;
+  const r2Key = `sites/${site.id}/objects/${nanoid(24)}`;
 
   await c.env.BUCKET.put(r2Key, body, {
     httpMetadata: { contentType },
@@ -477,22 +480,56 @@ sites.put('/sites/:id/files', async (c) => {
     },
   });
 
-  await c.env.DB.batch([
-    c.env.DB.prepare(`
-      INSERT OR REPLACE INTO site_files (site_id, path, content_type, size_bytes, r2_key)
-      VALUES (?, ?, ?, ?, ?)
-    `).bind(site.id, path, contentType, body.byteLength, r2Key),
-    c.env.DB.prepare(`
-      UPDATE sites
-      SET size_bytes = (
-        SELECT COALESCE(SUM(size_bytes), 0) FROM site_files WHERE site_id = ?
-      ),
-      file_count = (
-        SELECT COUNT(*) FROM site_files WHERE site_id = ?
-      )
-      WHERE id = ?
-    `).bind(site.id, site.id, site.id),
-  ]);
+  try {
+    await c.env.DB.batch([
+      c.env.DB.prepare(`
+        INSERT OR IGNORE INTO pending_r2_deletions (r2_key)
+        SELECT site_files.r2_key
+        FROM site_files
+        WHERE site_files.site_id = ?
+          AND site_files.path = ?
+          AND EXISTS (
+            SELECT 1 FROM sites WHERE id = ? AND deleted_at IS NULL AND published_at IS NULL
+          )
+      `).bind(site.id, path, site.id),
+      c.env.DB.prepare(`
+        INSERT OR REPLACE INTO site_files (site_id, path, content_type, size_bytes, r2_key)
+        SELECT ?, ?, ?, ?, ?
+        WHERE EXISTS (
+          SELECT 1 FROM sites WHERE id = ? AND deleted_at IS NULL AND published_at IS NULL
+        )
+      `).bind(site.id, path, contentType, body.byteLength, r2Key, site.id),
+      c.env.DB.prepare(`
+        UPDATE sites
+        SET size_bytes = (
+          SELECT COALESCE(SUM(size_bytes), 0) FROM site_files WHERE site_id = ?
+        ),
+        file_count = (
+          SELECT COUNT(*) FROM site_files WHERE site_id = ?
+        ),
+        last_activity_at = datetime('now')
+        WHERE id = ? AND deleted_at IS NULL AND published_at IS NULL
+      `).bind(site.id, site.id, site.id),
+    ]);
+  } catch (err) {
+    await queueAndDeleteR2Object(c.env, r2Key);
+    throw err;
+  }
+
+  const committedFile = await c.env.DB.prepare(`
+    SELECT r2_key FROM site_files WHERE site_id = ? AND path = ?
+  `).bind(site.id, path).first<{ r2_key: string }>();
+  if (committedFile?.r2_key !== r2Key) {
+    await queueAndDeleteR2Object(c.env, r2Key);
+    const currentSite = await getSite(c.env, site.id);
+    return currentSite
+      ? c.json({ error: 'This site draft was published before the upload completed' }, 409)
+      : c.json({ error: 'This site draft is no longer available' }, 410);
+  }
+
+  if (existingFile?.r2_key && existingFile.r2_key !== r2Key) {
+    await deletePendingR2Objects(c.env, [existingFile.r2_key]);
+  }
 
   return c.json({
     ok: true,
@@ -517,6 +554,8 @@ sites.post('/sites/:id/publish', async (c) => {
   if (!auth.ok) {
     return c.json({ error: auth.error }, auth.status);
   }
+
+  await touchSiteDraft(c.env, site.id);
 
   const rateLimit = await checkSiteMutationRateLimit(c, auth.tier, 'site-publish', TIER_LIMITS[auth.tier].rateLimit);
   if (!rateLimit.ok) {
@@ -592,6 +631,8 @@ sites.post('/sites/:id/replacements/:draftId/publish', async (c) => {
   if (!draft || draft.user_id !== user.id || getReplacementTargetId(draft) !== target.id) {
     return c.json({ error: 'Replacement draft not found' }, 404);
   }
+
+  await touchSiteDraft(c.env, draft.id);
   if (draft.published_at) {
     return c.json({ error: 'Replacement draft has already been published' }, 409);
   }
@@ -638,9 +679,10 @@ sites.post('/sites/:id/replacements/:draftId/publish', async (c) => {
 
   const oldFiles = await listSiteObjectKeys(c.env, target.id);
   await c.env.DB.batch([
-    ...oldFiles.map(key =>
-      c.env.DB.prepare('INSERT OR IGNORE INTO pending_r2_deletions (r2_key) VALUES (?)').bind(key)
-    ),
+    c.env.DB.prepare(`
+      INSERT OR IGNORE INTO pending_r2_deletions (r2_key)
+      SELECT r2_key FROM site_files WHERE site_id = ?
+    `).bind(target.id),
     c.env.DB.prepare(`
       INSERT OR REPLACE INTO site_files (site_id, path, content_type, size_bytes, r2_key, created_at)
       SELECT ?, path, content_type, size_bytes, r2_key, created_at
@@ -706,12 +748,12 @@ sites.get('/sites', async (c) => {
 
   let query = `
     SELECT id, user_id, name, root_path, slug, upload_token, size_bytes, file_count, expected_file_count,
-           expires_at, published_at, created_at, deleted_at
+           expires_at, published_at, created_at, last_activity_at, deleted_at
     FROM sites
     WHERE user_id = ?
   `;
   if (activeOnly) {
-    query += ` AND deleted_at IS NULL AND (expires_at IS NULL OR expires_at > datetime('now'))`;
+    query += ` AND deleted_at IS NULL AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))`;
   }
   query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`;
 
@@ -1024,6 +1066,7 @@ async function validateSiteConfigPatch(
   if (!user) {
     return { ok: false, error: 'Authentication required', status: 403 };
   }
+  const limits = TIER_LIMITS[user.tier];
 
   let rootPath = site.root_path;
   if (payload.rootPath !== undefined) {
@@ -1043,8 +1086,8 @@ async function validateSiteConfigPatch(
 
   let slug = site.slug;
   if (payload.slug !== undefined) {
-    if (user.tier !== 'pro') {
-      return { ok: false, error: 'Custom vanish.sh slugs are only available for Pro accounts', status: 403 };
+    if (!isPaidTier(user.tier)) {
+      return { ok: false, error: 'Custom vanish.sh slugs are only available on paid plans', status: 403 };
     }
 
     const normalizedSlug = await validateSiteSlug(c.env, payload.slug);
@@ -1069,13 +1112,13 @@ async function validateSiteConfigPatch(
     if (!customDays) {
       return { ok: false, error: 'days must be a positive integer', status: 400 };
     }
-    if (user.tier !== 'pro') {
-      return { ok: false, error: 'Custom TTL is only available for Pro tier', status: 403 };
+    if (!limits.customTtl) {
+      return { ok: false, error: 'Custom TTL is only available on paid plans', status: 403 };
     }
-    if (customDays > TIER_LIMITS.pro.maxCustomExpiryDays) {
+    if (customDays > limits.maxCustomExpiryDays) {
       return {
         ok: false,
-        error: `Maximum custom TTL is ${TIER_LIMITS.pro.maxCustomExpiryDays} days.`,
+        error: `Maximum custom TTL is ${limits.maxCustomExpiryDays} days.`,
         status: 400,
       };
     }
@@ -1119,13 +1162,14 @@ function normalizeChannel(input: string): string | null {
 async function getSiteByChannel(env: Env, userId: string, channel: string): Promise<Site | null> {
   return env.DB.prepare(`
     SELECT s.id, s.user_id, s.name, s.root_path, s.slug, s.upload_token, s.size_bytes,
-           s.file_count, s.expected_file_count, s.expires_at, s.published_at, s.created_at, s.deleted_at
+           s.file_count, s.expected_file_count, s.expires_at, s.published_at, s.created_at,
+           s.last_activity_at, s.deleted_at
     FROM site_channels sc
     JOIN sites s ON s.id = sc.site_id
     WHERE sc.user_id = ?
       AND sc.channel = ?
       AND s.deleted_at IS NULL
-      AND (s.expires_at IS NULL OR s.expires_at > datetime('now'))
+      AND (s.expires_at IS NULL OR datetime(s.expires_at) > datetime('now'))
     LIMIT 1
   `).bind(userId, channel).first<Site>();
 }
@@ -1133,7 +1177,7 @@ async function getSiteByChannel(env: Env, userId: string, channel: string): Prom
 async function getSiteBySlug(env: Env, slug: string): Promise<Site | null> {
   return env.DB.prepare(`
     SELECT id, user_id, name, root_path, slug, upload_token, size_bytes, file_count, expected_file_count,
-           expires_at, published_at, created_at, deleted_at
+           expires_at, published_at, created_at, last_activity_at, deleted_at
     FROM sites
     WHERE slug = ? AND deleted_at IS NULL
     LIMIT 1
@@ -1166,7 +1210,7 @@ async function getSiteByIdentifier(env: Env, identifier: string): Promise<Site |
 async function getPublishedSiteByIdentifier(env: Env, identifier: string): Promise<Site | null> {
   const idMatch = await env.DB.prepare(`
     SELECT id, user_id, name, root_path, slug, upload_token, size_bytes, file_count, expected_file_count,
-           expires_at, published_at, created_at, deleted_at
+           expires_at, published_at, created_at, last_activity_at, deleted_at
     FROM sites
     WHERE id = ?
       AND deleted_at IS NULL
@@ -1179,7 +1223,7 @@ async function getPublishedSiteByIdentifier(env: Env, identifier: string): Promi
 
   return env.DB.prepare(`
     SELECT id, user_id, name, root_path, slug, upload_token, size_bytes, file_count, expected_file_count,
-           expires_at, published_at, created_at, deleted_at
+           expires_at, published_at, created_at, last_activity_at, deleted_at
     FROM sites
     WHERE slug = ?
       AND deleted_at IS NULL
@@ -1189,22 +1233,63 @@ async function getPublishedSiteByIdentifier(env: Env, identifier: string): Promi
 }
 
 async function listSiteObjectKeys(env: Env, siteId: string): Promise<string[]> {
-  const files = await env.DB.prepare(`
-    SELECT r2_key FROM site_files WHERE site_id = ? LIMIT 1000
-  `).bind(siteId).all<{ r2_key: string }>();
+  const keys: string[] = [];
+  let after = '';
 
-  return (files.results || []).map(file => file.r2_key);
+  while (true) {
+    const files = await env.DB.prepare(`
+      SELECT r2_key
+      FROM site_files
+      WHERE site_id = ? AND r2_key > ?
+      ORDER BY r2_key
+      LIMIT ?
+    `).bind(siteId, after, 500).all<{ r2_key: string }>();
+    const page = files.results || [];
+    keys.push(...page.map(file => file.r2_key));
+    if (page.length < 500) {
+      return keys;
+    }
+    after = page[page.length - 1].r2_key;
+  }
+}
+
+async function touchSiteDraft(env: Env, siteId: string): Promise<void> {
+  await env.DB.prepare(`
+    UPDATE sites
+    SET last_activity_at = datetime('now')
+    WHERE id = ? AND deleted_at IS NULL AND published_at IS NULL
+  `).bind(siteId).run();
 }
 
 async function deletePendingR2Objects(env: Env, keys: string[]): Promise<void> {
-  for (const key of keys) {
+  for (let offset = 0; offset < keys.length; offset += 100) {
+    const chunk = keys.slice(offset, offset + 100);
     try {
-      await env.BUCKET.delete(key);
-      await env.DB.prepare('DELETE FROM pending_r2_deletions WHERE r2_key = ?').bind(key).run();
+      await env.BUCKET.delete(chunk);
+      await env.DB.batch(chunk.map(key =>
+        env.DB.prepare('DELETE FROM pending_r2_deletions WHERE r2_key = ?').bind(key)
+      ));
     } catch (err) {
-      console.error(`Failed to delete pending R2 object ${key}:`, err);
+      console.error(`Failed to delete ${chunk.length} pending R2 object(s):`, err);
     }
   }
+}
+
+async function queueAndDeleteR2Object(env: Env, key: string): Promise<void> {
+  try {
+    await env.DB.prepare(`
+      INSERT OR IGNORE INTO pending_r2_deletions (r2_key) VALUES (?)
+    `).bind(key).run();
+  } catch (queueError) {
+    try {
+      await env.BUCKET.delete(key);
+    } catch (deleteError) {
+      console.error('Failed to queue or delete an uncommitted R2 object:', queueError, deleteError);
+    }
+    return;
+  }
+
+  await deletePendingR2Objects(env, [key]);
 }
 
 function getReplacementTargetId(site: Site): string | null {
@@ -1241,6 +1326,7 @@ function siteToJson(baseUrl: string) {
       url: buildSiteUrl(baseUrl, identifier),
       expires_at: site.expires_at,
       created_at: site.created_at,
+      last_activity_at: site.last_activity_at || site.created_at,
       published_at: site.published_at,
       expired: site.expires_at ? new Date(site.expires_at) < new Date() : false,
       deleted: site.deleted_at !== null,
@@ -1251,7 +1337,7 @@ function siteToJson(baseUrl: string) {
 async function getSite(env: Env, id: string): Promise<Site | null> {
   return env.DB.prepare(`
     SELECT id, user_id, name, root_path, slug, upload_token, size_bytes, file_count, expected_file_count,
-           expires_at, published_at, created_at, deleted_at
+           expires_at, published_at, created_at, last_activity_at, deleted_at
     FROM sites
     WHERE id = ? AND deleted_at IS NULL
   `).bind(id).first<Site>();

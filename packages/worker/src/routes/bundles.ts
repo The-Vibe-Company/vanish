@@ -83,13 +83,13 @@ bundles.post('/bundles', rateLimitMiddleware, async (c) => {
     if (!limits.customTtl) {
       return c.json(structuredError(
         'custom_ttl_requires_pro',
-        `Custom TTL is only available for Pro tier. Current tier: ${tier}.`,
+        `Custom TTL is only available on paid plans. Current tier: ${tier}.`,
         403,
         { hint: user ? 'Upgrade with: vanish upgrade' : 'Login and upgrade with: vanish login && vanish upgrade', upgradeRequired: true },
       ), 403);
     }
-    if (customDays > TIER_LIMITS.pro.maxCustomExpiryDays) {
-      return c.json(structuredError('custom_ttl_too_long', `Maximum custom TTL is ${TIER_LIMITS.pro.maxCustomExpiryDays} days.`, 400), 400);
+    if (customDays > limits.maxCustomExpiryDays) {
+      return c.json(structuredError('custom_ttl_too_long', `Maximum custom TTL is ${limits.maxCustomExpiryDays} days.`, 400), 400);
     }
   }
 
@@ -413,7 +413,7 @@ bundles.post('/bundles/:id/publish', async (c) => {
         WHERE scope = ?
           AND owner = ?
           AND idempotency_key = ?
-          AND expires_at <= datetime('now')
+          AND datetime(expires_at) <= datetime('now')
       `).bind(idempotencyScope, idempotencyOwner, idempotencyKey),
       c.env.DB.prepare(`
         INSERT OR IGNORE INTO idempotency_keys (scope, owner, idempotency_key, status, response_json, expires_at)

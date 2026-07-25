@@ -19,6 +19,25 @@ describe('dashboard route', () => {
     expect(html).toContain('placeholder="vnsh_..."');
     expect(html).toContain('Use API key');
   });
+
+  it('distinguishes drafts, exposes the 10GB Pro plan, and uses mobile card layouts', async () => {
+    const html = await fetchDashboardHtml();
+
+    expect(html).toContain("if (s.draft) return 'draft'");
+    expect(html).toContain('cleaned after 6h');
+    expect(html).toContain('"pro":10');
+    expect(html).not.toContain('"max":10');
+    expect(html).toContain('(me.stats.total_site_drafts || 0)');
+    expect(html).toContain('(me.stats.published_sites || 0)');
+    expect(html).toContain("fmtBytes(me.stats.bundle_bytes || 0)");
+    expect(html).toContain(" + ' bundles</div>'");
+    expect(html).toContain('s.lastActivity + 6 * 3600 * 1000');
+    expect(html).toContain('billing managed in Stripe');
+    expect(html).not.toContain("PLAN_PRICES_EUR[me.tier] ? '€'");
+    expect(html).toContain('.files-head, .keys-head { display: none; }');
+    expect(html).toContain('content: attr(data-label)');
+    expect(html).not.toContain('/billing/checkout?key=');
+  });
 });
 
 async function fetchDashboardHtml(): Promise<string> {

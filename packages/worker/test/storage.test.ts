@@ -20,6 +20,9 @@ describe('storage quota helpers', () => {
     });
 
     await expect(getActiveStorageBytes(env(db), 'user1')).resolves.toBe(55);
+    expect(db.queries.filter(query => query.includes('expires_at')).every(
+      query => query.includes("datetime(expires_at) > datetime('now')")
+    )).toBe(true);
   });
 
   it('enforces anonymous max site size', async () => {
@@ -79,6 +82,7 @@ class StorageDB {
   uploads: StorageRow[];
   sites: StorageRow[];
   bundles: StorageRow[];
+  queries: string[] = [];
 
   constructor(input: { uploads?: StorageRow[]; sites?: StorageRow[]; bundles?: StorageRow[] } = {}) {
     this.uploads = input.uploads || [];
@@ -87,6 +91,7 @@ class StorageDB {
   }
 
   prepare(sql: string): StorageStatement {
+    this.queries.push(sql.replace(/\s+/g, ' '));
     return new StorageStatement(this, sql);
   }
 }

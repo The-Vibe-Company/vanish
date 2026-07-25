@@ -24,6 +24,10 @@ describe('landing route', () => {
     expect(html).toContain('Free to try');
     expect(html).toContain('Disappears automatically');
     expect(html).toContain('Simple pricing');
+    expect(html).toContain('<h3 class="plan-name">Pro</h3>');
+    expect(html).not.toContain('<h3 class="plan-name">Max</h3>');
+    expect(html).toContain('€10 / month');
+    expect(html).toContain('Up to 10 GB of storage');
     expect(html).toContain('href="/auth/github?redirect=/dashboard"');
     expect(html).not.toContain('href="/auth/github">');
     expect(html).toContain('href="/dashboard"');

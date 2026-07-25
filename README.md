@@ -70,7 +70,7 @@ vanish site ./demo --root index.html --update quiet-river-42
 # keeps the same public URL and replaces the files
 ```
 
-Use a Pro slug:
+Use a paid-plan slug:
 
 ```bash
 vanish site ./demo --root index.html --slug workshop-demo
@@ -81,7 +81,7 @@ Custom retention:
 
 ```bash
 vanish site ./demo --root index.html --days 90
-# Pro only, up to 365 days
+# Pro, up to 365 days
 ```
 
 JSON output:
@@ -135,7 +135,7 @@ vanish upload screenshot.png
 # https://vanish.sh/f/a1b2c3d4e5f6.png
 
 vanish upload report.pdf --days 90
-# Pro only
+# Pro
 ```
 
 Output formats:
@@ -171,7 +171,7 @@ vanish sites ls    # list mini-sites
 vanish keys ls     # list API keys
 vanish keys create --name agent-ci
 vanish keys revoke <prefix>
-vanish upgrade     # Pro slugs and longer retention
+vanish upgrade     # Pro: 10 GB for 10 EUR/month
 vanish update      # update the CLI to the latest version
 ```
 
@@ -180,15 +180,15 @@ vanish update      # update the CLI to the latest version
 | | Anonymous | Free | Pro |
 |---|---|---|---|
 | Account needed | No | GitHub login | GitHub login |
-| Mini-sites | Static HTML/CSS/JS/MD folders | Static HTML/CSS/JS/MD folders | Static HTML/CSS/JS/MD folders |
-| Site URL | Readable random `*.vanish.sh` | Readable random `*.vanish.sh` | Readable random or custom `*.vanish.sh` slug |
-| Site limits | 10 MB, 100 files | 500 files, counts toward 50 MB total | 1,000 files, counts toward 1 GB total |
+| Mini-sites | Static folders | Static folders | Static folders |
+| Site URL | Readable random | Readable random | Random or custom slug |
+| Site limits | 10 MB, 100 files | 500 files, within 50 MB total | 5,000 files, within 10 GB total |
 | File uploads | Images only | All except executables | All except executables |
 | Max file size | 5 MB | 50 MB | 1 GB |
-| Total storage | Ephemeral only | 50 MB | 1 GB |
-| Retention | 24 hours | 48 hours | 30 days, up to 365 with `--days` |
-| Rate limit | 10/hour | 50/hour | 200/hour |
-| Price | Free | Free | 2 EUR/month |
+| Total storage | Ephemeral only | 50 MB | 10 GB |
+| Retention | 24 hours | 48 hours | 30 days, up to 365 |
+| Rate limit | 10/hour | 50/hour | 500/hour |
+| Price | Free | Free | 10 EUR/month |
 
 ## Configuration
 
