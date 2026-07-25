@@ -83,7 +83,7 @@ export async function handleCleanup(env: Env): Promise<void> {
     const abandonedDrafts = await env.DB.prepare(`
       SELECT id FROM sites
       WHERE published_at IS NULL
-        AND created_at < datetime('now', '-6 hours')
+        AND COALESCE(last_activity_at, created_at) < datetime('now', '-6 hours')
         AND deleted_at IS NULL
       LIMIT ?
     `).bind(BATCH_SIZE).all<{ id: string }>();
@@ -94,18 +94,41 @@ export async function handleCleanup(env: Env): Promise<void> {
 
     const draftIds = abandonedDrafts.results.map(r => r.id);
     for (const draftId of draftIds) {
-      await deleteSiteFiles(env, draftId);
+      const results = await env.DB.batch([
+        env.DB.prepare(`
+          INSERT OR IGNORE INTO pending_r2_deletions (r2_key)
+          SELECT r2_key
+          FROM site_files
+          WHERE site_id = ?
+            AND EXISTS (
+              SELECT 1 FROM sites
+              WHERE id = ?
+                AND published_at IS NULL
+                AND COALESCE(last_activity_at, created_at) < datetime('now', '-6 hours')
+                AND deleted_at IS NULL
+            )
+        `).bind(draftId, draftId),
+        env.DB.prepare(`
+          UPDATE sites
+          SET deleted_at = datetime('now'), upload_token = NULL, size_bytes = 0, file_count = 0
+          WHERE id = ?
+            AND published_at IS NULL
+            AND COALESCE(last_activity_at, created_at) < datetime('now', '-6 hours')
+            AND deleted_at IS NULL
+        `).bind(draftId),
+        env.DB.prepare(`
+          DELETE FROM site_files
+          WHERE site_id = ?
+            AND EXISTS (
+              SELECT 1 FROM sites WHERE id = ? AND deleted_at IS NOT NULL
+            )
+        `).bind(draftId, draftId),
+      ]);
+
+      if ((results[1]?.meta?.changes || 0) > 0) {
+        totalDraftsDeleted++;
+      }
     }
-
-    await env.DB.batch(draftIds.map(draftId =>
-      env.DB.prepare(`
-        UPDATE sites
-        SET deleted_at = datetime('now'), upload_token = NULL, size_bytes = 0, file_count = 0
-        WHERE id = ?
-      `).bind(draftId)
-    ));
-
-    totalDraftsDeleted += draftIds.length;
 
     if (draftIds.length < BATCH_SIZE) {
       break;

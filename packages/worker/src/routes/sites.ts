@@ -423,6 +423,8 @@ sites.put('/sites/:id/files', async (c) => {
     return c.json({ error: auth.error }, auth.status);
   }
 
+  await touchSiteDraft(c.env, site.id);
+
   const rateLimit = await checkSiteMutationRateLimit(c, auth.tier, 'site-file', TIER_LIMITS[auth.tier].maxSiteFiles + TIER_LIMITS[auth.tier].rateLimit);
   if (!rateLimit.ok) {
     return c.json(rateLimit.body, 429);
@@ -442,6 +444,7 @@ sites.put('/sites/:id/files', async (c) => {
   if (body.byteLength === 0) {
     return c.json({ error: 'Empty file' }, 400);
   }
+  await touchSiteDraft(c.env, site.id);
 
   const existingFile = await c.env.DB.prepare(`
     SELECT size_bytes FROM site_files WHERE site_id = ? AND path = ?
@@ -480,8 +483,11 @@ sites.put('/sites/:id/files', async (c) => {
   await c.env.DB.batch([
     c.env.DB.prepare(`
       INSERT OR REPLACE INTO site_files (site_id, path, content_type, size_bytes, r2_key)
-      VALUES (?, ?, ?, ?, ?)
-    `).bind(site.id, path, contentType, body.byteLength, r2Key),
+      SELECT ?, ?, ?, ?, ?
+      WHERE EXISTS (
+        SELECT 1 FROM sites WHERE id = ? AND deleted_at IS NULL AND published_at IS NULL
+      )
+    `).bind(site.id, path, contentType, body.byteLength, r2Key, site.id),
     c.env.DB.prepare(`
       UPDATE sites
       SET size_bytes = (
@@ -489,10 +495,19 @@ sites.put('/sites/:id/files', async (c) => {
       ),
       file_count = (
         SELECT COUNT(*) FROM site_files WHERE site_id = ?
-      )
-      WHERE id = ?
+      ),
+      last_activity_at = datetime('now')
+      WHERE id = ? AND deleted_at IS NULL AND published_at IS NULL
     `).bind(site.id, site.id, site.id),
   ]);
+
+  if (!await getSite(c.env, site.id)) {
+    await c.env.DB.prepare(`
+      DELETE FROM site_files WHERE site_id = ? AND path = ?
+    `).bind(site.id, path).run();
+    await c.env.BUCKET.delete(r2Key);
+    return c.json({ error: 'This site draft is no longer available' }, 410);
+  }
 
   return c.json({
     ok: true,
@@ -517,6 +532,8 @@ sites.post('/sites/:id/publish', async (c) => {
   if (!auth.ok) {
     return c.json({ error: auth.error }, auth.status);
   }
+
+  await touchSiteDraft(c.env, site.id);
 
   const rateLimit = await checkSiteMutationRateLimit(c, auth.tier, 'site-publish', TIER_LIMITS[auth.tier].rateLimit);
   if (!rateLimit.ok) {
@@ -592,6 +609,8 @@ sites.post('/sites/:id/replacements/:draftId/publish', async (c) => {
   if (!draft || draft.user_id !== user.id || getReplacementTargetId(draft) !== target.id) {
     return c.json({ error: 'Replacement draft not found' }, 404);
   }
+
+  await touchSiteDraft(c.env, draft.id);
   if (draft.published_at) {
     return c.json({ error: 'Replacement draft has already been published' }, 409);
   }
@@ -638,9 +657,10 @@ sites.post('/sites/:id/replacements/:draftId/publish', async (c) => {
 
   const oldFiles = await listSiteObjectKeys(c.env, target.id);
   await c.env.DB.batch([
-    ...oldFiles.map(key =>
-      c.env.DB.prepare('INSERT OR IGNORE INTO pending_r2_deletions (r2_key) VALUES (?)').bind(key)
-    ),
+    c.env.DB.prepare(`
+      INSERT OR IGNORE INTO pending_r2_deletions (r2_key)
+      SELECT r2_key FROM site_files WHERE site_id = ?
+    `).bind(target.id),
     c.env.DB.prepare(`
       INSERT OR REPLACE INTO site_files (site_id, path, content_type, size_bytes, r2_key, created_at)
       SELECT ?, path, content_type, size_bytes, r2_key, created_at
@@ -1190,11 +1210,32 @@ async function getPublishedSiteByIdentifier(env: Env, identifier: string): Promi
 }
 
 async function listSiteObjectKeys(env: Env, siteId: string): Promise<string[]> {
-  const files = await env.DB.prepare(`
-    SELECT r2_key FROM site_files WHERE site_id = ? LIMIT 1000
-  `).bind(siteId).all<{ r2_key: string }>();
+  const keys: string[] = [];
+  let after = '';
 
-  return (files.results || []).map(file => file.r2_key);
+  while (true) {
+    const files = await env.DB.prepare(`
+      SELECT r2_key
+      FROM site_files
+      WHERE site_id = ? AND r2_key > ?
+      ORDER BY r2_key
+      LIMIT ?
+    `).bind(siteId, after, 500).all<{ r2_key: string }>();
+    const page = files.results || [];
+    keys.push(...page.map(file => file.r2_key));
+    if (page.length < 500) {
+      return keys;
+    }
+    after = page[page.length - 1].r2_key;
+  }
+}
+
+async function touchSiteDraft(env: Env, siteId: string): Promise<void> {
+  await env.DB.prepare(`
+    UPDATE sites
+    SET last_activity_at = datetime('now')
+    WHERE id = ? AND deleted_at IS NULL AND published_at IS NULL
+  `).bind(siteId).run();
 }
 
 async function deletePendingR2Objects(env: Env, keys: string[]): Promise<void> {

@@ -70,6 +70,7 @@ export interface MeResult {
   stats: {
     total_uploads: number;
     total_sites?: number;
+    published_sites?: number;
     total_site_drafts?: number;
     total_bundles?: number;
     upload_bytes?: number;

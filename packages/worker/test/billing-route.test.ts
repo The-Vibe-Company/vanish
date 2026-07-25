@@ -18,6 +18,7 @@ describe('billing routes', () => {
       PRODUCT_EVENTS: 'true',
       STRIPE_SECRET_KEY: 'sk_test_secret',
       STRIPE_PRICE_ID: 'price_test',
+      STRIPE_PRO_PRICE_ID_EUR_10: 'price_pro_eur_10',
       STRIPE_WEBHOOK_SECRET: 'whsec_test',
     };
   });
@@ -58,7 +59,7 @@ describe('billing routes', () => {
     const apiKey = await addUser(db, 'user1', 'free');
     const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       const body = String(init?.body);
-      expect(body).toContain('line_items%5B0%5D%5Bprice%5D=price_test');
+      expect(body).toContain('line_items%5B0%5D%5Bprice%5D=price_pro_eur_10');
       expect(body).toContain('metadata%5Bvanish_tier%5D=pro');
       expect(body).toContain('subscription_data%5Bmetadata%5D%5Bvanish_tier%5D=pro');
       return Response.json({ id: 'cs_pro', url: 'https://stripe.test/pro-checkout' });

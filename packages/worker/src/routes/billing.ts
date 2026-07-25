@@ -57,7 +57,7 @@ billing.on(['GET', 'POST'], '/billing/checkout', async (c) => {
     }, 409);
   }
 
-  const priceId = c.env.STRIPE_PRICE_ID;
+  const priceId = c.env.STRIPE_PRO_PRICE_ID_EUR_10;
   if (!c.env.STRIPE_SECRET_KEY || !priceId) {
     return c.json({ error: 'Stripe not configured' }, 503);
   }

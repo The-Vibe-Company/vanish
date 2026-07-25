@@ -27,6 +27,10 @@ describe('dashboard route', () => {
     expect(html).toContain('cleaned after 6h');
     expect(html).toContain('"pro":10');
     expect(html).not.toContain('"max":10');
+    expect(html).toContain('(me.stats.total_site_drafts || 0)');
+    expect(html).toContain('(me.stats.published_sites || 0)');
+    expect(html).toContain("fmtBytes(me.stats.bundle_bytes || 0)");
+    expect(html).toContain(" + ' bundles</div>'");
     expect(html).toContain('.files-head, .keys-head { display: none; }');
     expect(html).toContain('content: attr(data-label)');
     expect(html).not.toContain('/billing/checkout?key=');

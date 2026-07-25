@@ -26,7 +26,8 @@ user.get('/me', async (c) => {
 
   const siteStats = await c.env.DB.prepare(`
     SELECT
-      SUM(CASE WHEN published_at IS NOT NULL THEN 1 ELSE 0 END) as total_sites,
+      COUNT(*) as total_sites,
+      SUM(CASE WHEN published_at IS NOT NULL THEN 1 ELSE 0 END) as published_sites,
       SUM(CASE WHEN published_at IS NULL THEN 1 ELSE 0 END) as total_site_drafts,
       COALESCE(SUM(CASE WHEN published_at IS NOT NULL THEN size_bytes ELSE 0 END), 0) as published_bytes,
       COALESCE(SUM(CASE WHEN published_at IS NULL THEN size_bytes ELSE 0 END), 0) as draft_bytes
@@ -36,6 +37,7 @@ user.get('/me', async (c) => {
       AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))
   `).bind(currentUser.id).first<{
     total_sites: number;
+    published_sites: number;
     total_site_drafts: number;
     published_bytes: number;
     draft_bytes: number;
@@ -78,6 +80,7 @@ user.get('/me', async (c) => {
     stats: {
       total_uploads: uploadStats?.total_uploads || 0,
       total_sites: siteStats?.total_sites || 0,
+      published_sites: siteStats?.published_sites || 0,
       total_site_drafts: siteStats?.total_site_drafts || 0,
       total_bundles: bundleStats?.total_bundles || 0,
       upload_bytes: uploadBytes,

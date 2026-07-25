@@ -1967,17 +1967,19 @@ body:has(.login-screen) { background: #1649e8; }
           '<div class="stat-value">' + fmtBytes(totalBytes) + '</div>' +
           '<div class="stat-sub">' + (storageMax ? fmtBytes(storageMax) + ' total' : 'no limit') + '</div>' +
           '<div class="stat-detail">' + fmtBytes(me.stats.published_site_bytes || 0) + ' published · ' +
-            fmtBytes(me.stats.draft_site_bytes || 0) + ' drafts</div>' +
+            fmtBytes(me.stats.draft_site_bytes || 0) + ' drafts · ' +
+            fmtBytes(me.stats.upload_bytes || 0) + ' files · ' +
+            fmtBytes(me.stats.bundle_bytes || 0) + ' bundles</div>' +
           storageHtml +
         '</div>' +
         '<div class="stat-card">' +
           '<div class="stat-label">Published sites</div>' +
-          '<div class="stat-value">' + liveSites.length + '</div>' +
+          '<div class="stat-value">' + (me.stats.published_sites || 0) + '</div>' +
           '<div class="stat-sub">public and currently live</div>' +
         '</div>' +
         '<div class="stat-card">' +
           '<div class="stat-label">Upload drafts</div>' +
-          '<div class="stat-value">' + draftSites.length + '</div>' +
+          '<div class="stat-value">' + (me.stats.total_site_drafts || 0) + '</div>' +
           '<div class="stat-sub">' + fmtBytes(me.stats.draft_site_bytes || 0) + ' · cleaned after 6h</div>' +
         '</div>' +
         '<div class="stat-card">' +
@@ -2455,7 +2457,8 @@ body:has(.login-screen) { background: #1649e8; }
             '<div><div class="bh-l">rate limit</div><div class="bh-v">' + lim.rateLimit + '<span class="bh-of">/hour</span></div></div>' +
           '</div>' +
           '<div class="bh-storage-note">' + fmtBytes(me.stats.published_site_bytes || 0) + ' published sites · ' +
-            fmtBytes(me.stats.draft_site_bytes || 0) + ' drafts · ' + fmtBytes(me.stats.upload_bytes || 0) + ' files</div>' +
+            fmtBytes(me.stats.draft_site_bytes || 0) + ' drafts · ' + fmtBytes(me.stats.upload_bytes || 0) + ' files · ' +
+            fmtBytes(me.stats.bundle_bytes || 0) + ' bundles</div>' +
           hostedNote +
         '</div>' +
       '</div>' +

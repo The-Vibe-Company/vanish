@@ -10,6 +10,7 @@ export interface Env {
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PRICE_ID?: string;
+  STRIPE_PRO_PRICE_ID_EUR_10?: string;
 }
 
 export type Tier = 'anonymous' | 'free' | 'pro';
@@ -51,6 +52,7 @@ export interface Site {
   expires_at: string | null;
   published_at: string | null;
   created_at: string;
+  last_activity_at?: string | null;
   deleted_at: string | null;
 }
 

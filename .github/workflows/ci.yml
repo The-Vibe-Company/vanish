@@ -59,15 +59,15 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Deploy to Cloudflare
-        run: npx wrangler deploy
+      - name: Provision the Pro Stripe price
+        run: echo "${{ steps.stripe-price.outputs.price_id }}" | npx wrangler secret put STRIPE_PRO_PRICE_ID_EUR_10
         working-directory: packages/worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Activate the Pro Stripe price
-        run: echo "${{ steps.stripe-price.outputs.price_id }}" | npx wrangler secret put STRIPE_PRICE_ID
+      - name: Deploy to Cloudflare
+        run: npx wrangler deploy
         working-directory: packages/worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
