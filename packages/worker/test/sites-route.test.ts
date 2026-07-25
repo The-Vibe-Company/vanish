@@ -170,6 +170,32 @@ describe('site routes', () => {
     expect(db.siteFiles.size).toBe(0);
   });
 
+  it('keeps published content and quota metadata stable when an overwrite loses the publish race', async () => {
+    const draft = await createSite(env, {
+      rootPath: 'index.html',
+      fileCount: 1,
+      totalBytes: 32,
+    });
+    await uploadSiteFile(env, draft.id, draft.token, 'index.html', '<h1>stable</h1>');
+    const originalSize = db.sites.get(draft.id)!.size_bytes;
+    bucket.afterPut = () => {
+      const site = db.sites.get(draft.id)!;
+      site.published_at = new Date().toISOString();
+      site.upload_token = null;
+    };
+
+    const response = await request(env, `/sites/${draft.id}/files?path=index.html`, {
+      method: 'PUT',
+      headers: { 'X-Site-Token': draft.token, 'Content-Type': 'text/html' },
+      body: '<h1>late overwrite</h1>',
+    });
+
+    expect(response.status).toBe(409);
+    expect(db.sites.get(draft.id)!.size_bytes).toBe(originalSize);
+    expect(bucket.objects.size).toBe(1);
+    expect(await (await request(env, `/s/${draft.id}/`)).text()).toBe('<h1>stable</h1>');
+  });
+
   it('allows draft cleanup with the site token', async () => {
     const draft = await createSite(env, {
       rootPath: 'index.html',
@@ -356,7 +382,7 @@ describe('site routes', () => {
     expect(publish.status).toBe(200);
     expect(bucket.objects.has(oldKey)).toBe(true);
     expect(db.pendingR2Deletions.has(oldKey)).toBe(true);
-    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to delete pending R2 object'), expect.any(Error));
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to delete 1 pending R2 object'), expect.any(Error));
     errorSpy.mockRestore();
   });
 
@@ -539,11 +565,15 @@ class FakeBucket {
     return { body: new Response(object.body).body };
   }
 
-  async delete(key: string): Promise<void> {
-    if (this.failDeletes.has(key)) {
-      throw new Error(`delete failed: ${key}`);
+  async delete(keyOrKeys: string | string[]): Promise<void> {
+    const keys = Array.isArray(keyOrKeys) ? keyOrKeys : [keyOrKeys];
+    const failedKey = keys.find(key => this.failDeletes.has(key));
+    if (failedKey) {
+      throw new Error(`delete failed: ${failedKey}`);
     }
-    this.objects.delete(key);
+    for (const key of keys) {
+      this.objects.delete(key);
+    }
   }
 }
 
@@ -671,10 +701,16 @@ class FakeStatement {
       return { total_bytes: 0 } as T;
     }
 
-    if (sql.includes('SELECT size_bytes FROM site_files')) {
+    if (sql.includes('SELECT size_bytes, r2_key FROM site_files')) {
       const [siteId, path] = this.args as [string, string];
       const file = this.db.siteFiles.get(`${siteId}:${path}`);
-      return (file ? { size_bytes: file.size_bytes } : null) as T | null;
+      return (file ? { size_bytes: file.size_bytes, r2_key: file.r2_key } : null) as T | null;
+    }
+
+    if (sql.includes('SELECT r2_key FROM site_files') && sql.includes('path = ?')) {
+      const [siteId, path] = this.args as [string, string];
+      const file = this.db.siteFiles.get(`${siteId}:${path}`);
+      return (file ? { r2_key: file.r2_key } : null) as T | null;
     }
 
     if (sql.includes('SELECT path FROM site_files')) {
@@ -758,7 +794,11 @@ class FakeStatement {
 
     if (sql.includes('INSERT OR IGNORE INTO pending_r2_deletions')) {
       const [key] = this.args as [string];
-      this.db.pendingR2Deletions.add(key);
+      const siteId = this.args[2] as string | undefined;
+      const site = siteId ? this.db.sites.get(siteId) : null;
+      if (key && (!sql.includes('published_at IS NULL') || (site && site.deleted_at === null && site.published_at === null))) {
+        this.db.pendingR2Deletions.add(key);
+      }
       return;
     }
 
@@ -823,7 +863,9 @@ class FakeStatement {
     if (sql.includes('UPDATE sites SET size_bytes =')) {
       const [siteId] = this.args as [string];
       const site = this.db.sites.get(siteId);
-      if (!site || (sql.includes('deleted_at IS NULL') && site.deleted_at !== null)) return;
+      if (!site ||
+          (sql.includes('deleted_at IS NULL') && site.deleted_at !== null) ||
+          (sql.includes('published_at IS NULL') && site.published_at !== null)) return;
       const files = Array.from(this.db.siteFiles.values()).filter(file => file.site_id === siteId);
       site.size_bytes = files.reduce((sum, file) => sum + file.size_bytes, 0);
       site.file_count = files.length;

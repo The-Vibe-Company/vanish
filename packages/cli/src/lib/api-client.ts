@@ -103,6 +103,7 @@ export interface SiteInfo {
   url: string;
   expires_at: string | null;
   created_at: string;
+  last_activity_at?: string;
   published_at: string | null;
   expired: boolean;
   deleted: boolean;

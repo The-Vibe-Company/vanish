@@ -72,7 +72,7 @@ Agent-ready surfaces:
 Three tiers with different limits defined in `TIER_LIMITS` (`packages/worker/src/types.ts`):
 - **anonymous**: Images only for file uploads, 5MB max file, static mini-sites up to 10MB, 24h retention, 10 uploads/hour
 - **free**: All files, 50MB max file, 50MB total storage shared across files and mini-sites, 48h retention, 50/hour
-- **pro**: All files, 1GB max file, 1GB total storage shared across files and mini-sites, 30-day default retention (configurable up to 365 days via `--days`), custom site slugs, 200/hour
+- **pro**: All files, 1GB max file, 10GB total storage shared across files and mini-sites, up to 5,000 files per site, 30-day default retention (configurable up to 365 days via `--days`), custom site slugs, 500/hour
 
 ### Key Patterns
 

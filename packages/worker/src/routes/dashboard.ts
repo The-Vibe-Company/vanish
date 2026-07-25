@@ -1732,6 +1732,7 @@ body:has(.login-screen) { background: #1649e8; }
   function normalizeSite(s) {
     var expiresAt = parseSqlDate(s.expires_at);
     var createdAt = parseSqlDate(s.created_at);
+    var lastActivityAt = parseSqlDate(s.last_activity_at) || createdAt;
     return {
       id: s.id,
       name: s.name,
@@ -1741,6 +1742,7 @@ body:has(.login-screen) { background: #1649e8; }
       size_bytes: s.size_bytes || 0,
       url: s.url,
       created: createdAt || 0,
+      lastActivity: lastActivityAt || 0,
       expires: expiresAt || 0,
       published_at: parseSqlDate(s.published_at),
       draft: !s.published_at,
@@ -2092,7 +2094,7 @@ body:has(.login-screen) { background: #1649e8; }
     if (s.expired) {
       timeHtml = '<div class="site-time-label">expired</div><div class="site-time-val expired"' + countdownAttr(s.expires, 'ago') + '>' + fmtAgo(s.expires) + '</div>';
     } else if (s.draft) {
-      var cleanupAt = s.created + 6 * 3600 * 1000;
+      var cleanupAt = s.lastActivity + 6 * 3600 * 1000;
       timeHtml = '<div class="site-time-label">draft cleanup</div><div class="site-time-val expiring"' +
         countdownAttr(cleanupAt, 'until', 'expiring') + '>' + fmtTimeUntil(cleanupAt - Date.now()) + '</div>';
     } else if (!s.hasExpiry) {
@@ -2399,7 +2401,11 @@ body:has(.login-screen) { background: #1649e8; }
         : '<button class="btn solid btn-lg" data-action="upgrade-plan" data-tier="pro">Choose Pro <span class="btn-arrow">→</span></button>';
       return '<div class="bh-pro">' +
         '<div class="bh-pro-head"><span class="dot dot-gold dot-pulse"></span><span>Pro' +
-          (active ? ' · active' : '') + '</span><span class="bh-pro-price">€' + PLAN_PRICES_EUR.pro + '<span>/mo</span></span></div>' +
+          (active ? ' · active' : '') + '</span>' +
+          (active
+            ? '<span class="bh-pro-price">current plan</span>'
+            : '<span class="bh-pro-price">€' + PLAN_PRICES_EUR.pro + '<span>/mo</span></span>') +
+          '</div>' +
         '<ul class="bh-pro-list">' +
           '<li><span class="bh-check">✓</span> Custom <code>*.vanish.sh</code> slugs</li>' +
           '<li><span class="bh-check">✓</span> Up to 365 days with <code>--days</code></li>' +
@@ -2413,7 +2419,9 @@ body:has(.login-screen) { background: #1649e8; }
 
     var planCards = planCard();
     var currentName = me.tier === 'pro' ? 'Pro' : me.tier === 'free' ? 'Free' : 'Anonymous';
-    var currentPrice = PLAN_PRICES_EUR[me.tier] ? '€' + PLAN_PRICES_EUR[me.tier] + ' / month' : '€0';
+    var currentPrice = me.tier === 'pro'
+      ? (me.billing && me.billing.has_billing_account ? 'billing managed in Stripe' : 'included')
+      : '€0';
 
     var features = [
       { k: 'Custom subdomains', free: 'random readable', pro: 'pick a slug', highlight: true },

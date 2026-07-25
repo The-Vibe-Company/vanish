@@ -447,8 +447,8 @@ sites.put('/sites/:id/files', async (c) => {
   await touchSiteDraft(c.env, site.id);
 
   const existingFile = await c.env.DB.prepare(`
-    SELECT size_bytes FROM site_files WHERE site_id = ? AND path = ?
-  `).bind(site.id, path).first<{ size_bytes: number }>();
+    SELECT size_bytes, r2_key FROM site_files WHERE site_id = ? AND path = ?
+  `).bind(site.id, path).first<{ size_bytes: number; r2_key: string }>();
 
   if (!existingFile && site.file_count >= site.expected_file_count) {
     return c.json({
@@ -469,7 +469,7 @@ sites.put('/sites/:id/files', async (c) => {
   const contentType = c.req.header('Content-Type') === 'application/octet-stream'
     ? guessContentType(path)
     : c.req.header('Content-Type') || guessContentType(path);
-  const r2Key = `sites/${site.id}/${path}`;
+  const r2Key = `sites/${site.id}/objects/${nanoid(24)}`;
 
   await c.env.BUCKET.put(r2Key, body, {
     httpMetadata: { contentType },
@@ -480,33 +480,53 @@ sites.put('/sites/:id/files', async (c) => {
     },
   });
 
-  await c.env.DB.batch([
-    c.env.DB.prepare(`
-      INSERT OR REPLACE INTO site_files (site_id, path, content_type, size_bytes, r2_key)
-      SELECT ?, ?, ?, ?, ?
-      WHERE EXISTS (
-        SELECT 1 FROM sites WHERE id = ? AND deleted_at IS NULL AND published_at IS NULL
-      )
-    `).bind(site.id, path, contentType, body.byteLength, r2Key, site.id),
-    c.env.DB.prepare(`
-      UPDATE sites
-      SET size_bytes = (
-        SELECT COALESCE(SUM(size_bytes), 0) FROM site_files WHERE site_id = ?
-      ),
-      file_count = (
-        SELECT COUNT(*) FROM site_files WHERE site_id = ?
-      ),
-      last_activity_at = datetime('now')
-      WHERE id = ? AND deleted_at IS NULL AND published_at IS NULL
-    `).bind(site.id, site.id, site.id),
-  ]);
+  try {
+    await c.env.DB.batch([
+      c.env.DB.prepare(`
+        INSERT OR IGNORE INTO pending_r2_deletions (r2_key)
+        SELECT ?
+        WHERE ? IS NOT NULL
+          AND EXISTS (
+            SELECT 1 FROM sites WHERE id = ? AND deleted_at IS NULL AND published_at IS NULL
+          )
+      `).bind(existingFile?.r2_key || null, existingFile?.r2_key || null, site.id),
+      c.env.DB.prepare(`
+        INSERT OR REPLACE INTO site_files (site_id, path, content_type, size_bytes, r2_key)
+        SELECT ?, ?, ?, ?, ?
+        WHERE EXISTS (
+          SELECT 1 FROM sites WHERE id = ? AND deleted_at IS NULL AND published_at IS NULL
+        )
+      `).bind(site.id, path, contentType, body.byteLength, r2Key, site.id),
+      c.env.DB.prepare(`
+        UPDATE sites
+        SET size_bytes = (
+          SELECT COALESCE(SUM(size_bytes), 0) FROM site_files WHERE site_id = ?
+        ),
+        file_count = (
+          SELECT COUNT(*) FROM site_files WHERE site_id = ?
+        ),
+        last_activity_at = datetime('now')
+        WHERE id = ? AND deleted_at IS NULL AND published_at IS NULL
+      `).bind(site.id, site.id, site.id),
+    ]);
+  } catch (err) {
+    await queueAndDeleteR2Object(c.env, r2Key);
+    throw err;
+  }
 
-  if (!await getSite(c.env, site.id)) {
-    await c.env.DB.prepare(`
-      DELETE FROM site_files WHERE site_id = ? AND path = ?
-    `).bind(site.id, path).run();
-    await c.env.BUCKET.delete(r2Key);
-    return c.json({ error: 'This site draft is no longer available' }, 410);
+  const committedFile = await c.env.DB.prepare(`
+    SELECT r2_key FROM site_files WHERE site_id = ? AND path = ?
+  `).bind(site.id, path).first<{ r2_key: string }>();
+  if (committedFile?.r2_key !== r2Key) {
+    await queueAndDeleteR2Object(c.env, r2Key);
+    const currentSite = await getSite(c.env, site.id);
+    return currentSite
+      ? c.json({ error: 'This site draft was published before the upload completed' }, 409)
+      : c.json({ error: 'This site draft is no longer available' }, 410);
+  }
+
+  if (existingFile?.r2_key && existingFile.r2_key !== r2Key) {
+    await deletePendingR2Objects(c.env, [existingFile.r2_key]);
   }
 
   return c.json({
@@ -726,7 +746,7 @@ sites.get('/sites', async (c) => {
 
   let query = `
     SELECT id, user_id, name, root_path, slug, upload_token, size_bytes, file_count, expected_file_count,
-           expires_at, published_at, created_at, deleted_at
+           expires_at, published_at, created_at, last_activity_at, deleted_at
     FROM sites
     WHERE user_id = ?
   `;
@@ -1239,14 +1259,34 @@ async function touchSiteDraft(env: Env, siteId: string): Promise<void> {
 }
 
 async function deletePendingR2Objects(env: Env, keys: string[]): Promise<void> {
-  for (const key of keys) {
+  for (let offset = 0; offset < keys.length; offset += 100) {
+    const chunk = keys.slice(offset, offset + 100);
     try {
-      await env.BUCKET.delete(key);
-      await env.DB.prepare('DELETE FROM pending_r2_deletions WHERE r2_key = ?').bind(key).run();
+      await env.BUCKET.delete(chunk);
+      await env.DB.batch(chunk.map(key =>
+        env.DB.prepare('DELETE FROM pending_r2_deletions WHERE r2_key = ?').bind(key)
+      ));
     } catch (err) {
-      console.error(`Failed to delete pending R2 object ${key}:`, err);
+      console.error(`Failed to delete ${chunk.length} pending R2 object(s):`, err);
     }
   }
+}
+
+async function queueAndDeleteR2Object(env: Env, key: string): Promise<void> {
+  try {
+    await env.DB.prepare(`
+      INSERT OR IGNORE INTO pending_r2_deletions (r2_key) VALUES (?)
+    `).bind(key).run();
+  } catch (queueError) {
+    try {
+      await env.BUCKET.delete(key);
+    } catch (deleteError) {
+      console.error('Failed to queue or delete an uncommitted R2 object:', queueError, deleteError);
+    }
+    return;
+  }
+
+  await deletePendingR2Objects(env, [key]);
 }
 
 function getReplacementTargetId(site: Site): string | null {
@@ -1283,6 +1323,7 @@ function siteToJson(baseUrl: string) {
       url: buildSiteUrl(baseUrl, identifier),
       expires_at: site.expires_at,
       created_at: site.created_at,
+      last_activity_at: site.last_activity_at || site.created_at,
       published_at: site.published_at,
       expired: site.expires_at ? new Date(site.expires_at) < new Date() : false,
       deleted: site.deleted_at !== null,

@@ -54,7 +54,7 @@ The config file can contain `api_key` and `api_url`. Environment variables overr
 |------|-------|--------------|-----------|---------|------------|
 | Anonymous | 10 MB, 100 files | Images only, 5 MB max | 24h | Ephemeral | 10/hour |
 | Free | 500 files | All except executables, 50 MB max | 48h | 50 MB total | 50/hour |
-| Pro | 1,000 files, custom slugs | All except executables, 1 GB max | 30 days, `--days` up to 365 | 1 GB total | 200/hour |
+| Pro | 5,000 files, custom slugs | All except executables, 1 GB max | 30 days, `--days` up to 365 | 10 GB total | 500/hour |
 
 ## When To Route Here
 
