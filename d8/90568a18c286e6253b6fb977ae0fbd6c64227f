@@ -1,0 +1,107 @@
+packages/worker/src/routes/upload.ts
+  s_ce7a446508f9a7::t_fcc624799ab1aa 116,127,132-133
+packages/cli/src/commands/status.ts
+  s_ce7a446508f9a7::t_b43be21e5d1932 35-38
+packages/worker/test/dashboard-route.test.ts
+  s_ce7a446508f9a7::t_de449e0c254a1c 22,24-27,30-33
+  s_ce7a446508f9a7::t_388aa4653fd3fd 23,28-29
+packages/worker/src/types.ts
+  s_ce7a446508f9a7::t_9ca003ba488c1d 16,125,129
+  s_ce7a446508f9a7::t_4359d263dfaf06 114,118,124,126-128,130
+  s_ce7a446508f9a7::t_55baadcb48b035 113,115
+  s_ce7a446508f9a7::t_e386e7d5790218 131
+README.md
+  s_ce7a446508f9a7::t_c06f713198f370 73
+  s_ce7a446508f9a7::t_388aa4653fd3fd 84,138,174,183-185,188-191
+packages/worker/src/cron/cleanup.ts
+  s_ce7a446508f9a7::t_0d2d54c1497b27 158
+  s_ce7a446508f9a7::t_a55efd2d45cffc 12,80-114,195-196
+  s_ce7a446508f9a7::t_cee267a784a735 21,54,120,153
+packages/worker/src/routes/dashboard.ts
+  s_ce7a446508f9a7::t_3559f906251cf7 1709-1710
+  s_ce7a446508f9a7::t_0ebaafe1d5be54 1829-1830,1949,1952-1953,2389-2393,2395-2400,2412-2413,2417-2418,2466
+  s_ce7a446508f9a7::t_f724ab8ddf8143 2251-2254,2316-2319
+  s_ce7a446508f9a7::t_8f07f41641776d 1746,1865-1866,1913,1969-1970,1974,1976-1981
+  s_ce7a446508f9a7::t_579aa8a3b7cd25 3,15,1479
+  s_ce7a446508f9a7::t_bcfb9261bb5261 2394
+  s_ce7a446508f9a7::t_7f76265a752744 2401-2409,2414,2427-2428,2449-2450,2457-2458,2462
+  s_ce7a446508f9a7::t_d69fd18b631eaa 2705-2720
+  s_ce7a446508f9a7::t_6ee6852ced5b75 1314-1320,1326-1329,1349-1353,1358-1368,1370-1371,1374-1405,1407-1417,1419-1433,1438-1441,1443,1448-1459,1464-1466
+  s_ce7a446508f9a7::t_8d7fc61bb4f3a5 667-669,682,1040
+  s_ce7a446508f9a7::t_6c71b1ebb3e9cc 704,1021,1406,1418
+  s_ce7a446508f9a7::t_a9bd88343fce0a 2018,2027,2042,2061,2086-2087,2092-2095,2106-2110,2118-2121
+  s_ce7a446508f9a7::t_25cbea745524ef 1467,2415
+packages/cli/src/index.ts
+  s_ce7a446508f9a7::t_b43be21e5d1932 38,48,50,85,87,104
+  s_ce7a446508f9a7::t_9690b35380a85a 145
+packages/worker/src/routes/landing.ts
+  s_ce7a446508f9a7::t_f8ce59ced49f3f 387,634,648,652
+  s_ce7a446508f9a7::t_b098233149327b 459
+  s_ce7a446508f9a7::t_31e88b42ce5fcb 651,654
+packages/worker/src/routes/bundles.ts
+  s_ce7a446508f9a7::t_cee267a784a735 416
+  s_ce7a446508f9a7::t_fcc624799ab1aa 86,91-92
+packages/worker/src/lib/api-response.ts
+  s_ce7a446508f9a7::t_cee267a784a735 67,98
+packages/worker/test/landing-route.test.ts
+  s_ce7a446508f9a7::t_f216c25a3f29ea 29-30
+  s_ce7a446508f9a7::t_388aa4653fd3fd 27-28
+packages/cli/src/commands/site.ts
+  s_ce7a446508f9a7::t_b43be21e5d1932 105,108,123
+packages/worker/src/lib/expiry.ts
+  s_ce7a446508f9a7::t_4359d263dfaf06 8,15-16
+packages/cli/src/lib/api-client.ts
+  s_ce7a446508f9a7::t_b43be21e5d1932 73,77-78
+.github/workflows/ci.yml
+  s_ce7a446508f9a7::t_25f09130484bd3 48-54,68-70,72
+  s_ce7a446508f9a7::t_b63f3745e4c9a4 71,73-74
+packages/worker/src/lib/events.ts
+  s_ce7a446508f9a7::t_41d4c89379f2c4 26
+packages/worker/src/routes/auth.ts
+  s_ce7a446508f9a7::t_cee267a784a735 123,289,437,474
+.github/workflows/release.yml
+  s_ce7a446508f9a7::t_25f09130484bd3 68-74,100
+packages/worker/src/routes/user.ts
+  s_ce7a446508f9a7::t_cee267a784a735 24,29-32,36-42,64-66,81,85-86,126
+packages/worker/src/routes/sites.ts
+  s_ce7a446508f9a7::t_fcc624799ab1aa 5,127,131,133,140-141,357,359,1027,1047-1048,1073-1074,1076,1079
+  s_ce7a446508f9a7::t_cee267a784a735 714,1129
+packages/worker/src/lib/storage.ts
+  s_ce7a446508f9a7::t_cee267a784a735 10,18
+packages/worker/src/routes/billing.ts
+  s_ce7a446508f9a7::t_3ed7e62bbe9583 3-4,15,44-45,49-59,61,69,72-73,82
+  s_ce7a446508f9a7::t_11d3e5e25e3f1e 30-31,34,87
+  s_ce7a446508f9a7::t_29faee3f481269 150-152,159,162-164
+  s_ce7a446508f9a7::t_7a00fdd975bc78 46,60,310,443,452,455-456
+  s_ce7a446508f9a7::t_da2c6bd36cef68 204,240,260-261,311-312,351,356-357,364,370,372,382
+  s_ce7a446508f9a7::t_0863bc2b562148 439-442,444-451,453-454,457-458
+packages/worker/test/billing-route.test.ts
+  s_ce7a446508f9a7::t_64a84d215783ba 35,51,58-60,65-67,69-73
+  s_ce7a446508f9a7::t_ec541604037b69 57,61-64,68,74
+  s_ce7a446508f9a7::t_176880da784d7a 418,423
+  s_ce7a446508f9a7::t_acc3b824df8349 75-76
+packages/worker/test/storage.test.ts
+  s_ce7a446508f9a7::t_59c7d42917df0b 23,25
+  s_ce7a446508f9a7::t_de449e0c254a1c 24,85,94
+packages/worker/test/types.test.ts
+  s_ce7a446508f9a7::t_ec541604037b69 63
+  s_ce7a446508f9a7::t_388aa4653fd3fd 32-36
+scripts/ensure-stripe-pro-price.mjs
+  s_ce7a446508f9a7::t_25f09130484bd3 1-75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "d890568a18c286e6253b6fb977ae0fbd6c64227f",
+  "prompts": {},
+  "sessions": {
+    "s_ce7a446508f9a7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f97bd-7268-7052-a9f0-860973c38e35",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
