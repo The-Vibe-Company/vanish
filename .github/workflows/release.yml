@@ -53,7 +53,7 @@ jobs:
 
   deploy-worker:
     needs: release-please
-    if: github.event_name == 'workflow_dispatch' || needs.release-please.outputs.release_created == 'true'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
