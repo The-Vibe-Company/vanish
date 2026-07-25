@@ -9,1093 +9,761 @@ const html = `<!doctype html>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>vanish — temporary URLs from your terminal</title>
-<meta name="description" content="Temporary public URLs for agent-built work. Publish a folder or upload a file from your terminal, get a real *.vanish.sh link, and let it expire on schedule." />
+<meta name="description" content="Give anything your agent creates a temporary public URL. No deployment, no maintenance, no account required." />
+<meta name="theme-color" content="#1649e8" />
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2308090a'/%3E%3Cpath d='M14 16h28c6 0 10 4 10 10v12c0 6-4 10-10 10H14V16Z' fill='%23d4a850'/%3E%3Cpath d='M22 24h17c3 0 5 2 5 5v2H22v-7Zm0 12h22v2c0 3-2 5-5 5H22v-7Z' fill='%2308090a'/%3E%3Cpath d='M45 18h5v5h-5zM51 27h4v4h-4zM47 39h3v3h-3z' fill='%23d4a850'/%3E%3C/svg%3E" />
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231649e8'/%3E%3Cpath d='M14 16h28c6 0 10 4 10 10v12c0 6-4 10-10 10H14V16Z' fill='%23f4f0e7'/%3E%3Cpath d='M22 24h17c3 0 5 2 5 5v2H22v-7Zm0 12h22v2c0 3-2 5-5 5H22v-7Z' fill='%2311110f'/%3E%3Cpath d='M45 18h5v5h-5zM51 27h4v4h-4zM47 39h3v3h-3z' fill='%23ef432d'/%3E%3C/svg%3E" />
 
 <style>
-:root {
-  --bg: oklch(0.165 0.008 75);
-  --bg-elev: oklch(0.205 0.01 75);
-  --bg-card: oklch(0.225 0.012 75);
-  --bg-soft: oklch(0.255 0.014 75);
-  --line: oklch(0.32 0.01 75);
-  --line-soft: oklch(0.27 0.01 75);
-  --fg: oklch(0.965 0.008 80);
-  --fg-mute: oklch(0.78 0.012 80);
-  --fg-dim: oklch(0.58 0.012 80);
-  --accent: #d4a850;
-  --accent-soft: color-mix(in oklab, var(--accent) 18%, var(--bg));
-  --accent-line: color-mix(in oklab, var(--accent) 35%, var(--line));
-  --success: #6cc28a;
-  --danger: #e57373;
-  --pad-x: clamp(20px, 5vw, 80px);
-}
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 
-* { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
-html { scroll-behavior: smooth; }
-@media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
-}
-body {
-  background: var(--bg);
-  color: var(--fg);
-  font-family: 'Geist', system-ui, sans-serif;
-  font-size: 15px;
-  line-height: 1.55;
-  -webkit-font-smoothing: antialiased;
-  font-feature-settings: 'ss01', 'ss02', 'cv11';
-  letter-spacing: -0.005em;
-  overflow-x: hidden;
-}
-
-.mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-feature-settings: 'liga' 0; }
-.serif { font-family: 'Instrument Serif', serif; font-style: italic; }
-.sr-only {
-  position: absolute; width: 1px; height: 1px;
-  padding: 0; margin: -1px; overflow: hidden;
-  clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
-}
-
-a { color: inherit; text-decoration: none; }
-button { font-family: inherit; cursor: pointer; }
-
-.shell {
-  max-width: 1240px;
-  margin: 0 auto;
-  padding: 0 var(--pad-x);
-}
-
-/* NAV */
-.nav {
-  position: sticky; top: 0; z-index: 50;
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
-  background: color-mix(in oklab, var(--bg) 78%, transparent);
-  border-bottom: 1px solid color-mix(in oklab, var(--line) 50%, transparent);
-}
-.nav-inner { display: flex; align-items: center; justify-content: space-between; height: 60px; gap: 32px; }
-.brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16px; letter-spacing: -0.01em; }
-.brand-mark {
-  width: 26px; height: 26px; flex: 0 0 auto;
-  border-radius: 7px; display: block;
-  box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 22%, transparent),
-              0 10px 22px -14px var(--accent);
-}
-.brand-domain { color: var(--fg-mute); font-weight: 400; }
-.nav-links { display: flex; gap: 28px; font-size: 14px; color: var(--fg-mute); }
-.nav-links a:hover { color: var(--fg); }
-.nav-cta { display: flex; gap: 10px; align-items: center; }
-@media (max-width: 720px) { .nav-links { display: none; } }
-@media (max-width: 520px) {
-  .nav-inner { gap: 14px; }
-  .nav-cta { display: none; }
-}
-
-/* BUTTONS */
-.btn {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 9px 16px; border-radius: 8px;
-  font-size: 14px; font-weight: 500; letter-spacing: -0.005em;
-  border: 1px solid transparent; transition: all 0.15s ease;
-  white-space: nowrap;
-}
-.btn-primary { background: var(--fg); color: var(--bg); }
-.btn-primary:hover { background: oklch(0.92 0.02 80); }
-.btn-ghost { color: var(--fg-mute); border-color: var(--line); }
-.btn-ghost:hover { color: var(--fg); border-color: var(--line); background: var(--bg-elev); }
-.btn-accent { background: var(--accent); color: oklch(0.18 0.02 70); }
-.btn-accent:hover { filter: brightness(1.08); }
-.btn-sm { padding: 6px 12px; font-size: 13px; }
-.btn-lg { padding: 12px 20px; font-size: 15px; }
-
-/* HERO */
-.hero { position: relative; padding: clamp(56px, 9vw, 110px) 0 clamp(60px, 8vw, 100px); overflow: hidden; }
-.hero::before {
-  content: ''; position: absolute; inset: 0;
-  background:
-    radial-gradient(60% 60% at 78% 22%, color-mix(in oklab, var(--accent) 10%, transparent) 0%, transparent 70%),
-    radial-gradient(40% 50% at 8% 90%, color-mix(in oklab, var(--accent) 6%, transparent) 0%, transparent 70%);
-  pointer-events: none;
-}
-.hero-grid { display: grid; grid-template-columns: 1.05fr 1fr; gap: 64px; align-items: center; position: relative; }
-.hero-grid > * { min-width: 0; }
-@media (max-width: 960px) { .hero-grid { grid-template-columns: 1fr; gap: 48px; } }
-
-.eyebrow {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 5px 11px 5px 8px;
-  border: 1px solid var(--line); border-radius: 999px;
-  font-size: 12px; color: var(--fg-mute);
-  background: var(--bg-elev); margin-bottom: 22px;
-}
-.eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 3px color-mix(in oklab, var(--success) 25%, transparent); }
-.eyebrow strong { color: var(--fg); font-weight: 500; }
-
-/* BRAND LOCKUP (SVG) */
-.brand:hover .vanish-chip { animation: chipDrift 1.1s cubic-bezier(0.16,1,0.3,1) both; }
-.brand:hover .vanish-scan { transform: scaleX(0.18); opacity: 0.35; }
-.vanish-scan { transform-origin: left; transition: transform 0.5s cubic-bezier(0.16,1,0.3,1), opacity 0.5s; }
-@keyframes chipDrift { to { transform: translateX(3px); opacity: 0.28; } }
-
-.hero h1 {
-  font-size: clamp(40px, 5.6vw, 72px);
-  line-height: 1.02; letter-spacing: -0.035em;
-  font-weight: 500; margin: 0 0 22px;
-}
-.hero h1 em { font-style: normal; color: var(--accent); }
-.hero h1 .serif { font-family: 'Instrument Serif', serif; font-style: italic; font-weight: 400; color: var(--accent); }
-br.mobile-break { display: none; }
-@media (max-width: 620px) {
-  .hero h1 { font-size: clamp(34px, 10vw, 40px); letter-spacing: -0.025em; }
-  br.mobile-break { display: block; }
-  .hero h1,
-  .hero-sub,
-  .hero-cta,
-  .hero-proof,
-  .hero-meta,
-  .term {
-    width: 100%;
-    max-width: calc(100vw - 48px);
+  :root{
+    --blue:#1649e8;
+    --blue-dark:#0d2d9d;
+    --cream:#f4f0e7;
+    --paper:#fffdf7;
+    --ink:#11110f;
+    --red:#ef432d;
+    --yellow:#f4c928;
+    --muted:#6f6c65;
+    --line:rgba(17,17,15,.22);
+    --display:'Barlow Condensed',sans-serif;
+    --body:'Instrument Sans',sans-serif;
+    --mono:'JetBrains Mono',monospace;
+    --max:1380px;
   }
-  .hero-meta { gap: 12px; }
-  .hero-meta .pill { flex: 1 1 100%; }
-  .term-body { font-size: 12px; min-height: 300px; padding: 18px; }
-}
 
-.hero-sub { font-size: clamp(16px, 1.6vw, 18px); color: var(--fg-mute); max-width: 560px; line-height: 1.55; margin: 0 0 32px; }
-.hero-cta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-@media (max-width: 620px) {
-  .hero-cta .btn { flex: 1 1 100%; justify-content: center; }
-}
-.hero-meta { margin-top: 28px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; color: var(--fg-dim); font-size: 13px; }
-.hero-meta .pill { display: inline-flex; align-items: center; gap: 6px; }
-.hero-meta svg { width: 14px; height: 14px; opacity: 0.85; }
-.hero-proof {
-  margin-top: 18px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-  max-width: 560px; border: 1px solid var(--line-soft); border-radius: 12px;
-  overflow: hidden; background: color-mix(in oklab, var(--bg-elev) 72%, transparent);
-}
-.hero-proof span {
-  padding: 12px 14px; border-right: 1px solid var(--line-soft);
-  color: var(--fg-dim); font-size: 12px; line-height: 1.35;
-}
-.hero-proof span:last-child { border-right: none; }
-.hero-proof b { display: block; color: var(--fg); font-weight: 500; margin-bottom: 2px; }
-@media (max-width: 620px) {
-  .hero-proof { grid-template-columns: 1fr; }
-  .hero-proof span { border-right: none; border-bottom: 1px solid var(--line-soft); }
-  .hero-proof span:last-child { border-bottom: none; }
-}
+  html{scroll-behavior:smooth;background:var(--cream)}
+  body{
+    min-height:100vh;
+    overflow-x:hidden;
+    color:var(--ink);
+    background:var(--cream);
+    font-family:var(--body);
+    font-size:16px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  body::before{
+    content:"";
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+    z-index:100;
+    opacity:.055;
+    background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+    mix-blend-mode:multiply;
+  }
+  ::selection{background:var(--red);color:var(--paper)}
+  a{color:inherit;text-decoration:none}
+  button{border:0;background:none;color:inherit;font:inherit;cursor:pointer}
+  button:focus-visible,a:focus-visible{outline:3px solid currentColor;outline-offset:4px}
+  .hero .primary-cta:focus-visible,
+  .plan.pro .plan-cta:focus-visible{outline-color:var(--yellow)}
+  svg{display:block}
+  .shell{width:min(calc(100% - 72px),var(--max));margin-inline:auto}
 
-/* TERMINAL */
-.term {
-  background: oklch(0.13 0.008 75);
-  border: 1px solid var(--line);
-  border-radius: 14px; overflow: hidden;
-  box-shadow:
-    0 1px 0 0 color-mix(in oklab, white 4%, transparent) inset,
-    0 30px 60px -20px rgba(0,0,0,0.6),
-    0 0 0 1px color-mix(in oklab, var(--accent) 8%, transparent);
-  position: relative;
-  min-width: 0;
-}
-.term-bar {
-  display: flex; align-items: center; height: 38px; padding: 0 14px;
-  border-bottom: 1px solid var(--line-soft); gap: 8px;
-  background: color-mix(in oklab, var(--bg-elev) 90%, var(--accent) 2%);
-}
-.term-dots { display: flex; gap: 6px; }
-.term-dots span { width: 11px; height: 11px; border-radius: 50%; background: oklch(0.32 0.01 75); }
-.term-dots span:nth-child(1) { background: #ed6a5e; }
-.term-dots span:nth-child(2) { background: #f5bd4f; }
-.term-dots span:nth-child(3) { background: #61c554; }
-.term-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--fg-dim); letter-spacing: 0.02em; }
-.term-replay {
-  background: transparent; border: 1px solid var(--line); color: var(--fg-mute);
-  border-radius: 6px; padding: 4px 10px; font-size: 11px;
-  font-family: 'JetBrains Mono', monospace;
-  display: inline-flex; align-items: center; gap: 6px;
-}
-.term-replay:hover { color: var(--fg); border-color: var(--accent-line); }
+  .topbar{
+    position:absolute;
+    inset:0 0 auto;
+    z-index:20;
+    height:92px;
+    color:var(--cream);
+  }
+  .topbar-inner{height:100%;display:flex;align-items:center;justify-content:space-between;gap:2rem}
+  .brand{
+    font-family:var(--body);
+    font-size:1.75rem;
+    font-weight:600;
+    letter-spacing:-.07em;
+  }
+  .brand-dot{color:var(--red)}
+  .nav{display:flex;align-items:center;gap:2.1rem;font-size:.9rem;font-weight:500}
+  .nav-link{position:relative}
+  .nav-link::after{
+    content:"";
+    position:absolute;
+    left:0;right:100%;bottom:-5px;
+    height:2px;background:var(--cream);
+    transition:right .2s ease;
+  }
+  .nav-link:hover::after{right:0}
+   .nav-signin{
+     min-height:44px;
+     display:inline-flex;
+     align-items:center;
+     border:1px solid rgba(244,240,231,.75);
+    padding:.7rem 1.15rem;
+    border-radius:999px;
+    transition:background .2s,color .2s;
+  }
+  .nav-signin:hover{background:var(--cream);color:var(--blue)}
 
-.term-body {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 13.5px; line-height: 1.6;
-  padding: 22px 22px 26px; min-height: 360px;
-  color: var(--fg); white-space: pre-wrap; word-break: break-all;
-}
-.term-line { display: block; }
-.term-prompt { color: var(--accent); user-select: none; }
-.term-arg { color: var(--fg-mute); }
-.term-ok { color: var(--success); }
-.term-flag { color: oklch(0.78 0.07 240); }
-.term-url { color: var(--accent); text-decoration: underline; text-decoration-color: color-mix(in oklab, var(--accent) 50%, transparent); text-underline-offset: 3px; }
-.term-dim { color: var(--fg-dim); }
-.cursor {
-  display: inline-block; width: 9px; height: 16px;
-  background: var(--accent); vertical-align: -3px;
-  animation: blink 1s steps(2, start) infinite; margin-left: 1px;
-}
-@keyframes blink { to { background: transparent; } }
+  .hero{
+    position:relative;
+    min-height:780px;
+    height:100svh;
+    max-height:1050px;
+    display:flex;
+    align-items:center;
+    overflow:hidden;
+    color:var(--cream);
+    background:
+      radial-gradient(circle at 18% 35%,rgba(255,255,255,.07),transparent 29%),
+      var(--blue);
+  }
+  .hero::after{
+    content:"";
+    position:absolute;
+    width:440px;height:440px;
+    border:1px solid rgba(244,240,231,.15);
+    border-radius:50%;
+    left:-270px;bottom:-210px;
+  }
+  .hero-grid{
+    position:relative;
+    z-index:2;
+    width:min(calc(100% - 72px),var(--max));
+    margin-inline:auto;
+    display:grid;
+    grid-template-columns:minmax(0,.88fr) minmax(520px,1.12fr);
+    gap:clamp(4rem,8vw,9rem);
+    align-items:center;
+    padding-top:88px;
+  }
+  .hero-copy{padding-bottom:2rem}
+  .eyebrow{
+    display:flex;
+    align-items:center;
+    gap:.7rem;
+    margin-bottom:1.55rem;
+    font-size:.72rem;
+    font-weight:600;
+    letter-spacing:.15em;
+    text-transform:uppercase;
+  }
+  .eyebrow::before{content:"";width:32px;height:3px;background:var(--red)}
+  h1{
+    max-width:720px;
+    font-family:var(--display);
+    font-size:clamp(4.8rem,8.5vw,8.7rem);
+    font-weight:600;
+    line-height:.79;
+    letter-spacing:-.055em;
+  }
+  .hero-lede{
+    max-width:470px;
+    margin:2rem 0 2.1rem;
+    font-size:clamp(1.05rem,1.45vw,1.25rem);
+    line-height:1.45;
+    color:rgba(244,240,231,.88);
+  }
+  .hero-actions{display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+  .primary-cta{
+    min-height:58px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:1.3rem;
+    padding:.9rem 1.3rem .9rem 1.5rem;
+    background:var(--cream);
+    color:var(--ink);
+    border:2px solid var(--cream);
+    font-weight:600;
+    border-radius:4px;
+    box-shadow:7px 7px 0 var(--ink);
+    transition:transform .18s ease,box-shadow .18s ease;
+  }
+  .primary-cta:hover{transform:translate(3px,3px);box-shadow:4px 4px 0 var(--ink)}
+  .primary-cta svg{transition:transform .18s}
+  .primary-cta:hover svg{transform:translate(3px,-3px)}
+  .copy-state{min-width:44px;color:rgba(244,240,231,.9);font-size:.72rem}
+  .hero-trust{
+    display:flex;
+    gap:.75rem;
+    align-items:center;
+    flex-wrap:wrap;
+    margin-top:1.65rem;
+    color:rgba(244,240,231,.9);
+    font-size:.76rem;
+  }
+  .hero-trust span+span::before{content:"•";margin-right:.75rem;color:var(--red)}
 
-/* SECTION */
-.section { padding: clamp(70px, 10vw, 130px) 0; border-top: 1px solid var(--line-soft); position: relative; }
-.section, .footer { scroll-margin-top: 72px; }
-.section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; margin-bottom: 56px; flex-wrap: wrap; }
-.section-head h2 {
-  font-size: clamp(30px, 4vw, 46px); line-height: 1.05;
-  letter-spacing: -0.025em; font-weight: 500;
-  margin: 12px 0 0; max-width: 720px;
-}
-.section-head .kicker {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px; text-transform: uppercase; letter-spacing: 0.18em;
-  color: var(--accent); display: inline-flex; align-items: center; gap: 8px;
-}
-.section-head .kicker::before { content: ''; width: 18px; height: 1px; background: currentColor; opacity: 0.6; }
-.section-head p { color: var(--fg-mute); max-width: 380px; font-size: 15px; line-height: 1.6; margin: 0; }
+  .artifact-wrap{position:relative;padding:1rem 0 2rem}
+  .artifact{
+    position:relative;
+    width:min(100%,630px);
+    margin-left:auto;
+    padding:14px;
+    background:var(--ink);
+    box-shadow:25px 28px 0 rgba(8,24,91,.42);
+    transform:rotate(-1deg);
+    transition:transform .4s cubic-bezier(.16,1,.3,1);
+  }
+  .artifact:hover{transform:rotate(0) translateY(-5px)}
+  .artifact-paper{
+    min-height:590px;
+    display:grid;
+    grid-template-rows:1fr auto;
+    background:var(--paper);
+    color:var(--ink);
+  }
+  .artifact-preview{padding:clamp(2rem,4vw,3.2rem);display:flex;flex-direction:column}
+  .artifact-top{
+    display:flex;align-items:center;justify-content:space-between;
+    gap:1rem;margin-bottom:2.2rem;
+    font-size:.7rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+  }
+  .artifact-top span:first-child{color:var(--blue)}
+  .artifact-live{display:flex;align-items:center;gap:.5rem}
+  .artifact-live::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--red)}
+  .poster{
+    flex:1;
+    min-height:330px;
+    position:relative;
+    overflow:hidden;
+    display:grid;
+    grid-template-columns:1.05fr .95fr;
+    background:var(--cream);
+    border:1px solid var(--ink);
+  }
+  .poster-copy{padding:2rem 1.6rem;display:flex;flex-direction:column;justify-content:space-between}
+  .poster-kicker{font-size:.66rem;letter-spacing:.13em;text-transform:uppercase;color:var(--blue)}
+  .poster h2{
+    font-family:var(--display);
+    font-size:clamp(2.7rem,4.6vw,4.7rem);
+    line-height:.82;
+    letter-spacing:-.045em;
+    font-weight:600;
+  }
+  .poster h2 em{color:var(--blue);font-style:normal}
+  .poster-note{font-size:.72rem;max-width:22ch;color:var(--muted)}
+  .poster-art{position:relative;background:var(--blue);overflow:hidden}
+  .poster-art::before{
+    content:"";position:absolute;
+    width:190px;height:190px;border-radius:50%;
+    left:-70px;top:70px;background:var(--cream);
+  }
+  .poster-art::after{
+    content:"";position:absolute;
+    width:70px;height:70px;border-radius:50%;
+    left:48px;top:132px;background:var(--red);
+  }
+  .shape-black{
+    position:absolute;
+    inset:auto -45px -60px 10px;
+    height:280px;
+    background:var(--ink);
+    transform:rotate(-37deg);
+  }
+  .artifact-meta{
+    display:grid;
+    grid-template-columns:auto 1fr auto;
+    gap:1rem;
+    align-items:center;
+    min-height:82px;
+    padding:1rem 1.35rem;
+    border-top:1px solid var(--ink);
+  }
+  .link-mark{
+    width:36px;height:36px;border-radius:50%;
+    display:grid;place-items:center;
+    background:var(--blue);color:var(--paper);
+  }
+  .artifact-url{font-size:1.05rem;font-weight:600;letter-spacing:-.02em}
+  .expiry{
+    display:flex;align-items:center;gap:.55rem;
+    padding:.45rem .65rem;
+    border:1px solid var(--red);
+    border-radius:999px;
+    color:var(--red);
+    font-family:var(--mono);
+    font-size:.72rem;
+    white-space:nowrap;
+  }
+  .artifact-caption{
+    position:absolute;
+    right:0;bottom:-1.8rem;
+    font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;
+    color:rgba(244,240,231,.9);
+  }
 
-/* INSTALL */
-.install-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
-@media (max-width: 880px) { .install-grid { grid-template-columns: 1fr; } }
-.step {
-  border: 1px solid var(--line); border-radius: 14px;
-  padding: 28px;
-  background: linear-gradient(180deg, var(--bg-card), var(--bg-elev));
-  display: flex; flex-direction: column; gap: 18px;
-  position: relative; overflow: hidden;
-}
-.step .num {
-  position: absolute; top: 22px; right: 22px;
-  font-family: 'Instrument Serif', serif; font-style: italic;
-  font-size: 56px;
-  color: color-mix(in oklab, var(--accent) 35%, var(--line));
-  line-height: 1; letter-spacing: -0.04em;
-}
-.step h3 { font-size: 17px; margin: 0; font-weight: 500; letter-spacing: -0.01em; }
-.step p { color: var(--fg-mute); font-size: 13.5px; margin: 0; }
-.code-block {
-  background: oklch(0.13 0.008 75);
-  border: 1px solid var(--line-soft);
-  border-radius: 8px; padding: 12px 14px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12.5px; color: var(--fg);
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-}
-.code-block .cmd { overflow-x: auto; white-space: nowrap; flex: 1; }
-.code-block .cmd::before { content: '$ '; color: var(--accent); }
-.copy-btn {
-  background: transparent; border: 1px solid var(--line);
-  border-radius: 5px; padding: 3px 8px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px; color: var(--fg-mute);
-}
-.copy-btn:hover { color: var(--fg); border-color: var(--accent-line); }
-.copy-btn.copied { color: var(--success); border-color: var(--success); }
+  .ticker{overflow:hidden;background:var(--ink);color:var(--cream);border-block:1px solid var(--ink)}
+  .ticker-track{
+    width:max-content;
+    display:flex;
+    animation:ticker 34s linear infinite;
+  }
+  .ticker-track span{
+    display:flex;align-items:center;gap:1.8rem;
+    padding:.85rem .9rem;
+    font-family:var(--display);
+    font-size:1.05rem;
+    letter-spacing:.035em;
+    text-transform:uppercase;
+  }
+  .ticker-track span::after{content:"●";color:var(--red);font-size:.65rem}
+  @keyframes ticker{to{transform:translateX(-50%)}}
 
-/* USE CASES */
-.tabs {
-  display: flex; gap: 4px; padding: 4px;
-  background: var(--bg-elev); border: 1px solid var(--line);
-  border-radius: 10px; width: fit-content; margin-bottom: 28px;
-}
-.tab {
-  border: none; background: transparent;
-  color: var(--fg-mute); padding: 8px 14px;
-  border-radius: 7px; font-size: 13px;
-  font-family: 'JetBrains Mono', monospace;
-  display: inline-flex; align-items: center; gap: 8px;
-}
-.tab .ico-glyph { font-size: 14px; opacity: 0.7; }
-.tab.active { background: var(--bg); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,0.3); }
-.tab:hover:not(.active) { color: var(--fg); }
+  .section{padding:clamp(6rem,10vw,10rem) 0}
+  .section-kicker{
+    display:flex;align-items:center;gap:.75rem;
+    margin-bottom:1.25rem;
+    color:var(--blue);
+    font-size:.72rem;font-weight:600;letter-spacing:.15em;text-transform:uppercase;
+  }
+  .section-kicker::before{content:"";width:26px;height:3px;background:var(--red)}
+  .section-title{
+    max-width:900px;
+    font-family:var(--display);
+    font-size:clamp(3.5rem,7vw,7.1rem);
+    line-height:.84;
+    letter-spacing:-.048em;
+    font-weight:600;
+  }
+  .section-intro{
+    max-width:600px;margin-top:1.4rem;
+    color:var(--muted);font-size:1.1rem;
+  }
 
-.usecase {
-  display: grid; grid-template-columns: 1fr 1.15fr; gap: 0;
-  border: 1px solid var(--line); border-radius: 16px;
-  background: var(--bg-card); overflow: hidden; min-height: 460px;
-}
-@media (max-width: 880px) { .usecase { grid-template-columns: 1fr; } }
-.usecase[hidden] { display: none; }
-.usecase-text { padding: 40px; display: flex; flex-direction: column; gap: 18px; justify-content: center; }
-.usecase-text h3 { font-size: 26px; font-weight: 500; letter-spacing: -0.02em; margin: 0; }
-.usecase-text p { color: var(--fg-mute); margin: 0; line-height: 1.65; font-size: 14.5px; }
-.usecase-list { list-style: none; padding: 0; margin: 6px 0 0; display: flex; flex-direction: column; gap: 10px; }
-.usecase-list li { display: flex; align-items: flex-start; gap: 10px; font-size: 13.5px; color: var(--fg-mute); }
-.usecase-list li::before { content: '✓'; color: var(--accent); font-family: 'JetBrains Mono', monospace; font-size: 12px; margin-top: 2px; }
-.usecase-demo {
-  background: oklch(0.13 0.008 75);
-  border-left: 1px solid var(--line);
-  padding: 24px 28px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 13px; line-height: 1.7;
-  display: flex; flex-direction: column;
-}
-.usecase-demo pre { margin: 0; color: var(--fg); white-space: pre-wrap; word-break: break-word; font-family: inherit; font-size: inherit; line-height: inherit; }
-@media (max-width: 880px) { .usecase-demo { border-left: none; border-top: 1px solid var(--line); } }
+  .how{background:var(--cream)}
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:1.2rem;margin-top:4.5rem}
+  .step{
+    min-height:340px;
+    display:flex;flex-direction:column;
+    padding:1.7rem;
+    border:1px solid var(--ink);
+    background:var(--paper);
+    transition:transform .2s,box-shadow .2s;
+  }
+  .step:hover{transform:translateY(-5px);box-shadow:8px 8px 0 var(--blue)}
+  .step-no{
+    width:42px;height:42px;display:grid;place-items:center;
+    border-radius:50%;background:var(--blue);color:var(--cream);
+    font-family:var(--mono);font-size:.72rem;
+  }
+  .step h3{
+    margin-top:auto;
+    font-family:var(--display);font-size:2.3rem;line-height:.95;
+    letter-spacing:-.035em;font-weight:600;
+  }
+  .step p{margin-top:.8rem;color:var(--muted);font-size:.91rem;max-width:31ch}
+  .step-code{
+    margin-top:1.1rem;padding:.7rem .8rem;
+    background:var(--ink);color:var(--cream);
+    font-family:var(--mono);font-size:.65rem;
+    overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+  }
+  .step-code b{color:var(--red);font-weight:400}
 
-/* PRICING */
-.pricing { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-@media (max-width: 880px) { .pricing { grid-template-columns: 1fr; } }
-.tier {
-  border: 1px solid var(--line); border-radius: 14px;
-  padding: 32px 28px 28px;
-  background: var(--bg-card);
-  display: flex; flex-direction: column; gap: 20px;
-  position: relative;
-}
-.tier.featured {
-  background: linear-gradient(180deg, color-mix(in oklab, var(--accent) 8%, var(--bg-card)) 0%, var(--bg-card) 60%);
-  border-color: color-mix(in oklab, var(--accent) 50%, var(--line));
-  box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 25%, transparent),
-              0 30px 60px -30px color-mix(in oklab, var(--accent) 30%, transparent);
-}
-.tier .tier-name {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12px; text-transform: uppercase;
-  letter-spacing: 0.15em; color: var(--fg-mute);
-}
-.tier.featured .tier-name { color: var(--accent); }
-.tier .tier-price { display: flex; align-items: baseline; gap: 6px; }
-.tier .tier-price .amt { font-size: 38px; letter-spacing: -0.025em; font-weight: 500; }
-.tier .tier-price .per { color: var(--fg-dim); font-size: 14px; }
-.tier .tier-blurb { color: var(--fg-mute); font-size: 14px; margin: 0; line-height: 1.55; }
-.tier .tier-cta { width: 100%; justify-content: center; }
-.tier ul {
-  list-style: none; padding: 0; margin: 0;
-  display: flex; flex-direction: column; gap: 9px;
-  border-top: 1px solid var(--line-soft); padding-top: 20px;
-}
-.tier ul li { font-size: 13.5px; color: var(--fg-mute); display: flex; align-items: flex-start; gap: 10px; }
-.tier ul li svg { width: 14px; height: 14px; color: var(--accent); flex-shrink: 0; margin-top: 3px; }
-.tier ul li b { color: var(--fg); font-weight: 500; }
-.badge-pop {
-  position: absolute; top: -10px; right: 22px;
-  background: var(--accent); color: oklch(0.18 0.02 70);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px; letter-spacing: 0.1em;
-  padding: 4px 9px; border-radius: 999px;
-  text-transform: uppercase; font-weight: 600;
-}
+   .uses{background:var(--red);color:var(--ink)}
+   .uses .section-kicker{color:var(--ink)}
+   .uses .section-kicker::before{background:var(--yellow)}
+   .uses .section-intro{color:var(--ink)}
+  .use-strip{
+    margin-top:4.5rem;
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+     border:1px solid rgba(17,17,15,.55);
+  }
+  .use{
+    min-height:230px;
+    padding:1.5rem;
+     border-right:1px solid rgba(17,17,15,.55);
+    display:flex;flex-direction:column;justify-content:space-between;
+  }
+  .use:last-child{border-right:0}
+   .use-mark{font-family:var(--mono);font-size:.67rem;color:var(--ink)}
+  .use h3{font-family:var(--display);font-size:2.1rem;line-height:.95;font-weight:600}
+   .use p{font-size:.83rem;color:var(--ink)}
 
-/* COMMANDS REFERENCE */
-.cmds { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
-@media (max-width: 720px) { .cmds { grid-template-columns: 1fr; } }
-.cmd-row {
-  display: grid; grid-template-columns: minmax(220px, 320px) 1fr;
-  gap: 24px; padding: 16px 18px;
-  border: 1px solid var(--line-soft);
-  border-radius: 10px; background: var(--bg-elev);
-  font-size: 13px; align-items: center;
-}
-.cmd-row:hover { border-color: var(--accent-line); }
-.cmd-row .c {
-  font-family: 'JetBrains Mono', monospace;
-  color: var(--fg); font-size: 12.5px;
-  white-space: nowrap; overflow-x: auto;
-}
-.cmd-row .c::before { content: '$ '; color: var(--accent); }
-.cmd-row .d { color: var(--fg-mute); font-size: 13px; }
+  .pricing{background:var(--cream)}
+  .pricing-head{display:flex;justify-content:space-between;align-items:end;gap:3rem}
+  .pricing-note{max-width:380px;color:var(--muted)}
+  .plans{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;margin-top:4.5rem}
+  .plan{
+    min-height:390px;
+    padding:2rem;
+    border:1px solid var(--ink);
+    background:var(--paper);
+    display:flex;flex-direction:column;
+  }
+  .plan.pro{background:var(--blue);color:var(--cream);box-shadow:12px 12px 0 var(--ink)}
+  .plan-top{display:flex;justify-content:space-between;align-items:start;gap:1rem}
+  .plan-name{font-family:var(--display);font-size:3rem;line-height:1;font-weight:600}
+  .plan-price{font-family:var(--mono);font-size:.75rem;padding:.45rem .6rem;border:1px solid currentColor;border-radius:999px}
+  .plan ul{list-style:none;margin:2.2rem 0;display:grid;gap:.72rem;color:var(--muted)}
+  .plan.pro ul{color:rgba(244,240,231,.9)}
+  .plan li::before{content:"—";margin-right:.65rem;color:var(--red)}
+  .plan.pro li::before{color:var(--yellow)}
+  .plan-cta{
+    margin-top:auto;
+    min-height:52px;
+    display:flex;justify-content:space-between;align-items:center;
+    padding:.75rem 1rem;
+    border:1px solid currentColor;
+    font-weight:600;
+    transition:background .2s,color .2s;
+  }
+  .plan-cta:hover{background:var(--ink);color:var(--cream)}
+  .plan.pro .plan-cta{background:var(--cream);color:var(--ink);border-color:var(--cream)}
+  .plan.pro .plan-cta:hover{background:var(--yellow);border-color:var(--yellow)}
 
-/* AGENT CALLOUT */
-.callout {
-  border: 1px solid var(--line); border-radius: 16px;
-  background:
-    radial-gradient(80% 80% at 100% 0%, color-mix(in oklab, var(--accent) 12%, transparent), transparent 60%),
-    var(--bg-card);
-  padding: 56px;
-  display: grid; grid-template-columns: 1.1fr 1fr; gap: 40px;
-  align-items: center; position: relative; overflow: hidden;
-}
-@media (max-width: 880px) { .callout { grid-template-columns: 1fr; padding: 36px; } }
-.callout h2 { font-size: clamp(28px, 3.4vw, 40px); margin: 0 0 16px; letter-spacing: -0.025em; line-height: 1.1; font-weight: 500; }
-.callout h2 .serif { font-family: 'Instrument Serif', serif; font-style: italic; font-weight: 400; color: var(--accent); }
-.callout p { color: var(--fg-mute); margin: 0 0 24px; max-width: 460px; line-height: 1.6; }
-.agent-command { max-width: 520px; margin-bottom: 18px; }
-.skill-card {
-  background: oklch(0.13 0.008 75);
-  border: 1px solid var(--line);
-  border-radius: 12px; padding: 18px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12.5px; line-height: 1.7; color: var(--fg);
-  white-space: pre-wrap;
-}
-.skill-card .skill-head {
-  display: flex; align-items: center; justify-content: space-between;
-  border-bottom: 1px dashed var(--line-soft);
-  padding-bottom: 10px; margin-bottom: 12px;
-}
-.skill-card .skill-head .name { color: var(--accent); }
-.skill-card .skill-head .tag {
-  font-size: 10px; padding: 2px 6px;
-  border: 1px solid var(--line); border-radius: 4px;
-  color: var(--fg-mute);
-}
-.skill-card .label { color: var(--accent); }
-.skill-card .ok { color: var(--success); }
+  .oss{background:var(--blue);color:var(--cream)}
+  .oss-grid{display:grid;grid-template-columns:1fr 1fr;gap:5rem;align-items:center}
+  .oss .section-kicker{color:var(--cream)}
+  .oss .section-kicker::before{background:var(--red)}
+  .oss .section-title{font-size:clamp(3.7rem,6.5vw,6.6rem)}
+  .oss-copy{color:rgba(244,240,231,.9);max-width:540px;margin:1.5rem 0 2rem}
+  .oss-link{
+    display:inline-flex;align-items:center;gap:1rem;
+    padding:.85rem 1.1rem;border:1px solid var(--cream);
+    font-weight:600;transition:background .2s,color .2s;
+  }
+  .oss-link:hover{background:var(--cream);color:var(--blue)}
+  .stack-frame{padding:12px;background:var(--ink);transform:rotate(1.5deg)}
+  .stack-paper{background:var(--paper);color:var(--ink);padding:2rem}
+  .stack-title{font-family:var(--display);font-size:2.3rem;line-height:1;font-weight:600;margin-bottom:1.5rem}
+  .stack-row{
+    display:flex;justify-content:space-between;gap:2rem;
+    padding:.85rem 0;border-top:1px solid var(--line);font-size:.86rem;
+  }
+  .stack-row span:first-child{color:var(--muted)}
+  .stack-row span:last-child{font-family:var(--mono);font-size:.74rem}
 
-/* H2 serif accent */
-h2 .serif { font-family: 'Instrument Serif', serif; font-style: italic; font-weight: 400; }
+  footer{background:var(--ink);color:var(--cream);padding:4rem 0 2rem}
+  .footer-grid{display:grid;grid-template-columns:1.4fr repeat(3,1fr);gap:3rem}
+  .footer-brand{font-size:2rem;font-weight:600;letter-spacing:-.07em}
+  .footer-blurb{max-width:310px;margin-top:1rem;color:rgba(244,240,231,.76);font-size:.85rem}
+  .footer-col h4{font-size:.7rem;text-transform:uppercase;letter-spacing:.14em;color:var(--red);margin-bottom:1rem}
+  .footer-col ul{list-style:none;display:grid;gap:.6rem;font-size:.84rem;color:rgba(244,240,231,.7)}
+  .footer-col a:hover{color:var(--cream)}
+  .footer-bottom{
+    display:flex;justify-content:space-between;gap:2rem;flex-wrap:wrap;
+    margin-top:4rem;padding-top:1.5rem;border-top:1px solid rgba(244,240,231,.15);
+    color:rgba(244,240,231,.7);font-size:.72rem;
+  }
 
-/* FOOTER */
-.footer {
-  padding: 70px 0 36px;
-  border-top: 1px solid var(--line-soft);
-  color: var(--fg-mute); font-size: 13px;
-}
-.footer-grid {
-  display: grid; grid-template-columns: 2fr 1fr 1fr 1fr;
-  gap: 40px; margin-bottom: 50px;
-}
-@media (max-width: 720px) { .footer-grid { grid-template-columns: 1fr 1fr; } }
-.footer-grid h4 {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px; letter-spacing: 0.16em;
-  text-transform: uppercase; color: var(--fg-dim);
-  margin: 0 0 14px; font-weight: 500;
-}
-.footer-grid ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
-.footer-grid a:hover { color: var(--fg); }
-.footer-bottom {
-  display: flex; justify-content: space-between; gap: 16px;
-  padding-top: 24px; border-top: 1px solid var(--line-soft);
-  font-family: 'JetBrains Mono', monospace; font-size: 11.5px;
-  color: var(--fg-dim); flex-wrap: wrap;
-}
-.footer-bottom .ascii { font-size: 11px; color: color-mix(in oklab, var(--accent) 60%, var(--fg-dim)); }
-.footer-blurb { max-width: 340px; margin: 0; color: var(--fg-mute); font-size: 13.5px; line-height: 1.65; }
+  .reveal{opacity:1;transform:none}
+
+  @media(max-width:1050px){
+    .hero{height:auto;max-height:none;padding:8rem 0 7rem}
+    .hero-grid{grid-template-columns:1fr;gap:5rem;padding-top:3rem}
+    .hero-copy{max-width:760px}
+    .artifact{margin:0 auto}
+    .artifact-caption{right:1rem}
+    .use-strip{grid-template-columns:1fr 1fr}
+    .use:nth-child(2){border-right:0}
+     .use:nth-child(-n+2){border-bottom:1px solid rgba(17,17,15,.55)}
+    .oss-grid{grid-template-columns:1fr;gap:4rem}
+  }
+  @media(max-width:760px){
+    .shell{width:min(calc(100% - 36px),var(--max))}
+    .hero-grid{width:min(calc(100% - 36px),var(--max))}
+    .topbar{height:72px}
+    .nav-link{display:none}
+    .nav{gap:.8rem}
+    .nav-signin{padding:.55rem .85rem}
+    .hero{padding:6.5rem 0 5rem;min-height:0}
+    .hero-grid{padding-top:2rem;gap:3.2rem}
+    h1{font-size:clamp(4rem,21vw,6rem)}
+    .hero-lede{font-size:1rem}
+    .artifact{padding:8px;box-shadow:12px 14px 0 rgba(8,24,91,.42)}
+    .artifact-paper{min-height:460px}
+    .artifact-preview{padding:1.1rem}
+    .poster{grid-template-columns:1fr;min-height:300px}
+    .poster-copy{min-height:215px;padding:1.2rem}
+    .poster h2{font-size:3rem}
+    .poster-art{min-height:150px}
+    .poster-art::before{top:20px}
+    .poster-art::after{top:75px}
+    .artifact-meta{grid-template-columns:auto 1fr;padding:.8rem;min-height:68px}
+    .artifact-url{font-size:.77rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .expiry{grid-column:1/-1;justify-content:center}
+    .artifact-caption{position:static;margin-top:1.5rem;text-align:center}
+    .section{padding:5.5rem 0}
+    .steps,.plans{grid-template-columns:1fr;margin-top:3rem}
+    .step{min-height:285px}
+    .pricing-head{display:block}
+    .pricing-note{margin-top:1.2rem}
+    .use-strip{grid-template-columns:1fr;margin-top:3rem}
+     .use{border-right:0;border-bottom:1px solid rgba(17,17,15,.55)!important}
+    .use:last-child{border-bottom:0!important}
+    .footer-grid{grid-template-columns:1fr 1fr}
+    .footer-grid>div:first-child{grid-column:1/-1}
+  }
+  @media(prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto}
+    *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+    .reveal{opacity:1;transform:none}
+  }
 </style>
 </head>
 <body>
-<div class="sr-only" id="copyStatus" aria-live="polite"></div>
 
-<!-- NAV -->
-<nav class="nav">
-  <div class="shell nav-inner">
-    <a href="/" class="brand" aria-label="vanish.sh">
-      <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
-        <rect width="64" height="64" rx="14" fill="oklch(0.13 0.008 75)" />
-        <path d="M13 16h29c6.1 0 10 3.9 10 10v12c0 6.1-3.9 10-10 10H13V16Z" fill="var(--accent)" />
-        <path class="vanish-scan" d="M22 24h17c3.1 0 5 1.9 5 5v2H22v-7Zm0 12h22v2c0 3.1-1.9 5-5 5H22v-7Z" fill="oklch(0.13 0.008 75)" />
-        <path class="vanish-chip" d="M45 18h5v5h-5z" fill="var(--accent)" />
-        <path class="vanish-chip" d="M51 27h4v4h-4z" fill="var(--accent)" style="animation-delay:.05s" />
-        <path class="vanish-chip" d="M47 39h3v3h-3z" fill="var(--accent)" style="animation-delay:.1s" />
-      </svg>
-      <span>vanish<span class="brand-domain">.sh</span></span>
-    </a>
-    <div class="nav-links">
-      <a href="#install">Start</a>
-      <a href="#usecases">Use cases</a>
-      <a href="#agents">Agents</a>
-      <a href="#pricing">Pricing</a>
-      <a href="#commands">CLI</a>
-    </div>
-    <div class="nav-cta">
-      <a class="btn btn-ghost btn-sm" href="https://github.com/The-Vibe-Company/vanish" rel="noopener">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.56 0-.28-.01-1.02-.02-2.01-3.2.69-3.87-1.54-3.87-1.54-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.27-5.24-5.66 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.16 1.17.92-.26 1.9-.39 2.88-.39s1.96.13 2.88.39c2.2-1.48 3.16-1.17 3.16-1.17.62 1.58.23 2.75.11 3.04.74.8 1.18 1.82 1.18 3.07 0 4.4-2.69 5.37-5.25 5.65.41.36.78 1.06.78 2.13 0 1.54-.01 2.78-.01 3.16 0 .31.21.67.8.55C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>
-        1.4k
-      </a>
-      <a class="btn btn-primary btn-sm" href="/auth/github?redirect=/dashboard">
-        Get started
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-      </a>
-    </div>
+<header class="topbar">
+  <div class="shell topbar-inner">
+    <a class="brand" href="/" aria-label="Vanish home">vanish<span class="brand-dot">.</span></a>
+    <nav class="nav" aria-label="Primary navigation">
+      <a class="nav-link" href="#how">How it works</a>
+      <a class="nav-link" href="#uses">Examples</a>
+      <a class="nav-link" href="#pricing">Pricing</a>
+      <a class="nav-link" href="https://github.com/The-Vibe-Company/vanish" rel="noopener">GitHub</a>
+      <a class="nav-signin" href="/auth/github?redirect=/dashboard">Sign in</a>
+    </nav>
   </div>
-</nav>
+</header>
 
-<!-- HERO -->
-<section class="hero">
-  <div class="shell hero-grid">
-    <div>
-      <div class="eyebrow">
-        <span class="dot"></span>
-        <span><strong>v1.4</strong> — mini-sites, file links, agent skills</span>
-      </div>
-      <h1>
-        Temporary<br class="mobile-break" /> public URLs<br/>
-        for <em><span class="serif">agent-built work.</span></em>
-      </h1>
-      <p class="hero-sub">
-        Publish a folder or upload a file from your terminal. Vanish gives you a real
-        <span class="mono" style="color:var(--fg);">*.vanish.sh</span> link, copies it, and expires it on schedule.
-      </p>
-      <div class="hero-cta">
-        <button class="btn btn-accent btn-lg" data-copy="npx vanish-cli site ./demo --root index.html" data-copy-label-default="npx vanish-cli site ./demo --root index.html">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
-          <span class="copy-label">npx vanish-cli site ./demo</span>
-        </button>
-        <a class="btn btn-ghost btn-lg" href="/dashboard">
-          Dashboard
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M3 9h18"/></svg>
-        </a>
-        <a class="btn btn-ghost btn-lg" href="https://github.com/The-Vibe-Company/vanish" rel="noopener">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.56 0-.28-.01-1.02-.02-2.01-3.2.69-3.87-1.54-3.87-1.54-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.27-5.24-5.66 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.16 1.17.92-.26 1.9-.39 2.88-.39s1.96.13 2.88.39c2.2-1.48 3.16-1.17 3.16-1.17.62 1.58.23 2.75.11 3.04.74.8 1.18 1.82 1.18 3.07 0 4.4-2.69 5.37-5.25 5.65.41.36.78 1.06.78 2.13 0 1.54-.01 2.78-.01 3.16 0 .31.21.67.8.55C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>
-          View on GitHub
-        </a>
-      </div>
-      <div class="hero-proof">
-        <span><b>No deploy</b> One command publishes local output.</span>
-        <span><b>Agent-readable</b> JSON and Markdown outputs included.</span>
-        <span><b>Auto-expiring</b> Links die before stale demos linger.</span>
-      </div>
-      <div class="hero-meta">
-        <span class="pill">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-          ~300ms publish
-        </span>
-        <span class="pill">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          MIT · Self-hostable
-        </span>
-        <span class="pill">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
-          Cloudflare-backed
-        </span>
-      </div>
-    </div>
-
-    <div class="term" id="term">
-      <div class="term-bar">
-        <div class="term-dots"><span></span><span></span><span></span></div>
-        <div class="term-title">~/projects/demo — vanish-cli</div>
-        <button class="term-replay" id="termReplay" type="button" aria-label="Replay terminal animation" title="Replay">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
-          replay
-        </button>
-      </div>
-      <div class="term-body" id="termBody"></div>
-    </div>
-  </div>
-</section>
-
-<!-- INSTALL -->
-<section class="section" id="install">
-  <div class="shell">
-    <div class="section-head">
-      <div>
-        <span class="kicker">01 — Start</span>
-        <h2>One command first. <span class="serif">Install later.</span></h2>
-      </div>
-      <p>Use <span class="mono">npx</span> for the first link, then keep the CLI installed if it becomes part of your agent or terminal loop.</p>
-    </div>
-    <div class="install-grid">
-      <div class="step">
-        <span class="num">i</span>
-        <h3>Publish once</h3>
-        <p>No setup required. Point Vanish at a folder and name the file that should load at <span class="mono" style="color:var(--accent);">/</span>.</p>
-        <div class="code-block">
-          <span class="cmd mono">npx vanish-cli site ./demo --root index.html</span>
-          <button class="copy-btn" data-copy="npx vanish-cli site ./demo --root index.html">copy</button>
+<main>
+  <section class="hero">
+    <div class="shell hero-grid">
+      <div class="hero-copy">
+        <div class="eyebrow">Agent handoff, made visible</div>
+        <h1>One link.<br>Anyone can see it.</h1>
+        <p class="hero-lede">Your agent publishes sites, reports, presentations, and files. You share the link. Vanish handles the rest.</p>
+        <div class="hero-actions">
+          <button class="primary-cta" data-copy="Publish the current static site with Vanish. Identify the site folder and its entry HTML file, then run: npx vanish-cli site [folder] --root [entry-file]. Return the public URL.">
+            <span>Copy prompt for my agent</span>
+            <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 15L15 5M8 5h7v7"/></svg>
+          </button>
+          <span class="copy-state" aria-live="polite"></span>
+        </div>
+        <div class="hero-trust">
+          <span>Free to try</span>
+          <span>No account</span>
+          <span>Disappears automatically</span>
         </div>
       </div>
-      <div class="step">
-        <span class="num">ii</span>
-        <h3>Keep it handy</h3>
-        <p>Install the CLI when Vanish becomes part of your daily terminal, script, or agent workflow.</p>
-        <div class="code-block">
-          <span class="cmd mono">npm install -g vanish-cli</span>
-          <button class="copy-btn" data-copy="npm install -g vanish-cli">copy</button>
+
+      <div class="artifact-wrap" aria-label="Example Vanish site">
+        <div class="artifact">
+          <div class="artifact-paper">
+            <div class="artifact-preview">
+              <div class="artifact-top">
+                <span>Agent-made preview</span>
+                <span class="artifact-live">Published now</span>
+              </div>
+              <div class="poster">
+                <div class="poster-copy">
+                  <span class="poster-kicker">Design review · 07</span>
+                  <h2>Clear thinking,<br><em>ready to share.</em></h2>
+                  <p class="poster-note">A browser-ready report created by your agent and published without a deployment pipeline.</p>
+                </div>
+                <div class="poster-art"><span class="shape-black"></span></div>
+              </div>
+            </div>
+            <div class="artifact-meta">
+              <span class="link-mark" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12l4-4M6.5 14.5l-1 1a3.5 3.5 0 01-5-5l3-3a3.5 3.5 0 015 0M13.5 5.5l1-1a3.5 3.5 0 015 5l-3 3a3.5 3.5 0 01-5 0"/></svg>
+              </span>
+              <span class="artifact-url">quiet-river-42.vanish.sh</span>
+              <span class="expiry">48 h</span>
+            </div>
+          </div>
         </div>
+        <p class="artifact-caption">Published now · automatic expiry</p>
       </div>
-      <div class="step">
-        <span class="num">iii</span>
-        <h3>Login when needed</h3>
-        <p>GitHub OAuth unlocks 48h retention, larger uploads, dashboard history, and upgrade paths.</p>
-        <div class="code-block">
-          <span class="cmd mono">vanish login</span>
-          <button class="copy-btn" data-copy="vanish login">copy</button>
-        </div>
-      </div>
+    </div>
+  </section>
+
+  <div class="ticker" aria-hidden="true">
+    <div class="ticker-track">
+      <span>Sites</span><span>Reports</span><span>Prototypes</span><span>Presentations</span><span>Files</span><span>Visualizations</span>
+      <span>Sites</span><span>Reports</span><span>Prototypes</span><span>Presentations</span><span>Files</span><span>Visualizations</span>
     </div>
   </div>
-</section>
 
-<!-- USE CASES -->
-<section class="section" id="usecases">
-  <div class="shell">
-    <div class="section-head">
-      <div>
-        <span class="kicker">02 — Use cases</span>
-        <h2>Pick the output. <span class="serif">Get a URL.</span></h2>
+  <section class="section how" id="how">
+    <div class="shell">
+      <div class="reveal">
+        <div class="section-kicker">How it works</div>
+        <h2 class="section-title">From creation to public link in one move.</h2>
+        <p class="section-intro">No deployment settings to learn. No dashboard required. Your agent can publish what it just made and hand you the URL.</p>
       </div>
-      <p>Folders become mini-sites. Files become direct links. Agent loops get structured output for the next step.</p>
-    </div>
-    <div class="tabs" role="tablist" aria-label="Use cases">
-      <button class="tab active" role="tab" id="tab-site" data-tab="site" aria-selected="true" aria-controls="panel-site"><span class="ico-glyph" aria-hidden="true">⌘</span>Mini-site</button>
-      <button class="tab" role="tab" id="tab-file" data-tab="file" aria-selected="false" aria-controls="panel-file" tabindex="-1"><span class="ico-glyph" aria-hidden="true">↗</span>Single file</button>
-      <button class="tab" role="tab" id="tab-agent" data-tab="agent" aria-selected="false" aria-controls="panel-agent" tabindex="-1"><span class="ico-glyph" aria-hidden="true">⚡</span>Agent loop</button>
-    </div>
-
-    <div class="usecase" id="panel-site" role="tabpanel" aria-labelledby="tab-site" data-uc="site">
-      <div class="usecase-text">
-        <h3>Publish a folder as a real website</h3>
-        <p>Point at any directory with HTML, Markdown, CSS, JS or assets. Vanish packs it, uploads it, and returns a public subdomain.</p>
-        <ul class="usecase-list">
-          <li>HTML, CSS, JS and Markdown served as-is — no bundler, no transform</li>
-          <li>Up to 1,000 files per site, 1GB total on Pro</li>
-          <li>Update an existing site without changing the URL</li>
-          <li>Pro: custom slugs and retention up to 365 days</li>
-        </ul>
-      </div>
-      <div class="usecase-demo">
-<pre><span class="term-prompt">$ </span><span style="color:var(--fg);">vanish</span><span class="term-arg"> site ./pitch-deck</span>
-<span class="term-arg">     </span><span class="term-flag">--root</span><span class="term-arg"> index.html</span> <span class="term-flag">--slug</span><span class="term-arg"> q1-board</span>
-
-<span class="term-dim">↻ packing 47 files (3.2 MB)</span>
-<span class="term-dim">↑ uploading to vanish.sh</span>
-<span class="term-ok">✓ published in 612ms</span>
-
-<span class="term-dim">  → </span><span class="term-url">https://q1-board.vanish.sh/</span>
-<span class="term-dim">  expires in 30d · 47 files · 3.2 MB</span>
-<span class="term-dim">  📋 copied to clipboard</span></pre>
+      <div class="steps">
+        <article class="step reveal">
+          <span class="step-no">01</span>
+          <h3>Make something</h3>
+          <p>Your agent creates a site, a report, a deck, or any file you need someone else to see.</p>
+          <div class="step-code"><b>→</b> index.html · styles.css</div>
+        </article>
+        <article class="step reveal">
+          <span class="step-no">02</span>
+          <h3>Ask Vanish to publish</h3>
+          <p>Give your agent the prompt once. It chooses the right Vanish workflow for the artifact.</p>
+          <div class="step-code"><b>$</b> npx vanish-cli site ./demo --root index.html</div>
+        </article>
+        <article class="step reveal">
+          <span class="step-no">03</span>
+          <h3>Share the link</h3>
+          <p>Send a real public URL. Update it while you work, or simply let it disappear.</p>
+          <div class="step-code"><b>↗</b> quiet-river-42.vanish.sh</div>
+        </article>
       </div>
     </div>
+  </section>
 
-    <div class="usecase" id="panel-file" role="tabpanel" aria-labelledby="tab-file" data-uc="file" hidden>
-      <div class="usecase-text">
-        <h3>Drop a file. Get a link.</h3>
-        <p>Screenshots, PDFs, reports, archives. Anonymous works for images. Logged-in lets you upload almost anything except executables. Markdown output, JSON output, auto-clipboard.</p>
-        <ul class="usecase-list">
-          <li>Anonymous: images up to 5MB</li>
-          <li>Free: any file (except binaries) up to 50MB · Pro: 1GB</li>
-          <li>--md flag returns a Markdown link, ready to paste</li>
-          <li>List, delete, expire — full CRUD from the CLI</li>
-        </ul>
+  <section class="section uses" id="uses">
+    <div class="shell">
+      <div class="reveal">
+        <div class="section-kicker">What goes on Vanish</div>
+        <h2 class="section-title">The things that deserve better than an attachment.</h2>
+        <p class="section-intro">Vanish is the final step between an agent finishing the work and a person actually seeing it.</p>
       </div>
-      <div class="usecase-demo">
-<pre><span class="term-prompt">$ </span><span style="color:var(--fg);">vanish</span><span class="term-arg"> upload screenshot.png </span><span class="term-flag">--md</span>
-
-<span class="term-ok">✓ uploaded · 1.4 MB · 240ms</span>
-
-<span class="term-dim">  </span><span class="term-arg">![screenshot.png](</span><span class="term-url">https://vanish.sh/f/a1b2c3d4.png</span><span class="term-arg">)</span>
-
-<span class="term-prompt">$ </span><span style="color:var(--fg);">vanish</span><span class="term-arg"> ls</span>
-<span class="term-dim">  ID         FILE              SIZE   EXPIRES</span>
-<span class="term-arg">  a1b2c3d4   screenshot.png    1.4M   in 47h</span>
-<span class="term-arg">  e5f6g7h8   report.pdf        2.1M   in 22d</span></pre>
+      <div class="use-strip reveal">
+        <article class="use"><span class="use-mark">01 / REPORT</span><h3>Audits &amp;<br>reviews</h3><p>Turn generated HTML into a page your team can read.</p></article>
+        <article class="use"><span class="use-mark">02 / DEMO</span><h3>Prototypes &amp;<br>mini-sites</h3><p>Share a working browser experience with one URL.</p></article>
+        <article class="use"><span class="use-mark">03 / DECK</span><h3>Presentations &amp;<br>visual stories</h3><p>Give clients and collaborators a clean public preview.</p></article>
+        <article class="use"><span class="use-mark">04 / FILE</span><h3>Documents &amp;<br>media</h3><p>Upload a single file when a full site would be too much.</p></article>
       </div>
     </div>
+  </section>
 
-    <div class="usecase" id="panel-agent" role="tabpanel" aria-labelledby="tab-agent" data-uc="agent" hidden>
-      <div class="usecase-text">
-        <h3>A target for code-generating agents</h3>
-        <p>Claude Code, Codex and other agents generate folders all day. Vanish turns that output into a reviewable URL with JSON for the next iteration.</p>
-        <ul class="usecase-list">
-          <li>JSON output for structured agent feedback</li>
-          <li>Update flag preserves URL across iterations</li>
-          <li>Three first-party skills: publish, upload, account</li>
-          <li>Rate-limited 50/h Free, 200/h Pro — designed for tight loops</li>
-        </ul>
-      </div>
-      <div class="usecase-demo">
-<pre><span class="term-dim"># inside an agent loop</span>
-<span class="term-prompt">$ </span><span style="color:var(--fg);">vanish</span><span class="term-arg"> site ./out </span><span class="term-flag">--update</span><span class="term-arg"> demo-v3 </span><span class="term-flag">--json</span>
-
-<span style="color:var(--fg);">{</span>
-<span class="term-arg">  "url": "</span><span class="term-url">https://demo-v3.vanish.sh/</span><span class="term-arg">",</span>
-<span class="term-arg">  "id": "k8m2q9z4p1ad",</span>
-<span class="term-arg">  "rootPath": "index.html",</span>
-<span class="term-arg">  "size": 8120,</span>
-<span class="term-arg">  "fileCount": 3,</span>
-<span class="term-arg">  "expires": "2026-05-12T10:30:00.000Z"</span>
-<span style="color:var(--fg);">}</span></pre>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- AGENT CALLOUT -->
-<section class="section" id="agents">
-  <div class="shell">
-    <div class="callout">
-      <div>
-        <span class="kicker" style="color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.18em;display:inline-flex;align-items:center;gap:8px;">03 — For agents</span>
-        <h2 style="margin-top:12px">Native skills for <span class="serif">Claude Code &amp; Codex.</span></h2>
-        <p>Install the Vanish skills once. Review the skills doc first if you want to inspect what agents can run: publish a folder, upload a file, or handle login, quota and upgrade checks.</p>
-        <div class="code-block agent-command">
-          <span class="cmd mono">npx skills add The-Vibe-Company/vanish</span>
-          <button class="copy-btn" data-copy="npx skills add The-Vibe-Company/vanish">copy</button>
-        </div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <a class="btn btn-primary" href="https://github.com/The-Vibe-Company/vanish#skills" rel="noopener">
-            Read the skills doc
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-          </a>
-          <a class="btn btn-ghost" href="https://github.com/The-Vibe-Company/vanish" rel="noopener">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.56 0-.28-.01-1.02-.02-2.01-3.2.69-3.87-1.54-3.87-1.54-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.27-5.24-5.66 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.16 1.17.92-.26 1.9-.39 2.88-.39s1.96.13 2.88.39c2.2-1.48 3.16-1.17 3.16-1.17.62 1.58.23 2.75.11 3.04.74.8 1.18 1.82 1.18 3.07 0 4.4-2.69 5.37-5.25 5.65.41.36.78 1.06.78 2.13 0 1.54-.01 2.78-.01 3.16 0 .31.21.67.8.55C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>
-            github.com/vanish-sh
-          </a>
-        </div>
-      </div>
-      <div class="skill-card">
-        <div class="skill-head">
-          <span class="name">The-Vibe-Company/vanish</span>
-          <span class="tag">SKILLS</span>
-        </div><span class="label">install:</span> npx skills add The-Vibe-Company/vanish
-
-<span class="label">vanish-publish-site:</span> folders, demos, reports
-<span class="label">vanish-upload-files:</span> screenshots, PDFs, archives
-<span class="label">vanish-connect-upgrade:</span> login, quota, Pro
-
-<span class="label">privacy:</span> gated · explicit only
-<span class="ok">$ vanish site ./out --json</span>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- PRICING -->
-<section class="section" id="pricing">
-  <div class="shell">
-    <div class="section-head">
-      <div>
-        <span class="kicker">04 — Pricing</span>
-        <h2>Free for most.<br/><span class="serif">Two euros for everything else.</span></h2>
-      </div>
-      <p>Start without an account. Login for everyday work. Upgrade only when you need custom slugs, longer retention, or bigger artifacts.</p>
-    </div>
-    <div class="pricing">
-      <div class="tier">
+  <section class="section pricing" id="pricing">
+    <div class="shell">
+      <div class="pricing-head reveal">
         <div>
-          <div class="tier-name">Anonymous</div>
-          <div class="tier-price"><span class="amt">$0</span><span class="per">/ no account</span></div>
+          <div class="section-kicker">Simple pricing</div>
+          <h2 class="section-title">Free now.<br>Keep it longer when needed.</h2>
         </div>
-        <p class="tier-blurb">For one-shot previews when you just need a link.</p>
-        <button class="btn btn-ghost tier-cta" data-copy="npx vanish-cli site ./demo --root index.html">npx vanish-cli</button>
-        <ul>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span><b>10 MB</b> per site, 100 files</span></li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>Image uploads only · <b>5 MB</b> max</span></li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span><b>24 h</b> retention</span></li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>10 publishes / hour</span></li>
-        </ul>
+        <p class="pricing-note">Try Vanish without an account. Sign in for more room, or go Pro for custom names and longer-lived links.</p>
       </div>
-      <div class="tier">
-        <div>
-          <div class="tier-name">Free</div>
-          <div class="tier-price"><span class="amt">$0</span><span class="per">/ GitHub login</span></div>
-        </div>
-        <p class="tier-blurb">For everyday demos, screenshots, files, and dashboard history.</p>
-        <a class="btn btn-ghost tier-cta" href="/auth/github?redirect=/dashboard">vanish login</a>
-        <ul>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>500 files per site · <b>50 MB</b> total storage</span></li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>Any file (except binaries) · <b>50 MB</b> max</span></li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span><b>48 h</b> retention</span></li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>50 publishes / hour</span></li>
-        </ul>
-      </div>
-      <div class="tier featured">
-        <div class="badge-pop">Recommended</div>
-        <div>
-          <div class="tier-name">Pro</div>
-          <div class="tier-price"><span class="amt">€2</span><span class="per">/ month</span></div>
-        </div>
-        <p class="tier-blurb">For agent loops, custom slugs, larger artifacts, and longer-lived links.</p>
-        <a class="btn btn-accent tier-cta" href="/auth/github?redirect=/dashboard">
-          vanish upgrade
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-        </a>
-        <ul>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span><b>1,000 files</b> per site · <b>1 GB</b> storage</span></li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>Any file · <b>1 GB</b> max</span></li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>Up to <b>365 days</b> retention with --days</span></li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span><b>Custom slugs</b> · 200 publishes / hour</span></li>
-        </ul>
+      <div class="plans">
+        <article class="plan reveal">
+          <div class="plan-top"><h3 class="plan-name">Free</h3><span class="plan-price">€0</span></div>
+          <ul>
+            <li>Publish without an account</li>
+            <li>Readable random URLs</li>
+            <li>24–48 hour retention</li>
+            <li>Sites and individual files</li>
+          </ul>
+          <button class="plan-cta" data-copy="Publish the current static site with Vanish. Identify the site folder and its entry HTML file, then run: npx vanish-cli site [folder] --root [entry-file]. Return the public URL."><span>Try it with my agent</span><span>↗</span></button>
+        </article>
+        <article class="plan pro reveal">
+          <div class="plan-top"><h3 class="plan-name">Pro</h3><span class="plan-price">€2 / month</span></div>
+          <ul>
+            <li>Custom vanish.sh addresses</li>
+            <li>Up to 1 GB of storage</li>
+            <li>Keep links for up to 365 days</li>
+            <li>Update content without changing the URL</li>
+          </ul>
+          <a class="plan-cta" href="/auth/github?redirect=/dashboard"><span>Get Pro</span><span>↗</span></a>
+        </article>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- COMMANDS -->
-<section class="section" id="commands">
-  <div class="shell">
-    <div class="section-head">
-      <div>
-        <span class="kicker">05 — Reference</span>
-        <h2>The whole CLI <span class="serif">on one screen.</span></h2>
+  <section class="section oss">
+    <div class="shell oss-grid">
+      <div class="reveal">
+        <div class="section-kicker">Open by design</div>
+        <h2 class="section-title">Small enough to trust. Open enough to own.</h2>
+        <p class="oss-copy">Vanish is MIT licensed and built on Cloudflare. Run the hosted version, inspect every line, or deploy the whole thing yourself.</p>
+        <a class="oss-link" href="https://github.com/The-Vibe-Company/vanish" rel="noopener"><span>Explore on GitHub</span><span>↗</span></a>
       </div>
-      <p>Ten commands. Predictable flags. JSON output on every one of them.</p>
+      <div class="stack-frame reveal">
+        <div class="stack-paper">
+          <h3 class="stack-title">The whole stack,<br>without the mystery.</h3>
+          <div class="stack-row"><span>Runtime</span><span>Cloudflare Workers</span></div>
+          <div class="stack-row"><span>Storage</span><span>R2</span></div>
+          <div class="stack-row"><span>Metadata</span><span>D1</span></div>
+          <div class="stack-row"><span>License</span><span>MIT</span></div>
+          <div class="stack-row"><span>Self-hosting</span><span>Supported</span></div>
+        </div>
+      </div>
     </div>
-    <div class="cmds">
-      <div class="cmd-row"><span class="c">vanish site ./demo --root index.html</span><span class="d">Publish a folder as a mini-site</span></div>
-      <div class="cmd-row"><span class="c">vanish site ./demo --update &lt;slug&gt;</span><span class="d">Replace files on an existing site</span></div>
-      <div class="cmd-row"><span class="c">vanish upload report.pdf</span><span class="d">Upload a single file, copy URL to clipboard</span></div>
-      <div class="cmd-row"><span class="c">vanish upload img.png --md</span><span class="d">Get a markdown-formatted link</span></div>
-      <div class="cmd-row"><span class="c">vanish login</span><span class="d">Authenticate with GitHub OAuth</span></div>
-      <div class="cmd-row"><span class="c">vanish whoami</span><span class="d">Show current user and tier</span></div>
-      <div class="cmd-row"><span class="c">vanish status</span><span class="d">Storage usage, limits, rate-limit window</span></div>
-      <div class="cmd-row"><span class="c">vanish ls</span><span class="d">List your file uploads and sites</span></div>
-      <div class="cmd-row"><span class="c">vanish rm &lt;id&gt;</span><span class="d">Delete an upload before it expires</span></div>
-      <div class="cmd-row"><span class="c">vanish upgrade</span><span class="d">Move to Pro for slugs and longer TTL</span></div>
-    </div>
-  </div>
-</section>
+  </section>
+</main>
 
-<!-- FOOTER -->
-<footer class="footer">
+<footer>
   <div class="shell">
     <div class="footer-grid">
       <div>
-        <div class="brand" style="margin-bottom:14px" aria-label="vanish.sh">
-          <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true" style="width:30px;height:30px">
-            <rect width="64" height="64" rx="14" fill="oklch(0.13 0.008 75)" />
-            <path d="M13 16h29c6.1 0 10 3.9 10 10v12c0 6.1-3.9 10-10 10H13V16Z" fill="var(--accent)" />
-            <path class="vanish-scan" d="M22 24h17c3.1 0 5 1.9 5 5v2H22v-7Zm0 12h22v2c0 3.1-1.9 5-5 5H22v-7Z" fill="oklch(0.13 0.008 75)" />
-            <path class="vanish-chip" d="M45 18h5v5h-5z" fill="var(--accent)" />
-            <path class="vanish-chip" d="M51 27h4v4h-4z" fill="var(--accent)" style="animation-delay:.05s" />
-            <path class="vanish-chip" d="M47 39h3v3h-3z" fill="var(--accent)" style="animation-delay:.1s" />
-          </svg>
-          <span>vanish<span class="brand-domain">.sh</span></span>
-        </div>
-        <p class="footer-blurb">
-          Temporary URLs for the post-deploy era. Built on Cloudflare Workers, R2 and D1. MIT licensed.
-        </p>
+        <a class="footer-brand" href="/">vanish<span class="brand-dot">.</span></a>
+        <p class="footer-blurb">A temporary public home for whatever your agent just made.</p>
       </div>
-      <div>
+      <div class="footer-col">
         <h4>Product</h4>
-        <ul>
-          <li><a href="#install">Install</a></li>
-          <li><a href="#usecases">Use cases</a></li>
-          <li><a href="#agents">Agents</a></li>
-          <li><a href="#pricing">Pricing</a></li>
-          <li><a href="#commands">CLI reference</a></li>
-          <li><a href="/dashboard">Dashboard</a></li>
-        </ul>
+        <ul><li><a href="#how">How it works</a></li><li><a href="#pricing">Pricing</a></li><li><a href="/dashboard">Dashboard</a></li></ul>
       </div>
-      <div>
-        <h4>Developers</h4>
-        <ul>
-          <li><a href="https://github.com/The-Vibe-Company/vanish" rel="noopener">GitHub</a></li>
-          <li><a href="https://www.npmjs.com/package/vanish-cli" rel="noopener">npm package</a></li>
-          <li><a href="https://github.com/The-Vibe-Company/vanish#self-hosting" rel="noopener">Self-host guide</a></li>
-          <li><a href="https://github.com/The-Vibe-Company/vanish/releases" rel="noopener">Changelog</a></li>
-        </ul>
+      <div class="footer-col">
+        <h4>Open source</h4>
+        <ul><li><a href="https://github.com/The-Vibe-Company/vanish">GitHub</a></li><li><a href="https://github.com/The-Vibe-Company/vanish/releases">Changelog</a></li><li><a href="https://github.com/The-Vibe-Company/vanish/blob/main/LICENSE">MIT License</a></li></ul>
       </div>
-      <div>
-        <h4>Legal</h4>
-        <ul>
-          <li><a href="https://github.com/The-Vibe-Company/vanish/blob/main/LICENSE" rel="noopener">License (MIT)</a></li>
-          <li><a href="mailto:abuse@vanish.sh?subject=Vanish%20abuse%20report">Report abuse</a></li>
-          <li><a href="mailto:hi@vanish.sh">Contact</a></li>
-        </ul>
+      <div class="footer-col">
+        <h4>Support</h4>
+        <ul><li><a href="mailto:abuse@vanish.sh?subject=Vanish%20abuse%20report">Report abuse</a></li></ul>
       </div>
     </div>
-    <div class="footer-bottom">
-      <span>© 2026 vanish.sh — MIT licensed</span>
-      <span class="ascii">&gt;_ npx vanish-cli site ./demo</span>
-    </div>
+    <div class="footer-bottom"><span>© 2026 vanish.sh</span><span>Made by <a href="https://thevibecompany.co">The Vibe Company</a></span></div>
   </div>
 </footer>
 
 <script>
-// -- Hero terminal animation --
-(function () {
-  var SCRIPT = [
-    { type: 'cmd', text: 'npx vanish-cli site ./demo --root index.html' },
-    { type: 'out', text: '↻ packing 3 files (8.1 KB)', cls: 'term-dim' },
-    { type: 'out', text: '↑ uploading to vanish.sh', cls: 'term-dim' },
-    { type: 'out', text: '✓ published in 312ms', cls: 'term-ok' },
-    { type: 'spacer' },
-    { type: 'out', text: '  → https://quiet-river-42.vanish.sh/', cls: 'term-url' },
-    { type: 'out', text: '  expires in 24h · 3 files · 8.1 KB', cls: 'term-dim' },
-    { type: 'spacer' },
-    { type: 'cmd', text: 'vanish site ./demo --update quiet-river-42 --json' },
-    { type: 'out', text: '{ "url": "https://quiet-river-42.vanish.sh/", "expiresInHours": 24 }', cls: 'term-arg' },
-    { type: 'spacer' },
-    { type: 'cmd', text: 'vanish upload report.pdf --md' },
-    { type: 'out', text: '✓ [report.pdf](https://vanish.sh/f/a1b2c3d4.pdf)', cls: 'term-ok' },
-  ];
-  var CHAR_DELAY = 18;
-  var LINE_DELAY = 280;
-  var PAUSE = 320;
-
-  var body = document.getElementById('termBody');
-  var term = document.getElementById('term');
-  var replay = document.getElementById('termReplay');
-  if (!body || !term || !replay) return;
-
-  var paused = false;
-  var token = 0;
-
-  term.addEventListener('mouseenter', function () { paused = true; });
-  term.addEventListener('mouseleave', function () { paused = false; });
-
-  function wait(ms) {
-    return new Promise(function (resolve) {
-      var remaining = ms, last = Date.now();
-      (function tick() {
-        if (paused) { last = Date.now(); setTimeout(tick, 50); return; }
-        var now = Date.now();
-        remaining -= (now - last); last = now;
-        if (remaining <= 0) resolve();
-        else setTimeout(tick, Math.min(remaining, 16));
-      })();
-    });
-  }
-  function newLine(cls) {
-    var span = document.createElement('span');
-    span.className = 'term-line' + (cls ? ' ' + cls : '');
-    body.appendChild(span);
-    return span;
-  }
-  function colorizeCmd(line, text) {
-    var parts = text.split(' ');
-    parts.forEach(function (p, i) {
-      var s = document.createElement('span');
-      if (i === 0) s.style.color = 'var(--fg)';
-      else if (p.indexOf('--') === 0) s.className = 'term-flag';
-      else s.className = 'term-arg';
-      s.textContent = (i === 0 ? '' : ' ') + p;
-      line.appendChild(s);
-    });
-  }
-  async function typeCmd(text, my) {
-    var line = newLine();
-    var p = document.createElement('span'); p.className = 'term-prompt'; p.textContent = '$ '; line.appendChild(p);
-    var cursor = document.createElement('span'); cursor.className = 'cursor';
-    var typed = '';
-    for (var i = 0; i < text.length; i++) {
-      if (token !== my) return;
-      await wait(CHAR_DELAY + Math.random() * 24);
-      typed += text[i];
-      // re-render content of line (after prompt)
-      while (line.childNodes.length > 1) line.removeChild(line.lastChild);
-      colorizeCmd(line, typed);
-      line.appendChild(cursor);
-      body.scrollTop = body.scrollHeight;
-    }
-    if (cursor.parentNode) cursor.parentNode.removeChild(cursor);
-    await wait(PAUSE);
-  }
-  async function runOut(text, cls) {
-    var line = newLine(cls || '');
-    line.textContent = text;
-    body.scrollTop = body.scrollHeight;
-    await wait(LINE_DELAY);
-  }
-  async function runSpacer() {
-    var line = newLine();
-    line.innerHTML = '\\u00A0';
-    await wait(60);
-  }
-  async function run() {
-    token++;
-    var my = token;
-    body.innerHTML = '';
-    for (var i = 0; i < SCRIPT.length; i++) {
-      if (token !== my) return;
-      var item = SCRIPT[i];
-      if (item.type === 'cmd') await typeCmd(item.text, my);
-      else if (item.type === 'out') await runOut(item.text, item.cls);
-      else if (item.type === 'spacer') await runSpacer();
-    }
-    if (token !== my) return;
-    var finalLine = newLine();
-    var fp = document.createElement('span'); fp.className = 'term-prompt'; fp.textContent = '$ '; finalLine.appendChild(fp);
-    var fc = document.createElement('span'); fc.className = 'cursor'; finalLine.appendChild(fc);
-  }
-
-  replay.addEventListener('click', run);
-  run();
-})();
-
-// -- Use case tabs --
-(function () {
-  var tabs = document.querySelectorAll('.tab[data-tab]');
-  var panes = document.querySelectorAll('.usecase[data-uc]');
-  function selectTab(tab, moveFocus) {
-    var key = tab.getAttribute('data-tab');
-    tabs.forEach(function (t) {
-      var on = t === tab;
-      t.classList.toggle('active', on);
-      t.setAttribute('aria-selected', on ? 'true' : 'false');
-      t.setAttribute('tabindex', on ? '0' : '-1');
-    });
-    panes.forEach(function (p) {
-      var match = p.getAttribute('data-uc') === key;
-      p.hidden = !match;
-    });
-    if (moveFocus) tab.focus();
-  }
-  tabs.forEach(function (tab) {
-    tab.addEventListener('click', function () {
-      selectTab(tab, false);
-    });
-    tab.addEventListener('keydown', function (e) {
-      var keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
-      if (keys.indexOf(e.key) === -1) return;
-      e.preventDefault();
-      var index = Array.prototype.indexOf.call(tabs, tab);
-      var next = index;
-      if (e.key === 'ArrowRight') next = (index + 1) % tabs.length;
-      if (e.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
-      if (e.key === 'Home') next = 0;
-      if (e.key === 'End') next = tabs.length - 1;
-      selectTab(tabs[next], true);
-    });
-  });
-})();
-
-// -- Copy buttons --
-(function () {
-  var status = document.getElementById('copyStatus');
-  function announce(text) {
-    if (status) status.textContent = text;
-  }
-  function writeClipboard(text) {
-    if (!navigator.clipboard || !navigator.clipboard.writeText) {
-      return Promise.reject(new Error('Clipboard API unavailable'));
-    }
-    return navigator.clipboard.writeText(text);
-  }
-  document.querySelectorAll('[data-copy]').forEach(function (el) {
-    el.addEventListener('click', function (e) {
-      e.preventDefault();
-      var text = el.getAttribute('data-copy');
-      var copyButton = el.classList.contains('copy-btn');
-      var label = copyButton ? null : el.querySelector('.copy-label');
-      var node = copyButton ? el : label;
-      var prev = node ? node.textContent : '';
-      function show(message, ok) {
-        if (node) node.textContent = message;
-        if (copyButton && ok) el.classList.add('copied');
-        announce(ok ? 'Copied command to clipboard.' : 'Copy failed. Select and copy the command manually.');
-        if (node) {
-          setTimeout(function () {
-            if (copyButton) el.classList.remove('copied');
-            node.textContent = prev;
-          }, 1400);
-        }
+  (function(){
+    function copyValue(value){
+      if(navigator.clipboard&&window.isSecureContext){
+        return navigator.clipboard.writeText(value);
       }
-      writeClipboard(text).then(function () {
-        show('✓ copied', true);
-      }).catch(function () {
-        show('copy failed', false);
+      return new Promise(function(resolve,reject){
+        var field=document.createElement('textarea');
+        field.value=value;
+        field.setAttribute('readonly','');
+        field.style.position='fixed';
+        field.style.opacity='0';
+        document.body.appendChild(field);
+        field.select();
+        try{
+          if(document.execCommand('copy')) resolve();
+          else reject(new Error('copy unavailable'));
+        }catch(error){
+          reject(error);
+        }finally{
+          document.body.removeChild(field);
+        }
+      });
+    }
+
+    var copyButtons=document.querySelectorAll('[data-copy]');
+    copyButtons.forEach(function(button){
+      button.addEventListener('click',function(){
+        var value=button.getAttribute('data-copy')||'';
+        var state=document.querySelector('.copy-state');
+        copyValue(value).then(function(){
+          if(state) state.textContent='Copied';
+          var original=button.querySelector('span');
+          if(original){
+            var text=original.textContent;
+            original.textContent='Copied to clipboard';
+            setTimeout(function(){original.textContent=text;if(state)state.textContent='';},1800);
+          }
+        }).catch(function(){
+          if(state) state.textContent='Copy failed — select the command';
+          window.prompt('Copy this command:',value);
+        });
       });
     });
-  });
-})();
 
-// -- Mark decorative icons as aria-hidden --
-(function () {
-  document.querySelectorAll('svg').forEach(function (svg) {
-    if (!svg.hasAttribute('aria-label') && !svg.hasAttribute('aria-hidden')) {
-      svg.setAttribute('aria-hidden', 'true');
+    var revealItems=document.querySelectorAll('.reveal');
+    if('IntersectionObserver' in window){
+      var observer=new IntersectionObserver(function(entries){
+        entries.forEach(function(entry){
+          if(entry.isIntersecting){entry.target.classList.add('visible');observer.unobserve(entry.target);}
+        });
+      },{threshold:.12});
+      revealItems.forEach(function(item){observer.observe(item);});
+    }else{
+      revealItems.forEach(function(item){item.classList.add('visible');});
     }
-  });
-})();
-
+  })();
 </script>
-
 </body>
 </html>`;
 
-landing.get('/', (c) => {
-  return c.html(html);
-});
+landing.get('/', (c) => c.html(html));
 
 export default landing;
