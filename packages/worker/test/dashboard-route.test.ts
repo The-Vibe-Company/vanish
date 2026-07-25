@@ -38,6 +38,26 @@ describe('dashboard route', () => {
     expect(html).toContain('content: attr(data-label)');
     expect(html).not.toContain('/billing/checkout?key=');
   });
+
+  it('covers the iOS browser chrome above the sticky mobile navigation', async () => {
+    const html = await fetchDashboardHtml();
+    const mobileCss = html.match(
+      /@media \(max-width: 760px\) \{([\s\S]*?)\n\}\n@media \(max-width: 520px\)/
+    )?.[1];
+    const guardCss = mobileCss?.match(/\.sidebar::before\s*\{([^}]*)\}/)?.[1];
+
+    expect(html).toContain('<meta name="theme-color" content="#1649e8">');
+    expect(mobileCss).toBeDefined();
+    expect(guardCss).toBeDefined();
+    expect(guardCss).toMatch(/position:\s*absolute/);
+    expect(guardCss).toMatch(/right:\s*0/);
+    expect(guardCss).toMatch(/bottom:\s*100%/);
+    expect(guardCss).toMatch(/left:\s*0/);
+    expect(guardCss).toMatch(/height:\s*100vh/);
+    expect(guardCss).toMatch(/height:\s*100svh/);
+    expect(guardCss).toMatch(/background:\s*#1649e8/);
+    expect(guardCss).toMatch(/pointer-events:\s*none/);
+  });
 });
 
 async function fetchDashboardHtml(): Promise<string> {

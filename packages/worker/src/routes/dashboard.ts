@@ -13,6 +13,7 @@ dashboard.get('/dashboard', (c) => {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1649e8">
 <meta name="referrer" content="no-referrer">
 <title>vanish · dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1327,6 +1328,17 @@ body:has(.login-screen) { background: #1649e8; }
       max(.7rem, env(safe-area-inset-top))
       max(1rem, env(safe-area-inset-right))
       .65rem max(1rem, env(safe-area-inset-left));
+  }
+  .sidebar::before {
+    content: '';
+    position: absolute;
+    right: 0;
+    bottom: 100%;
+    left: 0;
+    height: 100vh;
+    height: 100svh;
+    background: #1649e8;
+    pointer-events: none;
   }
   .sb-brand { padding: 0 0 .6rem; margin: 0; border: 0; }
   .sb-wordmark { font-size: 1.25rem; }
