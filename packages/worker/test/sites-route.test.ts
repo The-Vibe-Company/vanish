@@ -196,6 +196,41 @@ describe('site routes', () => {
     expect(await (await request(env, `/s/${draft.id}/`)).text()).toBe('<h1>stable</h1>');
   });
 
+  it('queues the version actually displaced by an overlapping same-path upload', async () => {
+    const draft = await createSite(env, {
+      rootPath: 'index.html',
+      fileCount: 1,
+      totalBytes: 64,
+    });
+    await uploadSiteFile(env, draft.id, draft.token, 'index.html', 'initial');
+
+    let releaseSlowPut!: () => void;
+    bucket.pauseNextPut = new Promise(resolve => {
+      releaseSlowPut = resolve;
+    });
+    const slowUpload = request(env, `/sites/${draft.id}/files?path=index.html`, {
+      method: 'PUT',
+      headers: { 'X-Site-Token': draft.token, 'Content-Type': 'text/plain' },
+      body: 'slow second writer',
+    });
+    await vi.waitFor(() => expect(bucket.objects.size).toBe(2));
+
+    const fastUpload = await request(env, `/sites/${draft.id}/files?path=index.html`, {
+      method: 'PUT',
+      headers: { 'X-Site-Token': draft.token, 'Content-Type': 'text/plain' },
+      body: 'fast first commit',
+    });
+    expect(fastUpload.status).toBe(200);
+    const displacedKey = db.siteFiles.get(`${draft.id}:index.html`)!.r2_key;
+
+    releaseSlowPut();
+    expect((await slowUpload).status).toBe(200);
+    const activeKey = db.siteFiles.get(`${draft.id}:index.html`)!.r2_key;
+
+    expect(activeKey).not.toBe(displacedKey);
+    expect(db.pendingR2Deletions.has(displacedKey)).toBe(true);
+  });
+
   it('allows draft cleanup with the site token', async () => {
     const draft = await createSite(env, {
       rootPath: 'index.html',
@@ -550,6 +585,7 @@ class FakeBucket {
   objects = new Map<string, { body: ArrayBuffer; contentType?: string }>();
   failDeletes = new Set<string>();
   afterPut?: () => void;
+  pauseNextPut?: Promise<void>;
 
   async put(key: string, body: ArrayBuffer, options?: R2PutOptions): Promise<void> {
     this.objects.set(key, {
@@ -557,6 +593,9 @@ class FakeBucket {
       contentType: options?.httpMetadata?.contentType,
     });
     this.afterPut?.();
+    const pause = this.pauseNextPut;
+    this.pauseNextPut = undefined;
+    await pause;
   }
 
   async get(key: string): Promise<{ body: ReadableStream | null } | null> {
@@ -779,6 +818,18 @@ class FakeStatement {
     }
 
     if (sql.includes('UPDATE api_keys SET last_used_at')) {
+      return;
+    }
+
+    if (sql.includes('INSERT OR IGNORE INTO pending_r2_deletions') &&
+        sql.includes('SELECT site_files.r2_key') &&
+        sql.includes('site_files.path = ?')) {
+      const [siteId, path, guardSiteId] = this.args as [string, string, string];
+      const site = this.db.sites.get(guardSiteId);
+      const file = this.db.siteFiles.get(`${siteId}:${path}`);
+      if (site && site.deleted_at === null && site.published_at === null && file) {
+        this.db.pendingR2Deletions.add(file.r2_key);
+      }
       return;
     }
 

@@ -484,12 +484,14 @@ sites.put('/sites/:id/files', async (c) => {
     await c.env.DB.batch([
       c.env.DB.prepare(`
         INSERT OR IGNORE INTO pending_r2_deletions (r2_key)
-        SELECT ?
-        WHERE ? IS NOT NULL
+        SELECT site_files.r2_key
+        FROM site_files
+        WHERE site_files.site_id = ?
+          AND site_files.path = ?
           AND EXISTS (
             SELECT 1 FROM sites WHERE id = ? AND deleted_at IS NULL AND published_at IS NULL
           )
-      `).bind(existingFile?.r2_key || null, existingFile?.r2_key || null, site.id),
+      `).bind(site.id, path, site.id),
       c.env.DB.prepare(`
         INSERT OR REPLACE INTO site_files (site_id, path, content_type, size_bytes, r2_key)
         SELECT ?, ?, ?, ?, ?

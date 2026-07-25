@@ -1,7 +1,14 @@
 ALTER TABLE sites ADD COLUMN last_activity_at TEXT;
 
 UPDATE sites
-SET last_activity_at = created_at
+SET last_activity_at = COALESCE(
+  (
+    SELECT MAX(site_files.created_at)
+    FROM site_files
+    WHERE site_files.site_id = sites.id
+  ),
+  created_at
+)
 WHERE last_activity_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_uploads_expires_datetime
