@@ -1247,6 +1247,19 @@ async function getSiteBySlug(env: Env, slug: string): Promise<Site | null> {
 }
 
 async function getSlugConflict(env: Env, slug: string, currentSiteId?: string): Promise<Site | null> {
+  try {
+    const reservation = await env.DB.prepare(`
+      SELECT hostname FROM domain_reservations WHERE slug = ? LIMIT 1
+    `).bind(slug).first<{ hostname: string }>();
+    if (reservation) {
+      return { id: reservation.hostname } as Site;
+    }
+  } catch (error) {
+    if (!(error instanceof Error && /no such table: domain_reservations/i.test(error.message))) {
+      throw error;
+    }
+  }
+
   const idMatch = await getSite(env, slug);
   if (idMatch) {
     return idMatch;

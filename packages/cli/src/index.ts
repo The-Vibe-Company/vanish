@@ -17,7 +17,9 @@ import { bundleCommand } from './commands/bundle.js';
 import {
   domainAddCommand,
   domainAttachCommand,
+  domainReleaseCommand,
   domainRemoveCommand,
+  domainReserveCommand,
   domainsListCommand,
   domainVerifyCommand,
 } from './commands/domains.js';
@@ -119,9 +121,22 @@ const domains = program
   .description('Manage custom domains');
 
 domains
+  .command('reserve')
+  .description('Reserve your Pro namespace under vanish.sh')
+  .argument('<slug>', 'namespace, for example studio')
+  .option('--json', 'Output as JSON')
+  .action(domainReserveCommand);
+
+domains
+  .command('release')
+  .description('Release your vanish.sh namespace after removing its routes')
+  .option('--json', 'Output as JSON')
+  .action(domainReleaseCommand);
+
+domains
   .command('add')
-  .description('Add a custom domain and attach it to a channel')
-  .argument('<hostname>', 'custom subdomain, for example preview.example.com')
+  .description('Add a custom domain or a route below an owned namespace')
+  .argument('<hostname>', 'hostname, for example preview.example.com or site.studio.vanish.sh')
   .requiredOption('--channel <channel>', 'stable site channel')
   .option('--json', 'Output as JSON')
   .action(domainAddCommand);

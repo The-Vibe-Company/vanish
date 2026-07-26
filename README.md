@@ -130,34 +130,53 @@ vanish sites access pr-42 --mode link
 
 ### Custom domains
 
-Pro accounts can attach one custom subdomain to a stable channel:
+Pro accounts can reserve one permanent Vanish namespace, then publish up to 20
+site routes below it:
 
 ```bash
-vanish domains add preview.example.com --channel client-preview
-# Add the CNAME/TXT records printed by the command
-vanish domains verify preview.example.com
+vanish domains reserve studio
+
+vanish site ./portfolio \
+  --root index.html \
+  --channel portfolio \
+  --domain portfolio.studio.vanish.sh
 ```
 
-Once configured, the domain follows the channel across every update:
+DNS is managed by Vanish for these routes. Each child hostname gets its own TLS
+certificate, while the namespace remains reserved independently of site
+expiration.
+
+Pro accounts can also attach one custom subdomain to a stable channel:
 
 ```bash
-vanish site ./demo \
+vanish domains add studio.example.com --channel homepage
+# Add the CNAME/TXT records printed by the command
+vanish domains verify studio.example.com
+```
+
+The custom domain can act as a namespace too. Add a direct child for another
+site and point the printed CNAME/TXT records at Vanish:
+
+```bash
+vanish site ./portfolio \
   --root index.html \
-  --channel client-preview \
-  --domain preview.example.com \
+  --channel portfolio \
+  --domain portfolio.studio.example.com \
   --verify
 ```
 
-Domain lifecycle commands:
+Every hostname follows its channel across updates. Domain lifecycle commands:
 
 ```bash
 vanish domains ls
-vanish domains attach preview.example.com --channel another-preview
-vanish domains rm preview.example.com
+vanish domains attach portfolio.studio.example.com --channel another-preview
+vanish domains rm portfolio.studio.example.com
+vanish domains release
 ```
 
-Custom domains support subdomains in the first release. Apex domains such as
-`example.com` are intentionally rejected.
+Custom domains support subdomains. Apex domains such as `example.com` are
+intentionally rejected. A parent domain or Vanish namespace cannot be removed
+until all of its child routes have been removed.
 
 Lifecycle commands:
 
@@ -224,7 +243,8 @@ vanish update      # update the CLI to the latest version
 | Account needed | No | GitHub login | GitHub login |
 | Mini-sites | Static folders | Static folders | Static folders |
 | Site URL | Readable random | Readable random | Random or custom slug |
-| Custom domain | No | No | 1 subdomain |
+| Domain identity | No | No | 1 `vanish.sh` namespace + 1 custom subdomain |
+| Site domain routes | No | No | Up to 20 below owned namespaces |
 | Password protection | No | Yes | Yes |
 | Site limits | 10 MB, 100 files | 500 files, within 50 MB total | 5,000 files, within 10 GB total |
 | File uploads | Images only | All except executables | All except executables |

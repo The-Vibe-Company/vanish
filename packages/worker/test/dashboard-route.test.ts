@@ -65,6 +65,9 @@ describe('dashboard route', () => {
     expect(html).toContain("{ id: 'domains', label: 'Domains'");
     expect(html).toContain("apiFetch('/domains')");
     expect(html).toContain('data-domain-form');
+    expect(html).toContain('data-namespace-form');
+    expect(html).toContain("apiFetch('/domains/reservation'");
+    expect(html).toContain('reserve an identity and route every site');
     expect(html).toContain("data-action=\"protect-site\"");
     expect(html).toContain("JSON.stringify({ mode: 'password', password: password })");
     expect(html).toContain('data-modal-password type="password"');

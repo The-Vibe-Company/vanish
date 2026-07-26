@@ -524,6 +524,24 @@ describe('site routes', () => {
     expect(response.status).toBe(409);
   });
 
+  it('rejects custom slugs reserved as Vanish namespaces', async () => {
+    db.domainReservations.add('studio');
+    const key = await addUser(db, 'user1', 'pro');
+    const response = await request(env, '/sites', {
+      method: 'POST',
+      headers: authHeaders(key, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        name: 'reserved namespace conflict',
+        rootPath: 'index.html',
+        fileCount: 1,
+        totalBytes: 12,
+        slug: 'studio',
+      }),
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: 'Slug "studio" is already taken' });
+  });
+
   it('rejects config-only root updates when the file is missing', async () => {
     const key = await addUser(db, 'user1', 'free');
     const draft = await createSite(env, { rootPath: 'index.html', fileCount: 1, totalBytes: 12 }, key);
@@ -725,6 +743,7 @@ class FakeDB {
   pendingR2Deletions = new Set<string>();
   rateLimits: Array<{ identifier: string; action: string }> = [];
   events: Array<{ id: string; name: string; user_id: string | null; site_id: string | null; upload_id: string | null; properties: string }> = [];
+  domainReservations = new Set<string>();
 
   prepare(sql: string): FakeStatement {
     return new FakeStatement(this, sql);
@@ -785,6 +804,11 @@ class FakeStatement {
     if (sql.includes('SELECT id FROM sites WHERE slug = ?')) {
       const [slug] = this.args as [string];
       return (Array.from(this.db.sites.values()).find(site => site.slug === slug && site.deleted_at === null) || null) as T | null;
+    }
+
+    if (sql.includes('SELECT hostname FROM domain_reservations WHERE slug = ?')) {
+      const slug = String(this.args[0]);
+      return (this.db.domainReservations.has(slug) ? { hostname: `${slug}.vanish.sh` } : null) as T | null;
     }
 
     if (sql.includes('FROM sites WHERE slug = ? AND deleted_at IS NULL')) {

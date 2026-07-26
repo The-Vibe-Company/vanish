@@ -1513,6 +1513,8 @@ body:has(.login-screen) { background: #1649e8; }
     uploads: [],
     keys: [],
     domains: [],
+    domainReservation: null,
+    domainRouteLimit: 20,
     section: 'overview',
     sitesFilter: 'all',
     sitesQuery: '',
@@ -1747,6 +1749,8 @@ body:has(.login-screen) { background: #1649e8; }
       state.uploads = (rs[2].uploads || []).filter(function(u) { return !u.deleted; }).map(normalizeUpload);
       state.keys = (rs[3].keys || []);
       state.domains = (rs[4].domains || []);
+      state.domainReservation = rs[4].reservation || null;
+      state.domainRouteLimit = rs[4].routeLimit || 20;
       refreshTimerBuckets();
       render();
     });
@@ -2197,7 +2201,12 @@ body:has(.login-screen) { background: #1649e8; }
 
   function renderDomainsPage() {
     var domains = state.domains || [];
-    var canAdd = state.me && state.me.tier === 'pro' && domains.length === 0;
+    var roots = domains.filter(function(d) { return !d.parentHostname; });
+    var routes = domains.filter(function(d) { return Boolean(d.parentHostname); });
+    var isPro = state.me && state.me.tier === 'pro';
+    var canAddRoot = isPro && roots.length === 0;
+    var canAddRoute = isPro && routes.length < state.domainRouteLimit &&
+      (Boolean(state.domainReservation) || roots.length > 0);
     var rows = domains.length ? domains.map(function(d) {
       var tone = d.status === 'active' ? 'green' : (d.status === 'error' || d.status === 'suspended' ? 'red' : 'gold');
       var dns = (d.dnsRecords || []).map(function(r) {
@@ -2205,7 +2214,9 @@ body:has(.login-screen) { background: #1649e8; }
       }).join('');
       return '<div class="set-row" style="align-items:flex-start">' +
         '<div><div class="set-label">' + escapeHtml(d.hostname) + ' <span class="pill pill-' + tone + '">' + escapeHtml(d.status) + '</span></div>' +
-          '<div class="set-hint">channel <code>' + escapeHtml(d.channel) + '</code></div>' + dns +
+          '<div class="set-hint">channel <code>' + escapeHtml(d.channel) + '</code>' +
+            (d.parentHostname ? ' · namespace <code>' + escapeHtml(d.parentHostname) + '</code>' : '') + '</div>' + dns +
+          (d.managedDns && d.status !== 'active' ? '<div class="set-hint">DNS managed by Vanish · TLS provisioning in progress</div>' : '') +
           (d.lastError ? '<div class="set-hint" style="color:var(--red)">' + escapeHtml(d.lastError) + '</div>' : '') +
         '</div>' +
         '<div class="set-row-r">' +
@@ -2213,22 +2224,40 @@ body:has(.login-screen) { background: #1649e8; }
           '<button class="btn danger-ghost btn-sm" data-action="delete-domain" data-hostname="' + attr(d.hostname) + '">Remove</button>' +
         '</div>' +
       '</div>';
-    }).join('') : '<div class="empty subtle"><span class="empty-mark">∅</span>no custom domain configured</div>';
+    }).join('') : '<div class="empty subtle"><span class="empty-mark">∅</span>no domain route configured</div>';
 
-    var form = canAdd
+    var form = (canAddRoot || canAddRoute)
       ? '<form class="set-rows" data-domain-form style="margin-bottom:1rem">' +
-          '<div class="set-row"><div style="flex:1"><div class="set-label">Custom subdomain</div><div class="set-hint" id="domain-hint">Use a subdomain such as preview.example.com. Apex domains are not supported yet.</div></div>' +
-          '<div class="domain-fields"><label class="domain-field"><span>Hostname</span><input name="hostname" required autocomplete="url" placeholder="preview.example.com" aria-describedby="domain-hint"></label>' +
+          '<div class="set-row"><div style="flex:1"><div class="set-label">Connect a hostname</div><div class="set-hint" id="domain-hint">' +
+            (canAddRoute
+              ? 'Use a direct child such as site.' + escapeHtml((state.domainReservation && state.domainReservation.hostname) || (roots[0] && roots[0].hostname)) + '.'
+              : 'Use a custom subdomain such as studio.example.com. Apex domains are not supported yet.') +
+          '</div></div>' +
+          '<div class="domain-fields"><label class="domain-field"><span>Hostname</span><input name="hostname" required autocomplete="url" placeholder="' +
+            (canAddRoute ? 'site.' + attr((state.domainReservation && state.domainReservation.hostname) || (roots[0] && roots[0].hostname)) : 'studio.example.com') +
+          '" aria-describedby="domain-hint"></label>' +
           '<label class="domain-field"><span>Channel</span><input name="channel" required autocomplete="off" placeholder="client-preview" aria-describedby="domain-hint"></label>' +
           '<button class="btn solid btn-sm" type="submit">Connect</button></div></div></form>'
-      : (state.me && state.me.tier !== 'pro'
+      : (!isPro
         ? '<p class="set-blurb" style="margin-bottom:1rem">Custom domains require Pro. Your vanish.sh URLs continue to work normally.</p>'
         : '');
 
+    var reservation = state.domainReservation
+      ? '<div class="set-row"><div><div class="set-label">' + escapeHtml(state.domainReservation.hostname) + '</div>' +
+          '<div class="set-hint">reserved namespace · publish on <code>site.' + escapeHtml(state.domainReservation.hostname) + '</code></div></div>' +
+          '<button class="btn danger-ghost btn-sm" data-action="release-namespace">Release</button></div>'
+      : (isPro
+        ? '<form class="set-row" data-namespace-form><div style="flex:1"><div class="set-label">Reserve your vanish.sh namespace</div>' +
+            '<div class="set-hint">One permanent identity, then up to ' + state.domainRouteLimit + ' site subdomains below it.</div></div>' +
+            '<div class="domain-fields"><label class="domain-field"><span>Namespace</span><input name="slug" required autocomplete="off" placeholder="studio"></label>' +
+            '<button class="btn solid btn-sm" type="submit">Reserve</button></div></form>'
+        : '<p class="set-blurb">Namespace reservations require Pro.</p>');
+
     return '<div class="page page-domains">' +
-      '<header class="page-head"><div><h1 class="page-title">Domains</h1><p class="page-sub">one branded handoff domain attached to a stable channel</p></div></header>' +
-      '<section class="set-section"><h2>Custom domain</h2>' + form + '<div class="set-rows">' + rows + '</div></section>' +
-      '<section class="set-section"><h2>CLI</h2><p class="set-blurb"><code>vanish domains add preview.example.com --channel client-preview</code></p></section>' +
+      '<header class="page-head"><div><h1 class="page-title">Domains</h1><p class="page-sub">reserve an identity and route every site through its own hostname</p></div></header>' +
+      '<section class="set-section"><h2>Vanish namespace</h2><div class="set-rows">' + reservation + '</div></section>' +
+      '<section class="set-section"><h2>Domains &amp; site routes</h2>' + form + '<div class="set-rows">' + rows + '</div></section>' +
+      '<section class="set-section"><h2>CLI</h2><p class="set-blurb"><code>vanish domains reserve studio</code><br><code>vanish site ./portfolio --root index.html --channel portfolio --domain portfolio.studio.vanish.sh</code></p></section>' +
     '</div>';
   }
 
@@ -2770,6 +2799,23 @@ body:has(.login-screen) { background: #1649e8; }
       });
       return;
     }
+    if (action === 'release-namespace') {
+      openConfirm({
+        title: 'Release Vanish namespace?',
+        body: 'The namespace can only be released after all of its site routes have been removed.',
+        confirmLabel: 'Release namespace',
+        onConfirm: function() {
+          apiFetch('/domains/reservation', { method: 'DELETE' }).then(function(r) {
+            if (r && r.ok) {
+              state.domainReservation = null;
+              toast('namespace released');
+              rerenderMain();
+            } else toast('error: ' + ((r && r.error) || 'failed'));
+          });
+        }
+      });
+      return;
+    }
 
     if (action === 'files-filter') {
       state.filesFilter = el.getAttribute('data-filter');
@@ -2945,6 +2991,22 @@ body:has(.login-screen) { background: #1649e8; }
         if (r && !r.error) {
           state.domains.unshift(r);
           toast('domain added');
+          rerenderMain();
+        } else toast('error: ' + ((r && r.error) || 'failed'));
+      });
+      return;
+    }
+    if (form.matches('[data-namespace-form]')) {
+      e.preventDefault();
+      var slugInput = form.querySelector('input[name="slug"]');
+      apiFetch('/domains/reservation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: slugInput && slugInput.value })
+      }).then(function(r) {
+        if (r && !r.error) {
+          state.domainReservation = r;
+          toast('namespace reserved');
           rerenderMain();
         } else toast('error: ' + ((r && r.error) || 'failed'));
       });

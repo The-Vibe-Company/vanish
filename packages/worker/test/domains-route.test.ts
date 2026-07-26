@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import worker from '../src/index.js';
 import { hashApiKey } from '../src/lib/api-key.js';
-import type { CustomDomain, Env, Site, SiteFile, User } from '../src/types.js';
+import type { CustomDomain, DomainReservation, Env, Site, SiteFile, User } from '../src/types.js';
 
 describe('domain routes', () => {
   let db: DomainDB;
@@ -45,15 +45,18 @@ describe('domain routes', () => {
       CUSTOM_DOMAIN_FALLBACK_HOST: 'fallback.vanish.sh',
     };
 
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      success: true,
-      result: {
-        id: 'cf-host-1',
-        hostname: 'preview.example.com',
-        status: 'active',
-        ssl: { status: 'active' },
-      },
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } })));
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (_url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) as { hostname?: string } : {};
+      return new Response(JSON.stringify({
+        success: true,
+        result: {
+          id: `cf-host-${body.hostname || 'existing'}`,
+          hostname: body.hostname || 'preview.example.com',
+          status: 'active',
+          ssl: { status: 'active' },
+        },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }));
   });
 
   afterEach(() => {
@@ -143,6 +146,101 @@ describe('domain routes', () => {
     expect(db.domains.size).toBe(1);
   });
 
+  it('reserves a vanish.sh namespace and serves a site on its child hostname', async () => {
+    const reserved = await call('https://vanish.sh/domains/reservation', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ slug: 'studio' }),
+    });
+    expect(reserved.status).toBe(201);
+    expect(await reserved.json()).toMatchObject({
+      slug: 'studio',
+      hostname: 'studio.vanish.sh',
+    });
+
+    const created = await call('https://vanish.sh/domains', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        hostname: 'portfolio.studio.vanish.sh',
+        channel: 'client-preview',
+      }),
+    });
+    expect(created.status).toBe(201);
+    expect(await created.json()).toMatchObject({
+      hostname: 'portfolio.studio.vanish.sh',
+      parentHostname: 'studio.vanish.sh',
+      managedDns: true,
+      kind: 'domain_route',
+      dnsRecords: [],
+    });
+
+    const response = await call('https://portfolio.studio.vanish.sh/', {
+      headers: { Host: 'portfolio.studio.vanish.sh' },
+    });
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('<h1>one</h1>');
+
+    const rootCustomDomain = await call('https://vanish.sh/domains', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ hostname: 'preview.example.com', channel: 'client-preview' }),
+    });
+    expect(rootCustomDomain.status).toBe(201);
+  });
+
+  it('allows direct child routes below an owned custom domain', async () => {
+    const root = await call('https://vanish.sh/domains', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ hostname: 'studio.example.com', channel: 'client-preview' }),
+    });
+    expect(root.status).toBe(201);
+
+    const child = await call('https://vanish.sh/domains', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ hostname: 'portfolio.studio.example.com', channel: 'client-preview' }),
+    });
+    expect(child.status).toBe(201);
+    expect(await child.json()).toMatchObject({
+      parentHostname: 'studio.example.com',
+      managedDns: false,
+      kind: 'domain_route',
+    });
+  });
+
+  it('rejects nested vanish.sh routes outside the owned namespace', async () => {
+    const response = await call('https://vanish.sh/domains', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        hostname: 'portfolio.someone-else.vanish.sh',
+        channel: 'client-preview',
+      }),
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ code: 'invalid_hostname' });
+  });
+
   async function call(url: string, init?: RequestInit): Promise<Response> {
     const pending: Promise<unknown>[] = [];
     const response = await worker.fetch(new Request(url, init), env, {
@@ -160,6 +258,7 @@ class DomainDB {
   channels = new Map<string, string>();
   files = new Map<string, SiteFile>();
   domains = new Map<string, CustomDomain>();
+  reservations = new Map<string, DomainReservation>();
 
   prepare(sql: string): DomainStatement {
     return new DomainStatement(this, sql.replace(/\s+/g, ' ').trim());
@@ -187,11 +286,33 @@ class DomainStatement {
     }
     if (this.sql.includes('SELECT COUNT(*) AS count FROM custom_domains')) {
       const userId = String(this.args[0]);
+      const parentHostname = this.sql.includes('parent_hostname = ?') ? String(this.args[1]) : null;
       return {
         count: Array.from(this.db.domains.values()).filter(domain =>
-          domain.user_id === userId && domain.status !== 'deleting'
+          domain.user_id === userId &&
+          domain.status !== 'deleting' &&
+          (this.sql.includes('parent_hostname IS NOT NULL') ? domain.parent_hostname !== null : true) &&
+          (this.sql.includes('parent_hostname IS NULL') ? domain.parent_hostname === null : true) &&
+          (parentHostname ? domain.parent_hostname === parentHostname : true)
         ).length,
       } as T;
+    }
+    if (this.sql.includes('SELECT hostname FROM domain_reservations WHERE user_id = ? AND hostname = ?')) {
+      const [userId, hostname] = this.args as [string, string];
+      const reservation = this.db.reservations.get(hostname);
+      return (reservation?.user_id === userId ? { hostname } : null) as T | null;
+    }
+    if (this.sql.includes('FROM domain_reservations WHERE user_id = ?')) {
+      const userId = String(this.args[0]);
+      return (Array.from(this.db.reservations.values()).find(item => item.user_id === userId) || null) as T | null;
+    }
+    if (this.sql.includes('SELECT id FROM sites WHERE slug = ?')) return null;
+    if (this.sql.includes('SELECT hostname FROM custom_domains') && this.sql.includes('parent_hostname IS NULL')) {
+      const [userId, hostname] = this.args as [string, string];
+      const domain = this.db.domains.get(hostname);
+      return (domain?.user_id === userId && domain.parent_hostname === null
+        ? { hostname: domain.hostname }
+        : null) as T | null;
     }
     if (this.sql.includes('FROM custom_domains WHERE user_id = ? AND hostname = ?')) {
       const [userId, hostname] = this.args as [string, string];
@@ -226,10 +347,15 @@ class DomainStatement {
   async run(): Promise<void> {
     if (this.sql.includes('UPDATE api_keys SET last_used_at')) return;
     if (this.sql.includes('INSERT INTO custom_domains')) {
-      const [hostname, userId, channel, createdAt, updatedAt] = this.args as [string, string, string, string, string];
+      const [hostname, userId, channel, parentHostname, managedDns, createdAt, updatedAt] = this.args as [
+        string, string, string, string | null, number, string, string,
+      ];
       if (this.db.domains.has(hostname)) throw new Error('UNIQUE constraint failed');
       if (Array.from(this.db.domains.values()).some(domain =>
-        domain.user_id === userId && domain.status !== 'deleting'
+        domain.user_id === userId &&
+        domain.status !== 'deleting' &&
+        domain.parent_hostname === null &&
+        parentHostname === null
       )) {
         throw new Error('UNIQUE constraint failed: custom_domains.user_id');
       }
@@ -237,12 +363,28 @@ class DomainStatement {
         hostname,
         user_id: userId,
         channel,
+        parent_hostname: parentHostname,
+        managed_dns: managedDns,
         provider_hostname_id: null,
         status: 'pending_dns',
         dns_records: '[]',
         last_error: null,
         verified_at: null,
         grace_expires_at: null,
+        created_at: createdAt,
+        updated_at: updatedAt,
+      });
+      return;
+    }
+    if (this.sql.includes('INSERT INTO domain_reservations')) {
+      const [hostname, slug, userId, createdAt, updatedAt] = this.args as [string, string, string, string, string];
+      if (this.db.reservations.has(hostname) || Array.from(this.db.reservations.values()).some(item => item.user_id === userId)) {
+        throw new Error('UNIQUE constraint failed');
+      }
+      this.db.reservations.set(hostname, {
+        hostname,
+        slug,
+        user_id: userId,
         created_at: createdAt,
         updated_at: updatedAt,
       });

@@ -45,6 +45,22 @@ export function customDomainsConfigured(env: Env): boolean {
 }
 
 export function normalizeCustomHostname(input: string, baseUrl?: string): string | null {
+  const candidate = normalizeHostname(input);
+  if (!candidate) return null;
+  const parsed = parseDomain(candidate, { allowPrivateDomains: true });
+  if (!parsed.domain || !parsed.subdomain || parsed.isIp) {
+    return null;
+  }
+  if (baseUrl) {
+    const baseHostname = new URL(baseUrl).hostname.toLowerCase();
+    if (candidate === baseHostname || candidate.endsWith(`.${baseHostname}`)) {
+      return null;
+    }
+  }
+  return candidate;
+}
+
+export function normalizeHostname(input: string): string | null {
   const candidate = input.trim().toLowerCase().replace(/\.$/, '');
   if (!candidate || candidate.includes('*') || candidate.includes('/') || candidate.includes(':')) {
     return null;
@@ -64,56 +80,53 @@ export function normalizeCustomHostname(input: string, baseUrl?: string): string
     return null;
   }
   const parsed = parseDomain(candidate, { allowPrivateDomains: true });
-  if (!parsed.domain || !parsed.subdomain || parsed.isIp) {
+  if (!parsed.domain || parsed.isIp) {
     return null;
-  }
-  if (baseUrl) {
-    const baseHostname = new URL(baseUrl).hostname.toLowerCase();
-    if (candidate === baseHostname || candidate.endsWith(`.${baseHostname}`)) {
-      return null;
-    }
   }
   return candidate;
 }
 
 export function requestCustomHostname(env: Env, hostHeader: string | null): string | null {
-  if (!hostHeader || !env.CUSTOM_DOMAIN_FALLBACK_HOST) return null;
+  if (!hostHeader) return null;
   const hostname = stripPort(hostHeader).toLowerCase().replace(/\.$/, '');
   const baseHostname = new URL(env.BASE_URL).hostname.toLowerCase();
-  if (
-    hostname === baseHostname ||
-    hostname === `www.${baseHostname}` ||
-    hostname.endsWith(`.${baseHostname}`)
-  ) {
+  if (hostname === baseHostname || hostname === `www.${baseHostname}`) {
     return null;
   }
+  if (hostname.endsWith(`.${baseHostname}`)) {
+    const relative = hostname.slice(0, -(baseHostname.length + 1));
+    return relative.includes('.') ? normalizeHostname(hostname) : null;
+  }
+  if (!env.CUSTOM_DOMAIN_FALLBACK_HOST) return null;
   return normalizeCustomHostname(hostname, env.BASE_URL);
 }
 
 export async function createProviderHostname(
   env: Env,
   hostname: string,
+  managedDns = false,
 ): Promise<{ providerId: string; status: CustomDomainStatus; dnsRecords: DnsRecord[]; error: string | null }> {
   ensureProviderConfigured(env);
   const result = await cloudflareRequest<CloudflareCustomHostname>(env, '', {
     method: 'POST',
     body: JSON.stringify({
       hostname,
-      ssl: { method: 'txt', type: 'dv' },
+      ssl: { method: managedDns ? 'http' : 'txt', type: 'dv' },
     }),
   });
-  return providerState(env, result);
+  return providerState(env, result, managedDns);
 }
 
 export async function getProviderHostname(
   env: Env,
   providerId: string,
+  managedDns = false,
 ): Promise<{ providerId: string; status: CustomDomainStatus; dnsRecords: DnsRecord[]; error: string | null }> {
   ensureProviderConfigured(env);
   const result = await cloudflareRequest<CloudflareCustomHostname>(env, `/${encodeURIComponent(providerId)}`, {
     method: 'GET',
   });
-  return providerState(env, result);
+  return providerState(env, result, managedDns);
 }
 
 export async function deleteProviderHostname(env: Env, providerId: string): Promise<void> {
@@ -129,6 +142,9 @@ export async function deleteProviderHostname(env: Env, providerId: string): Prom
 export function domainToJson(domain: CustomDomain): {
   hostname: string;
   channel: string;
+  parentHostname: string | null;
+  managedDns: boolean;
+  kind: 'custom_domain' | 'domain_route';
   status: CustomDomainStatus;
   dnsRecords: DnsRecord[];
   lastError: string | null;
@@ -141,6 +157,9 @@ export function domainToJson(domain: CustomDomain): {
   return {
     hostname: domain.hostname,
     channel: domain.channel,
+    parentHostname: domain.parent_hostname,
+    managedDns: domain.managed_dns === 1,
+    kind: domain.parent_hostname ? 'domain_route' : 'custom_domain',
     status: domain.status,
     dnsRecords: parseDnsRecords(domain.dns_records),
     lastError: domain.last_error,
@@ -157,7 +176,7 @@ export async function syncDomain(env: Env, domain: CustomDomain): Promise<Custom
     return domain;
   }
   try {
-    const provider = await getProviderHostname(env, domain.provider_hostname_id);
+    const provider = await getProviderHostname(env, domain.provider_hostname_id, domain.managed_dns === 1);
     await env.DB.prepare(`
       UPDATE custom_domains
       SET status = ?, dns_records = ?, last_error = ?,
@@ -215,7 +234,7 @@ export async function beginDomainGrace(env: Env, userId: string): Promise<void> 
 export async function resumeDomainsAfterUpgrade(env: Env, userId: string): Promise<void> {
   try {
     const result = await env.DB.prepare(`
-      SELECT hostname, user_id, channel, provider_hostname_id, status, dns_records, last_error,
+      SELECT hostname, user_id, channel, parent_hostname, managed_dns, provider_hostname_id, status, dns_records, last_error,
              verified_at, grace_expires_at, created_at, updated_at
       FROM custom_domains WHERE user_id = ?
     `).bind(userId).all<CustomDomain>();
@@ -233,7 +252,7 @@ export async function resumeDomainsAfterUpgrade(env: Env, userId: string): Promi
           continue;
         }
         try {
-          const provider = await createProviderHostname(env, domain.hostname);
+          const provider = await createProviderHostname(env, domain.hostname, domain.managed_dns === 1);
           await env.DB.prepare(`
             UPDATE custom_domains
             SET provider_hostname_id = ?, status = ?, dns_records = ?, last_error = ?,
@@ -269,7 +288,7 @@ export async function maintainCustomDomains(env: Env): Promise<void> {
   if (!customDomainsConfigured(env)) return;
   try {
     const expiring = await env.DB.prepare(`
-      SELECT hostname, user_id, channel, provider_hostname_id, status, dns_records, last_error,
+      SELECT hostname, user_id, channel, parent_hostname, managed_dns, provider_hostname_id, status, dns_records, last_error,
              verified_at, grace_expires_at, created_at, updated_at
       FROM custom_domains
       WHERE (grace_expires_at IS NOT NULL AND datetime(grace_expires_at) <= datetime('now'))
@@ -304,24 +323,27 @@ export async function maintainCustomDomains(env: Env): Promise<void> {
 function providerState(
   env: Env,
   hostname: CloudflareCustomHostname,
+  managedDns = false,
 ): { providerId: string; status: CustomDomainStatus; dnsRecords: DnsRecord[]; error: string | null } {
-  const dnsRecords: DnsRecord[] = [{
-    type: 'CNAME',
-    name: hostname.hostname,
-    value: env.CUSTOM_DOMAIN_FALLBACK_HOST!,
-  }];
+  const dnsRecords: DnsRecord[] = managedDns ? [] : [{
+      type: 'CNAME',
+      name: hostname.hostname,
+      value: env.CUSTOM_DOMAIN_FALLBACK_HOST!,
+    }];
 
-  const ownership = hostname.ownership_verification;
-  if (ownership?.name && ownership.value) {
-    dnsRecords.push({
-      type: 'TXT',
-      name: ownership.name,
-      value: ownership.value,
-    });
-  }
-  for (const record of hostname.ssl?.validation_records || []) {
-    if (record.txt_name && record.txt_value && !dnsRecords.some(item => item.name === record.txt_name && item.value === record.txt_value)) {
-      dnsRecords.push({ type: 'TXT', name: record.txt_name, value: record.txt_value });
+  if (!managedDns) {
+    const ownership = hostname.ownership_verification;
+    if (ownership?.name && ownership.value) {
+      dnsRecords.push({
+        type: 'TXT',
+        name: ownership.name,
+        value: ownership.value,
+      });
+    }
+    for (const record of hostname.ssl?.validation_records || []) {
+      if (record.txt_name && record.txt_value && !dnsRecords.some(item => item.name === record.txt_name && item.value === record.txt_value)) {
+        dnsRecords.push({ type: 'TXT', name: record.txt_name, value: record.txt_value });
+      }
     }
   }
 

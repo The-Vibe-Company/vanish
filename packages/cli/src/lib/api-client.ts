@@ -131,6 +131,9 @@ export type DomainStatus = 'pending_dns' | 'pending_tls' | 'active' | 'error' | 
 export interface DomainInfo {
   hostname: string;
   channel: string;
+  parentHostname: string | null;
+  managedDns: boolean;
+  kind: 'custom_domain' | 'domain_route';
   status: DomainStatus;
   dnsRecords: Array<{ type: 'CNAME' | 'TXT'; name: string; value: string }>;
   lastError: string | null;
@@ -139,6 +142,21 @@ export interface DomainInfo {
   createdAt: string;
   updatedAt: string;
   url: string;
+}
+
+export interface DomainReservationInfo {
+  hostname: string;
+  slug: string;
+  url: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DomainListInfo {
+  domains: DomainInfo[];
+  reservation?: DomainReservationInfo | null;
+  limit: number;
+  routeLimit?: number;
 }
 
 export interface SiteAccessInfo {
@@ -524,12 +542,35 @@ export class VanishClient {
     return response.json() as Promise<DomainInfo>;
   }
 
-  async listDomains(): Promise<{ domains: DomainInfo[]; limit: number }> {
+  async listDomains(): Promise<DomainListInfo> {
     const response = await fetch(`${this.apiUrl}/domains`, { headers: this.authHeaders() });
     if (!response.ok) {
       await throwApiError(response, 'Failed to list custom domains');
     }
-    return response.json() as Promise<{ domains: DomainInfo[]; limit: number }>;
+    return response.json() as Promise<DomainListInfo>;
+  }
+
+  async reserveDomainNamespace(slug: string): Promise<DomainReservationInfo> {
+    const response = await fetch(`${this.apiUrl}/domains/reservation`, {
+      method: 'POST',
+      headers: this.jsonHeaders(),
+      body: JSON.stringify({ slug }),
+    });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to reserve Vanish namespace');
+    }
+    return response.json() as Promise<DomainReservationInfo>;
+  }
+
+  async releaseDomainNamespace(): Promise<{ ok: true; hostname: string }> {
+    const response = await fetch(`${this.apiUrl}/domains/reservation`, {
+      method: 'DELETE',
+      headers: this.authHeaders(),
+    });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to release Vanish namespace');
+    }
+    return response.json() as Promise<{ ok: true; hostname: string }>;
   }
 
   async getDomain(hostname: string): Promise<DomainInfo> {

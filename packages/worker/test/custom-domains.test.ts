@@ -31,6 +31,7 @@ describe('custom domains', () => {
     expect(requestCustomHostname(env, 'preview.example.com')).toBe('preview.example.com');
     expect(requestCustomHostname(env, 'vanish.sh')).toBeNull();
     expect(requestCustomHostname(env, 'site.vanish.sh')).toBeNull();
+    expect(requestCustomHostname(env, 'portfolio.studio.vanish.sh')).toBe('portfolio.studio.vanish.sh');
     expect(requestCustomHostname({ ...env, CUSTOM_DOMAIN_FALLBACK_HOST: undefined }, 'preview.example.com')).toBeNull();
   });
 
@@ -90,6 +91,34 @@ describe('custom domains', () => {
     expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: 'DELETE' });
   });
 
+  it('uses managed HTTP validation without exposing DNS instructions for Vanish routes', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      result: {
+        id: 'cf-host-managed',
+        hostname: 'portfolio.studio.vanish.sh',
+        status: 'pending',
+        ssl: {
+          status: 'pending_validation',
+          validation_records: [{ txt_name: '_acme.example', txt_value: 'secret' }],
+        },
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await createProviderHostname(
+      configuredEnv(),
+      'portfolio.studio.vanish.sh',
+      true,
+    );
+
+    expect(result.dnsRecords).toEqual([]);
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toMatchObject({
+      hostname: 'portfolio.studio.vanish.sh',
+      ssl: { method: 'http', type: 'dv' },
+    });
+  });
+
   it('persists one stable downgrade deadline even without provider bindings', async () => {
     const statements: string[] = [];
     const env = {
@@ -112,6 +141,8 @@ describe('custom domains', () => {
       hostname: 'preview.example.com',
       user_id: 'user-1',
       channel: 'preview',
+      parent_hostname: null,
+      managed_dns: 0,
       provider_hostname_id: 'cf-host-1',
       status: 'active',
       dns_records: '[]',
@@ -144,6 +175,8 @@ describe('custom domains', () => {
       hostname: 'preview.example.com',
       user_id: 'user-1',
       channel: 'preview',
+      parent_hostname: null,
+      managed_dns: 0,
       provider_hostname_id: 'deleted-provider-id',
       status: 'error',
       dns_records: '[]',

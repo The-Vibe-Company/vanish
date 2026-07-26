@@ -82,12 +82,22 @@ export interface CustomDomain {
   hostname: string;
   user_id: string;
   channel: string;
+  parent_hostname: string | null;
+  managed_dns: number;
   provider_hostname_id: string | null;
   status: CustomDomainStatus;
   dns_records: string;
   last_error: string | null;
   verified_at: string | null;
   grace_expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DomainReservation {
+  hostname: string;
+  slug: string;
+  user_id: string;
   created_at: string;
   updated_at: string;
 }

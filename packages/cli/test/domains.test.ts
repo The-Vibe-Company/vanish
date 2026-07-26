@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
     verifyDomain: vi.fn(),
     attachDomain: vi.fn(),
     deleteDomain: vi.fn(),
+    reserveDomainNamespace: vi.fn(),
+    releaseDomainNamespace: vi.fn(),
   },
 }));
 
@@ -20,6 +22,8 @@ vi.mock('../src/lib/api-client.js', () => ({
 
 const {
   domainAddCommand,
+  domainReleaseCommand,
+  domainReserveCommand,
   domainsListCommand,
   domainVerifyCommand,
 } = await import('../src/commands/domains.js');
@@ -61,12 +65,37 @@ describe('domain commands', () => {
     await domainVerifyCommand('preview.example.com', { json: true });
     expect(JSON.parse(String(logSpy.mock.calls[0][0]))).toMatchObject({ status: 'active' });
   });
+
+  it('reserves and releases a vanish.sh namespace', async () => {
+    mocks.client.reserveDomainNamespace.mockResolvedValue({
+      hostname: 'studio.vanish.sh',
+      slug: 'studio',
+      url: 'https://studio.vanish.sh/',
+      createdAt: '2026-07-26T00:00:00.000Z',
+      updatedAt: '2026-07-26T00:00:00.000Z',
+    });
+    mocks.client.releaseDomainNamespace.mockResolvedValue({
+      ok: true,
+      hostname: 'studio.vanish.sh',
+    });
+
+    await domainReserveCommand('studio', {});
+    expect(mocks.client.reserveDomainNamespace).toHaveBeenCalledWith('studio');
+    expect(logSpy.mock.calls.flat().join('\n')).toContain('site.studio.vanish.sh');
+
+    logSpy.mockClear();
+    await domainReleaseCommand({});
+    expect(logSpy.mock.calls.flat().join('\n')).toContain('Released: studio.vanish.sh');
+  });
 });
 
 function domain(status: 'pending_dns' | 'pending_tls' | 'active') {
   return {
     hostname: 'preview.example.com',
     channel: 'client-preview',
+    parentHostname: null,
+    managedDns: false,
+    kind: 'custom_domain',
     status,
     dnsRecords: [{ type: 'CNAME', name: 'preview.example.com', value: 'fallback.vanish.sh' }],
     lastError: null,
