@@ -92,12 +92,12 @@ button{width:100%;margin-top:12px;padding:12px;border:0;border-radius:6px;backgr
 <body><main>
 <h1><span class="mark">vanish</span> protected preview</h1>
 <p>This handoff is password protected. Enter the shared password to continue.</p>
-${invalid ? '<p class="error">That password is not valid.</p>' : ''}
+${invalid ? '<p class="error" id="password-error" role="alert">That password is not valid.</p>' : ''}
 <form method="post" action="/.vanish/access">
 <input type="hidden" name="site" value="${escapeHtml(siteId)}">
 <input type="hidden" name="return" value="${escapeHtml(safeReturnPath)}">
 <label for="password">Password</label>
-<input id="password" name="password" type="password" minlength="8" maxlength="128" autocomplete="current-password" required autofocus>
+<input id="password" name="password" type="password" minlength="8" maxlength="128" autocomplete="current-password" required autofocus${invalid ? ' aria-invalid="true" aria-describedby="password-error"' : ''}>
 <button type="submit">Open preview</button>
 </form>
 </main></body></html>`;

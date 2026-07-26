@@ -265,20 +265,20 @@ export async function siteCommand(folder: string, options: SiteOptions): Promise
       }
     }
 
-    const verification = options.verify
-      ? await verifyPublishedSite(
-        published.url,
-        rootPath,
-        files,
-        requestedPassword ? { siteId: published.id, password: requestedPassword } : undefined,
-      )
-      : undefined;
-
     const access = published.access;
 
     const shareUrl = !domainError && customDomain?.status === 'active'
       ? customDomain.url
       : published.url;
+
+    const verification = options.verify
+      ? await verifyPublishedSite(
+        shareUrl,
+        rootPath,
+        files,
+        requestedPassword ? { siteId: published.id, password: requestedPassword } : undefined,
+      )
+      : undefined;
 
     const result = {
       url: shareUrl,

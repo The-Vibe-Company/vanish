@@ -280,6 +280,13 @@ describe('site routes', () => {
       method: 'POST',
       headers: authHeaders(key, { 'X-Site-Token': draft.token }),
     });
+    const initialAccess = await request(env, `/sites/${draft.id}/access`, {
+      method: 'PATCH',
+      headers: authHeaders(key, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ mode: 'password', password: 'initial-secret' }),
+    });
+    expect(initialAccess.status).toBe(200);
+    expect(await initialAccess.json()).toMatchObject({ policyVersion: 1 });
 
     const replacement = await request(env, `/sites/${draft.id}/replacements`, {
       method: 'POST',
@@ -302,7 +309,7 @@ describe('site routes', () => {
     expect(await publish.json()).toMatchObject({
       id: draft.id,
       url: draft.url,
-      access: { mode: 'password', passwordConfigured: true },
+      access: { mode: 'password', policyVersion: 2, passwordConfigured: true },
     });
 
     const gatedRoot = await request(env, `/s/${draft.id}/`);
@@ -542,6 +549,29 @@ describe('site routes', () => {
     expect(await response.json()).toMatchObject({ error: 'Slug "studio" is already taken' });
   });
 
+  it('maps a namespace claimed after site preflight to slug_already_taken', async () => {
+    const key = await addUser(db, 'user1', 'pro');
+    db.rejectNextNamespaceClaim = true;
+
+    const response = await request(env, '/sites', {
+      method: 'POST',
+      headers: authHeaders(key, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        name: 'concurrent namespace conflict',
+        rootPath: 'index.html',
+        fileCount: 1,
+        totalBytes: 12,
+        slug: 'studio',
+      }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      code: 'slug_already_taken',
+      error: 'Slug "studio" is reserved as a Vanish namespace',
+    });
+  });
+
   it('rejects config-only root updates when the file is missing', async () => {
     const key = await addUser(db, 'user1', 'free');
     const draft = await createSite(env, { rootPath: 'index.html', fileCount: 1, totalBytes: 12 }, key);
@@ -579,7 +609,7 @@ describe('site routes', () => {
     });
     expect(publish.status).toBe(200);
     expect(await publish.json()).toMatchObject({
-      access: { mode: 'password', passwordConfigured: true },
+      access: { mode: 'password', policyVersion: 1, passwordConfigured: true },
     });
 
     const gate = await request(env, `/s/${draft.id}/asset.js`);
@@ -590,12 +620,34 @@ describe('site routes', () => {
     expect(gateHtml).toContain('protected preview');
     expect(gateHtml).toContain(`value="/s/${draft.id}/asset.js"`);
 
+    const rateLimitCountBeforeOversizedPassword = db.rateLimits.length;
+    const invalidTypes = await request(env, '/.vanish/access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ site: draft.id, password: 12345678, return: [] }),
+    });
+    expect(invalidTypes.status).toBe(400);
+    expect(await invalidTypes.json()).toMatchObject({ code: 'invalid_request' });
+    expect(db.rateLimits).toHaveLength(rateLimitCountBeforeOversizedPassword);
+
+    const oversized = await request(env, '/.vanish/access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ site: draft.id, password: 'x'.repeat(129), return: '/' }),
+    });
+    expect(oversized.status).toBe(400);
+    expect(await oversized.json()).toMatchObject({ code: 'invalid_password' });
+    expect(db.rateLimits).toHaveLength(rateLimitCountBeforeOversizedPassword);
+
     const denied = await request(env, '/.vanish/access', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ site: draft.id, password: 'wrong-pass', return: `/s/${draft.id}/asset.js` }),
     });
     expect(denied.status).toBe(401);
+    const deniedHtml = await denied.text();
+    expect(deniedHtml).toContain('id="password-error" role="alert"');
+    expect(deniedHtml).toContain('aria-invalid="true" aria-describedby="password-error"');
 
     const accepted = await request(env, '/.vanish/access', {
       method: 'POST',
@@ -604,6 +656,10 @@ describe('site routes', () => {
       redirect: 'manual',
     });
     expect(accepted.status).toBe(303);
+    const passwordAttempts = () => db.rateLimits.filter(
+      attempt => attempt.action === `site-password:${draft.id}`
+    );
+    expect(passwordAttempts()).toHaveLength(2);
     const cookie = accepted.headers.get('Set-Cookie');
     expect(cookie).toContain('HttpOnly');
     expect(cookie).toContain('SameSite=Lax');
@@ -615,12 +671,44 @@ describe('site routes', () => {
     expect(asset.headers.get('Cache-Control')).toBe('private, no-store');
     expect(await asset.text()).toBe('private asset');
 
+    const reservedAttempt = passwordAttempts()[0];
+    while (passwordAttempts().length < 10) {
+      db.rateLimits.push({ ...reservedAttempt });
+    }
+    const limited = await request(env, '/.vanish/access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ site: draft.id, password: 'client-secret', return: '/' }),
+    });
+    expect(limited.status).toBe(429);
+    expect(passwordAttempts()).toHaveLength(10);
+
     const linkPolicy = await request(env, `/sites/${draft.id}/access`, {
       method: 'PATCH',
       headers: authHeaders(key, { 'Content-Type': 'application/json' }),
       body: JSON.stringify({ mode: 'link' }),
     });
     expect(linkPolicy.status).toBe(200);
+    expect(await linkPolicy.json()).toMatchObject({ policyVersion: 2 });
+
+    const concurrentPolicies = await Promise.all([
+      request(env, `/sites/${draft.id}/access`, {
+        method: 'PATCH',
+        headers: authHeaders(key, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ mode: 'link' }),
+      }),
+      request(env, `/sites/${draft.id}/access`, {
+        method: 'PATCH',
+        headers: authHeaders(key, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ mode: 'link' }),
+      }),
+    ]);
+    expect(concurrentPolicies.map(response => response.status)).toEqual([200, 200]);
+    const concurrentVersions = await Promise.all(
+      concurrentPolicies.map(response => response.json().then(body => Number((body as { policyVersion: number }).policyVersion)))
+    );
+    expect(concurrentVersions.sort((a, b) => a - b)).toEqual([3, 4]);
+    expect(db.siteAccess.get(draft.id)?.policy_version).toBe(4);
     expect(await (await request(env, `/s/${draft.id}/`)).text()).toBe('<h1>private</h1>');
   });
 
@@ -744,6 +832,7 @@ class FakeDB {
   rateLimits: Array<{ identifier: string; action: string }> = [];
   events: Array<{ id: string; name: string; user_id: string | null; site_id: string | null; upload_id: string | null; properties: string }> = [];
   domainReservations = new Set<string>();
+  rejectNextNamespaceClaim = false;
 
   prepare(sql: string): FakeStatement {
     return new FakeStatement(this, sql);
@@ -770,6 +859,27 @@ class FakeStatement {
 
   async first<T>(): Promise<T | null> {
     const sql = normalizeSql(this.sql);
+
+    if (sql.includes('INSERT INTO site_access') && sql.includes('RETURNING policy_version')) {
+      const [siteId, passwordHash, passwordSalt] = this.args as [
+        string,
+        string | undefined,
+        string | undefined,
+      ];
+      const isLink = sql.includes("VALUES (?, 'link'");
+      const previous = this.db.siteAccess.get(siteId);
+      const policyVersion = (previous?.policy_version || 0) + 1;
+      this.db.siteAccess.set(siteId, {
+        site_id: siteId,
+        mode: isLink ? 'link' : 'password',
+        password_hash: isLink ? null : String(passwordHash),
+        password_salt: isLink ? null : String(passwordSalt),
+        policy_version: policyVersion,
+        created_at: previous?.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+      return { policy_version: policyVersion } as T;
+    }
 
     if (sql.includes('FROM api_keys ak JOIN users u')) {
       const [keyHash] = this.args as [string];
@@ -918,13 +1028,21 @@ class FakeStatement {
     throw new Error(`Unhandled all query: ${sql}`);
   }
 
-  async run(): Promise<void> {
+  async run(): Promise<unknown> {
     const sql = normalizeSql(this.sql);
 
     if (sql.includes('INSERT INTO rate_limits')) {
       const [identifier, action] = this.args as [string, string];
+      if (sql.includes('SELECT ?, ?')) {
+        const recentAttempts = this.db.rateLimits.filter(
+          record => record.identifier === identifier && record.action === action
+        ).length;
+        if (recentAttempts >= 10) {
+          return { meta: { changes: 0 } };
+        }
+      }
       this.db.rateLimits.push({ identifier, action });
-      return;
+      return { meta: { changes: 1 } };
     }
 
     if (sql.includes('INSERT INTO site_access')) {
@@ -936,9 +1054,9 @@ class FakeStatement {
       ];
       const isLink = sql.includes("VALUES (?, 'link'");
       const previous = this.db.siteAccess.get(siteId);
-      const version = isLink
-        ? Number(passwordHash)
-        : Number(policyVersion);
+      const version = sql.includes('policy_version = site_access.policy_version + 1')
+        ? (previous?.policy_version || 0) + 1
+        : (isLink ? Number(passwordHash) : Number(policyVersion));
       this.db.siteAccess.set(siteId, {
         site_id: siteId,
         mode: isLink ? 'link' : 'password',
@@ -1018,6 +1136,10 @@ class FakeStatement {
         number,
         string,
       ];
+      if (this.db.rejectNextNamespaceClaim) {
+        this.db.rejectNextNamespaceClaim = false;
+        throw new Error('site_namespace_claim_conflict');
+      }
       this.assertUniqueSlug(slug);
       this.db.sites.set(id, {
         id,

@@ -72,11 +72,76 @@ describe('dashboard route', () => {
     expect(html).toContain("JSON.stringify({ mode: 'password', password: password })");
     expect(html).toContain('data-modal-password type="password"');
     expect(html).toContain('Remove password protection?');
-    expect(html).toContain('disabled aria-current="true"');
+    expect(html).toContain("s.access_mode === 'link' ? ' aria-current=\"true\"' : ''");
     expect(html).toContain('<span>Hostname</span><input name="hostname"');
     expect(html).toContain('<span>Channel</span><input name="channel"');
     expect(html).not.toContain("window.prompt('Password");
     expect(html).toContain('Apex domains are not supported yet');
+  });
+
+  it('keeps modal interactions accessible and prevents Cancel from confirming', async () => {
+    const html = await fetchDashboardHtml();
+    const confirmStart = html.indexOf('function confirmModal()');
+    const validationIndex = html.indexOf('passwordInput.checkValidity()', confirmStart);
+    const closeIndex = html.indexOf('closeModal();', validationIndex);
+
+    expect(html).toContain('role="dialog" aria-modal="true"');
+    expect(html).toContain('aria-labelledby="modal-title" aria-describedby="modal-description"');
+    expect(html).toContain("rootEl.setAttribute('inert', '')");
+    expect(html).toContain("rootEl.removeAttribute('inert')");
+    expect(html).toContain('function trapModalFocus(e)');
+    expect(html).toContain("target.closest('[data-action=\"modal-cancel\"]')) return");
+    expect(html).toContain('modalReturnFocus');
+    expect(html).toContain("c.destructive === false ? '[data-action=\"modal-confirm\"]' : 'button[data-action=\"modal-cancel\"]'");
+    expect(validationIndex).toBeGreaterThan(confirmStart);
+    expect(closeIndex).toBeGreaterThan(validationIndex);
+  });
+
+  it('serializes site access mutations and reports request failures inline', async () => {
+    const html = await fetchDashboardHtml();
+
+    expect(html).toContain('accessPending: {}');
+    expect(html).toContain('accessErrors: {}');
+    expect(html).toContain('state.accessPending[protectedSiteId] = true');
+    expect(html).toContain('state.accessPending[linkedSiteId] = true');
+    expect(html).toContain('delete state.accessPending[protectedSiteId]');
+    expect(html).toContain('delete state.accessPending[linkedSiteId]');
+    expect(html).toContain('Updating access…');
+    expect(html).toContain('Unable to update password protection.');
+    expect(html).toContain('Unable to enable link access.');
+    expect(html).toContain('data-site-access-region="');
+    expect(html).toContain('function focusSiteAccessRegion(siteId, preferredAction)');
+    expect(html).toContain("focusSiteAccessRegion(protectedSiteId, 'protect-site')");
+    expect(html).toContain("focusSiteAccessRegion(linkedSiteId, 'link-site')");
+  });
+
+  it('renders pending, inline error, and mobile overflow states for domains', async () => {
+    const html = await fetchDashboardHtml();
+
+    expect(html).toContain("domainPending: { connect: false, reserve: false, verify: {}, delete: {}, release: false }");
+    expect(html).toContain("domainErrors: { connect: '', reserve: '', verify: {}, delete: {}, release: '' }");
+    expect(html).toContain("state.domainPending.connect = true");
+    expect(html).toContain("state.domainPending.reserve = true");
+    expect(html).toContain("state.domainPending.verify[verifyHostname] = true");
+    expect(html).toContain('Connecting…');
+    expect(html).toContain('Reserving…');
+    expect(html).toContain('Verifying…');
+    expect(html).toContain('Removing…');
+    expect(html).toContain('Releasing…');
+    expect(html).toContain('Network error. Check your connection and try again.');
+    expect(html).toContain('function focusDomainMutation(hostname)');
+    expect(html).toContain('function focusDomainVerification(hostname)');
+    expect(html).toContain('function focusDomainForm(hostname)');
+    expect(html).toContain('function focusNamespaceReservation(reserved)');
+    expect(html).toContain('focusDomainVerification(verifyHostname)');
+    expect(html).toContain('focusDomainForm(connectedHostname)');
+    expect(html).toContain('focusNamespaceReservation(reserved)');
+    expect(html).toContain('function focusNamespaceMutation()');
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('.set-row > * { min-width: 0; }');
+    expect(html).toContain('grid-template-columns: minmax(0, 1fr)');
+    expect(html).toContain('overflow-wrap: anywhere');
+    expect(html).toContain('class="set-hint domain-record"');
   });
 });
 

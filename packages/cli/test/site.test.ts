@@ -430,6 +430,75 @@ describe('siteCommand', () => {
     });
   });
 
+  it('verifies the final active custom-domain URL', async () => {
+    mocks.loadConfig.mockReturnValue({ api_url: 'https://vanish.test', api_key: 'vnsh_key' });
+    mocks.client.me.mockResolvedValue({
+      id: 'user1',
+      username: 'stan',
+      email: null,
+      tier: 'pro',
+      created_at: '2026-05-10T00:00:00.000Z',
+      stats: { total_uploads: 0, total_sites: 0, total_bytes: 0 },
+      limits: {
+        maxFileSize: 1024 * 1024 * 1024,
+        maxSiteSize: 10 * 1024 * 1024 * 1024,
+        maxSiteFiles: 5000,
+        maxTotalStorage: 10 * 1024 * 1024 * 1024,
+        maxExpiryHours: 720,
+        imageOnly: false,
+        customTtl: true,
+        rateLimit: 500,
+      },
+    });
+    mocks.client.listDomains.mockResolvedValue({
+      domains: [{
+        hostname: 'preview.example.com',
+        channel: 'client-preview',
+        status: 'active',
+        dnsRecords: [],
+        lastError: null,
+        verifiedAt: '2026-05-10T00:00:00.000Z',
+        graceExpiresAt: null,
+        createdAt: '2026-05-10T00:00:00.000Z',
+        updatedAt: '2026-05-10T00:00:00.000Z',
+        url: 'https://preview.example.com/',
+      }],
+      limit: 1,
+    });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('<script src="assets/app.js"></script>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      }))
+      .mockResolvedValueOnce(new Response('window.ok = true;', {
+        status: 200,
+        headers: { 'Content-Type': 'text/javascript; charset=utf-8' },
+      }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await siteCommand(dir, {
+      root: 'index.html',
+      channel: 'client-preview',
+      domain: 'preview.example.com',
+      verify: true,
+      json: true,
+      clipboard: false,
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, 'https://preview.example.com/', {
+      redirect: 'follow',
+      headers: undefined,
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://preview.example.com/assets/app.js', {
+      redirect: 'follow',
+      headers: undefined,
+    });
+    expect(JSON.parse(String(logSpy.mock.calls[0][0]))).toMatchObject({
+      url: 'https://preview.example.com/',
+      verified: true,
+    });
+  });
+
   it('publishes password protection atomically instead of patching after publication', async () => {
     mocks.loadConfig.mockReturnValue({ api_url: 'https://vanish.test', api_key: 'vnsh_key' });
     mocks.client.me.mockResolvedValue({

@@ -46,6 +46,12 @@ describe('domain routes', () => {
     };
 
     vi.stubGlobal('fetch', vi.fn().mockImplementation(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'GET') {
+        return new Response(JSON.stringify({
+          success: true,
+          result: [],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
       const body = init?.body ? JSON.parse(String(init.body)) as { hostname?: string } : {};
       return new Response(JSON.stringify({
         success: true,
@@ -241,6 +247,109 @@ describe('domain routes', () => {
     expect(await response.json()).toMatchObject({ code: 'invalid_hostname' });
   });
 
+  it('rejects namespace claims that collide with an active site id', async () => {
+    const response = await call('https://vanish.sh/domains/reservation', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ slug: 'site-one' }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'namespace_already_exists' });
+  });
+
+  it('maps an atomic parent-ownership failure to a stable conflict', async () => {
+    db.reservations.set('studio.vanish.sh', {
+      hostname: 'studio.vanish.sh',
+      slug: 'studio',
+      user_id: 'pro-user',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+    db.rejectNextDomainParent = true;
+
+    const response = await call('https://vanish.sh/domains', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        hostname: 'portfolio.studio.vanish.sh',
+        channel: 'client-preview',
+      }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'domain_parent_changed' });
+  });
+
+  it('maps a child inserted during namespace release to namespace_not_empty', async () => {
+    db.reservations.set('studio.vanish.sh', {
+      hostname: 'studio.vanish.sh',
+      slug: 'studio',
+      user_id: 'pro-user',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+    db.rejectNextParentRemoval = true;
+
+    const response = await call('https://vanish.sh/domains/reservation', {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'namespace_not_empty' });
+  });
+
+  it('queues provider cleanup when deletion wins the provisioning race', async () => {
+    db.markDeletingOnProviderCommit = true;
+
+    const response = await call('https://vanish.sh/domains', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ hostname: 'race.example.com', channel: 'client-preview' }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'domain_creation_cancelled' });
+    expect(db.domains.get('race.example.com')).toMatchObject({
+      status: 'deleting',
+      provider_hostname_id: 'cf-host-race.example.com',
+    });
+  });
+
+  it('maps a child inserted during custom-domain removal to domain_not_empty', async () => {
+    const created = await call('https://vanish.sh/domains', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        hostname: 'studio.example.com',
+        channel: 'client-preview',
+      }),
+    });
+    expect(created.status).toBe(201);
+    db.rejectNextParentRemoval = true;
+
+    const response = await call('https://vanish.sh/domains/studio.example.com', {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'domain_not_empty' });
+  });
+
   async function call(url: string, init?: RequestInit): Promise<Response> {
     const pending: Promise<unknown>[] = [];
     const response = await worker.fetch(new Request(url, init), env, {
@@ -259,6 +368,9 @@ class DomainDB {
   files = new Map<string, SiteFile>();
   domains = new Map<string, CustomDomain>();
   reservations = new Map<string, DomainReservation>();
+  rejectNextDomainParent = false;
+  rejectNextParentRemoval = false;
+  markDeletingOnProviderCommit = false;
 
   prepare(sql: string): DomainStatement {
     return new DomainStatement(this, sql.replace(/\s+/g, ' ').trim());
@@ -306,7 +418,12 @@ class DomainStatement {
       const userId = String(this.args[0]);
       return (Array.from(this.db.reservations.values()).find(item => item.user_id === userId) || null) as T | null;
     }
-    if (this.sql.includes('SELECT id FROM sites WHERE slug = ?')) return null;
+    if (this.sql.includes('SELECT id FROM sites') && this.sql.includes('(id = ? OR slug = ?)')) {
+      const [id, slug] = this.args as [string, string];
+      return (Array.from(this.db.sites.values()).find(site =>
+        site.deleted_at === null && (site.id === id || site.slug === slug)
+      ) || null) as T | null;
+    }
     if (this.sql.includes('SELECT hostname FROM custom_domains') && this.sql.includes('parent_hostname IS NULL')) {
       const [userId, hostname] = this.args as [string, string];
       const domain = this.db.domains.get(hostname);
@@ -350,6 +467,10 @@ class DomainStatement {
       const [hostname, userId, channel, parentHostname, managedDns, createdAt, updatedAt] = this.args as [
         string, string, string, string | null, number, string, string,
       ];
+      if (this.db.rejectNextDomainParent) {
+        this.db.rejectNextDomainParent = false;
+        throw new Error('domain_parent_not_owned');
+      }
       if (this.db.domains.has(hostname)) throw new Error('UNIQUE constraint failed');
       if (Array.from(this.db.domains.values()).some(domain =>
         domain.user_id === userId &&
@@ -390,16 +511,67 @@ class DomainStatement {
       });
       return;
     }
+    if (this.sql.includes('DELETE FROM domain_reservations')) {
+      if (this.db.rejectNextParentRemoval) {
+        this.db.rejectNextParentRemoval = false;
+        throw new Error('domain_parent_not_empty');
+      }
+      const [userId, hostname] = this.args as [string, string];
+      const reservation = this.db.reservations.get(hostname);
+      if (reservation?.user_id === userId) this.db.reservations.delete(hostname);
+      return;
+    }
+    if (this.sql.includes("UPDATE custom_domains SET status = 'deleting'")) {
+      if (this.db.rejectNextParentRemoval) {
+        this.db.rejectNextParentRemoval = false;
+        throw new Error('domain_parent_not_empty');
+      }
+      const [hostname, userId] = this.args as [string, string];
+      const domain = this.db.domains.get(hostname);
+      if (domain?.user_id === userId && domain.status !== 'deleting') {
+        domain.status = 'deleting';
+      }
+      return;
+    }
+    if (this.sql.includes('DELETE FROM custom_domains')) {
+      const [hostname, userId] = this.args as [string, string];
+      const domain = this.db.domains.get(hostname);
+      if (domain?.user_id === userId && domain.status === 'deleting') {
+        this.db.domains.delete(hostname);
+      }
+      return;
+    }
+    if (
+      this.sql.includes('UPDATE custom_domains SET provider_hostname_id = ?') &&
+      this.sql.includes('Provisioning completed after deletion was requested')
+    ) {
+      const [providerId, hostname, userId] = this.args as [string, string, string];
+      const domain = this.db.domains.get(hostname);
+      if (domain?.user_id === userId && domain.status === 'deleting') {
+        domain.provider_hostname_id = providerId;
+        domain.last_error = 'Provisioning completed after deletion was requested';
+        return { meta: { changes: 1 } };
+      }
+      return { meta: { changes: 0 } };
+    }
     if (this.sql.includes('UPDATE custom_domains SET provider_hostname_id = ?')) {
-      const [providerId, status, dnsRecords, error, verifiedStatus, hostname] = this.args as [
+      const [providerId, status, dnsRecords, error, verifiedStatus, hostname, userId] = this.args as [
         string,
         CustomDomain['status'],
         string,
         string | null,
         CustomDomain['status'],
         string,
+        string,
       ];
-      const domain = this.db.domains.get(hostname)!;
+      const domain = this.db.domains.get(hostname);
+      if (this.db.markDeletingOnProviderCommit && domain) {
+        this.db.markDeletingOnProviderCommit = false;
+        domain.status = 'deleting';
+      }
+      if (!domain || domain.user_id !== userId || domain.status === 'deleting') {
+        return { meta: { changes: 0 } };
+      }
       Object.assign(domain, {
         provider_hostname_id: providerId,
         status,
@@ -407,7 +579,20 @@ class DomainStatement {
         last_error: error,
         verified_at: verifiedStatus === 'active' ? new Date().toISOString() : null,
       });
-      return;
+      return { meta: { changes: 1 } };
+    }
+    if (
+      this.sql.includes("UPDATE custom_domains SET status = 'error'") &&
+      this.sql.includes("status != 'deleting'")
+    ) {
+      const [message, hostname, userId] = this.args as [string, string, string];
+      const domain = this.db.domains.get(hostname);
+      if (domain?.user_id === userId && domain.status !== 'deleting') {
+        domain.status = 'error';
+        domain.last_error = message;
+        return { meta: { changes: 1 } };
+      }
+      return { meta: { changes: 0 } };
     }
     throw new Error(`Unhandled run query: ${this.sql}`);
   }

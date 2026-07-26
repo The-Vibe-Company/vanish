@@ -3,7 +3,7 @@ import { createMiddleware } from 'hono/factory';
 import type { CustomDomain, DomainReservation, Env, Site } from '../types.js';
 import { normalizeSiteSlug } from '../lib/site-path.js';
 import {
-  createProviderHostname,
+  adoptOrCreateProviderHostname,
   customDomainsConfigured,
   deleteProviderHostname,
   domainToJson,
@@ -100,7 +100,7 @@ domains.post('/domains', async (c) => {
 
   const now = new Date().toISOString();
   try {
-    await c.env.DB.prepare(`
+    const inserted = await c.env.DB.prepare(`
       INSERT INTO custom_domains (
         hostname, user_id, channel, parent_hostname, managed_dns,
         status, dns_records, created_at, updated_at
@@ -114,7 +114,19 @@ domains.post('/domains', async (c) => {
       now,
       now,
     ).run();
+    if (inserted?.meta && inserted.meta.changes !== 1) {
+      return c.json({
+        error: 'The domain route could not be created because its parent changed',
+        code: 'domain_parent_changed',
+      }, 409);
+    }
   } catch (error) {
+    if (isConstraintError(error, 'domain_parent_not_owned')) {
+      return c.json({
+        error: 'The parent namespace or custom domain is no longer available',
+        code: 'domain_parent_changed',
+      }, 409);
+    }
     const ownedCount = await c.env.DB.prepare(`
       SELECT COUNT(*) AS count FROM custom_domains
       WHERE user_id = ? AND status != 'deleting'
@@ -136,30 +148,29 @@ domains.post('/domains', async (c) => {
   }
 
   try {
-    const provider = await createProviderHostname(c.env, hostname, target.managedDns);
-    await c.env.DB.prepare(`
-      UPDATE custom_domains
-      SET provider_hostname_id = ?, status = ?, dns_records = ?, last_error = ?,
-          verified_at = CASE WHEN ? = 'active' THEN datetime('now') ELSE NULL END,
-          updated_at = datetime('now')
-      WHERE hostname = ?
-    `).bind(
-      provider.providerId,
-      provider.status,
-      JSON.stringify(provider.dnsRecords),
-      provider.error,
-      provider.status,
-      hostname,
-    ).run();
+    const provider = await adoptOrCreateProviderHostname(c.env, hostname, target.managedDns);
+    const persisted = await persistProvisionedHostname(c.env, user.id, hostname, provider);
+    if (!persisted) {
+      return c.json({
+        error: 'Domain creation was cancelled while provisioning',
+        code: 'domain_creation_cancelled',
+      }, 409);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message.slice(0, 500) : 'Custom domain provider error';
     await c.env.DB.prepare(`
       UPDATE custom_domains SET status = 'error', last_error = ?, updated_at = datetime('now')
-      WHERE hostname = ?
-    `).bind(message, hostname).run();
+      WHERE hostname = ? AND user_id = ? AND status != 'deleting'
+    `).bind(message, hostname, user.id).run();
   }
 
   const created = await findOwnedDomain(c.env, user.id, hostname);
+  if (!created || created.status === 'deleting') {
+    return c.json({
+      error: 'Domain creation was cancelled while provisioning',
+      code: 'domain_creation_cancelled',
+    }, 409);
+  }
   return c.json(domainToJson(created!), 201);
 });
 
@@ -203,8 +214,10 @@ domains.post('/domains/reservation', async (c) => {
   const baseHostname = canonicalBaseHostname(c.env.BASE_URL);
   const hostname = `${slug}.${baseHostname}`;
   const siteConflict = await c.env.DB.prepare(`
-    SELECT id FROM sites WHERE slug = ? AND deleted_at IS NULL LIMIT 1
-  `).bind(slug).first<{ id: string }>();
+    SELECT id FROM sites
+    WHERE (id = ? OR slug = ?) AND deleted_at IS NULL
+    LIMIT 1
+  `).bind(slug, slug).first<{ id: string }>();
   if (siteConflict) {
     return c.json({
       error: `The namespace "${slug}" is already used by a site`,
@@ -213,10 +226,16 @@ domains.post('/domains/reservation', async (c) => {
   }
   const now = new Date().toISOString();
   try {
-    await c.env.DB.prepare(`
+    const inserted = await c.env.DB.prepare(`
       INSERT INTO domain_reservations (hostname, slug, user_id, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?)
     `).bind(hostname, slug, user.id, now, now).run();
+    if (inserted?.meta && inserted.meta.changes !== 1) {
+      return c.json({
+        error: `The namespace "${slug}" was claimed concurrently`,
+        code: 'namespace_already_exists',
+      }, 409);
+    }
   } catch {
     const owned = await findReservation(c.env, user.id);
     return c.json(owned ? {
@@ -255,7 +274,22 @@ domains.delete('/domains/reservation', async (c) => {
       code: 'namespace_not_empty',
     }, 409);
   }
-  await c.env.DB.prepare('DELETE FROM domain_reservations WHERE user_id = ?').bind(user.id).run();
+  try {
+    const deleted = await c.env.DB.prepare(`
+      DELETE FROM domain_reservations WHERE user_id = ? AND hostname = ?
+    `).bind(user.id, reservation.hostname).run();
+    if (deleted?.meta && deleted.meta.changes !== 1) {
+      return c.json({ error: 'Vanish namespace not found', code: 'namespace_not_found' }, 404);
+    }
+  } catch (error) {
+    if (isConstraintError(error, 'domain_parent_not_empty')) {
+      return c.json({
+        error: 'Remove every site route in this namespace before releasing it',
+        code: 'namespace_not_empty',
+      }, 409);
+    }
+    throw error;
+  }
   return c.json({ ok: true, hostname: reservation.hostname });
 });
 
@@ -282,29 +316,28 @@ domains.post('/domains/:hostname/verify', async (c) => {
   }
   if (!domain.provider_hostname_id) {
     try {
-      const provider = await createProviderHostname(c.env, domain.hostname, domain.managed_dns === 1);
-      await c.env.DB.prepare(`
-        UPDATE custom_domains
-        SET provider_hostname_id = ?, status = ?, dns_records = ?, last_error = ?,
-            verified_at = CASE WHEN ? = 'active' THEN datetime('now') ELSE NULL END,
-            updated_at = datetime('now')
-        WHERE hostname = ?
-      `).bind(
-        provider.providerId,
-        provider.status,
-        JSON.stringify(provider.dnsRecords),
-        provider.error,
-        provider.status,
-        domain.hostname,
-      ).run();
+      const provider = await adoptOrCreateProviderHostname(c.env, domain.hostname, domain.managed_dns === 1);
+      const persisted = await persistProvisionedHostname(c.env, user.id, domain.hostname, provider);
+      if (!persisted) {
+        return c.json({
+          error: 'Domain verification was cancelled while the domain was being removed',
+          code: 'domain_creation_cancelled',
+        }, 409);
+      }
       const reprovisioned = await findOwnedDomain(c.env, user.id, domain.hostname);
-      return c.json(domainToJson(reprovisioned!));
+      if (!reprovisioned || reprovisioned.status === 'deleting') {
+        return c.json({
+          error: 'Domain verification was cancelled while the domain was being removed',
+          code: 'domain_creation_cancelled',
+        }, 409);
+      }
+      return c.json(domainToJson(reprovisioned));
     } catch (error) {
       const message = error instanceof Error ? error.message.slice(0, 500) : 'Custom domain provider error';
       await c.env.DB.prepare(`
         UPDATE custom_domains SET status = 'error', last_error = ?, updated_at = datetime('now')
-        WHERE hostname = ?
-      `).bind(message, domain.hostname).run();
+        WHERE hostname = ? AND user_id = ? AND status != 'deleting'
+      `).bind(message, domain.hostname, user.id).run();
       return c.json({
         ...domainToJson({ ...domain, status: 'error', last_error: message }),
       }, 502);
@@ -349,9 +382,28 @@ domains.delete('/domains/:hostname', async (c) => {
     }
   }
 
-  await c.env.DB.prepare(`
-    UPDATE custom_domains SET status = 'deleting', updated_at = datetime('now') WHERE hostname = ?
-  `).bind(hostname).run();
+  try {
+    const marked = await c.env.DB.prepare(`
+      UPDATE custom_domains
+      SET status = 'deleting', updated_at = datetime('now')
+      WHERE hostname = ? AND user_id = ? AND status != 'deleting'
+    `).bind(hostname, user.id).run();
+    if (marked?.meta && marked.meta.changes !== 1) {
+      const current = await findOwnedDomain(c.env, user.id, hostname!);
+      if (!current) {
+        return c.json({ error: 'Domain not found', code: 'domain_not_found' }, 404);
+      }
+      return c.json({ ok: true, hostname, status: 'deleting' }, 202);
+    }
+  } catch (error) {
+    if (isConstraintError(error, 'domain_parent_not_empty')) {
+      return c.json({
+        error: 'Remove every child route before removing this custom domain',
+        code: 'domain_not_empty',
+      }, 409);
+    }
+    throw error;
+  }
   if (domain.provider_hostname_id) {
     try {
       await deleteProviderHostname(c.env, domain.provider_hostname_id);
@@ -359,8 +411,12 @@ domains.delete('/domains/:hostname', async (c) => {
       if (!(error instanceof DomainProviderError)) throw error;
       return c.json({ ok: true, hostname, status: 'deleting' }, 202);
     }
+  } else {
+    return c.json({ ok: true, hostname, status: 'deleting' }, 202);
   }
-  await c.env.DB.prepare('DELETE FROM custom_domains WHERE hostname = ?').bind(hostname).run();
+  await c.env.DB.prepare(`
+    DELETE FROM custom_domains WHERE hostname = ? AND user_id = ? AND status = 'deleting'
+  `).bind(hostname, user.id).run();
   return c.json({ ok: true, hostname });
 });
 
@@ -371,6 +427,43 @@ async function findOwnedDomain(env: Env, userId: string, hostname: string): Prom
     FROM custom_domains
     WHERE user_id = ? AND hostname = ?
   `).bind(userId, hostname).first<CustomDomain>();
+}
+
+type ProvisionedHostname = Awaited<ReturnType<typeof adoptOrCreateProviderHostname>>;
+
+async function persistProvisionedHostname(
+  env: Env,
+  userId: string,
+  hostname: string,
+  provider: ProvisionedHostname,
+): Promise<boolean> {
+  const committed = await env.DB.prepare(`
+    UPDATE custom_domains
+    SET provider_hostname_id = ?, status = ?, dns_records = ?, last_error = ?,
+        verified_at = CASE WHEN ? = 'active' THEN datetime('now') ELSE NULL END,
+        updated_at = datetime('now')
+    WHERE hostname = ? AND user_id = ? AND status != 'deleting'
+  `).bind(
+    provider.providerId,
+    provider.status,
+    JSON.stringify(provider.dnsRecords),
+    provider.error,
+    provider.status,
+    hostname,
+    userId,
+  ).run();
+  if (committed.meta?.changes !== 0) return true;
+
+  const queued = await env.DB.prepare(`
+    UPDATE custom_domains
+    SET provider_hostname_id = ?, last_error = 'Provisioning completed after deletion was requested',
+        updated_at = datetime('now')
+    WHERE hostname = ? AND user_id = ? AND status = 'deleting'
+  `).bind(provider.providerId, hostname, userId).run();
+  if (queued.meta?.changes === 1) return false;
+
+  await deleteProviderHostname(env, provider.providerId);
+  return false;
 }
 
 async function resolveDomainTarget(env: Env, userId: string, input: string): Promise<DomainTarget | null> {
@@ -421,6 +514,10 @@ function reservationToJson(reservation: DomainReservation) {
 function canonicalBaseHostname(baseUrl: string): string {
   const hostname = new URL(baseUrl).hostname.toLowerCase();
   return hostname.startsWith('www.') ? hostname.slice(4) : hostname;
+}
+
+function isConstraintError(error: unknown, marker: string): boolean {
+  return error instanceof Error && error.message.includes(marker);
 }
 
 export default domains;

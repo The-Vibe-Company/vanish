@@ -1,6 +1,8 @@
 import type { CustomDomain, CustomDomainStatus, Env } from '../types.js';
 import { parse as parseDomain } from 'tldts';
 
+const PROVISIONING_DELETE_GRACE_MS = 10 * 60 * 1000;
+
 export interface DnsRecord {
   type: 'CNAME' | 'TXT';
   name: string;
@@ -114,7 +116,37 @@ export async function createProviderHostname(
       ssl: { method: managedDns ? 'http' : 'txt', type: 'dv' },
     }),
   });
+  if (!result || typeof result.id !== 'string' || !result.id) {
+    const recovered = await findProviderHostnameByExactName(env, hostname, managedDns);
+    if (recovered) return recovered;
+    throw new DomainProviderError('Cloudflare accepted the hostname but did not return an identifier');
+  }
   return providerState(env, result, managedDns);
+}
+
+export async function findProviderHostnameByExactName(
+  env: Env,
+  hostname: string,
+  managedDns = false,
+): Promise<{ providerId: string; status: CustomDomainStatus; dnsRecords: DnsRecord[]; error: string | null } | null> {
+  ensureProviderConfigured(env);
+  const normalizedHostname = hostname.toLowerCase();
+  const results = await cloudflareRequest<CloudflareCustomHostname[]>(
+    env,
+    `?hostname.exact=${encodeURIComponent(normalizedHostname)}&per_page=2`,
+    { method: 'GET' },
+  );
+  const existing = results.find(result => result.hostname.toLowerCase() === normalizedHostname);
+  return existing ? providerState(env, existing, managedDns) : null;
+}
+
+export async function adoptOrCreateProviderHostname(
+  env: Env,
+  hostname: string,
+  managedDns = false,
+): Promise<{ providerId: string; status: CustomDomainStatus; dnsRecords: DnsRecord[]; error: string | null }> {
+  const existing = await findProviderHostnameByExactName(env, hostname, managedDns);
+  return existing || createProviderHostname(env, hostname, managedDns);
 }
 
 export async function getProviderHostname(
@@ -177,19 +209,24 @@ export async function syncDomain(env: Env, domain: CustomDomain): Promise<Custom
   }
   try {
     const provider = await getProviderHostname(env, domain.provider_hostname_id, domain.managed_dns === 1);
-    await env.DB.prepare(`
+    const updated = await env.DB.prepare(`
       UPDATE custom_domains
       SET status = ?, dns_records = ?, last_error = ?,
           verified_at = CASE WHEN ? = 'active' THEN COALESCE(verified_at, datetime('now')) ELSE verified_at END,
           updated_at = datetime('now')
-      WHERE hostname = ?
+      WHERE hostname = ? AND provider_hostname_id = ? AND status = ?
     `).bind(
       provider.status,
       JSON.stringify(provider.dnsRecords),
       provider.error,
       provider.status,
       domain.hostname,
+      domain.provider_hostname_id,
+      domain.status,
     ).run();
+    if (updated.meta?.changes === 0) {
+      return await findDomainByHostname(env, domain.hostname) || domain;
+    }
     return {
       ...domain,
       status: provider.status,
@@ -201,14 +238,17 @@ export async function syncDomain(env: Env, domain: CustomDomain): Promise<Custom
   } catch (error) {
     const message = providerErrorMessage(error);
     const providerMissing = error instanceof DomainProviderError && error.status === 404;
-    await env.DB.prepare(providerMissing ? `
+    const updated = await env.DB.prepare(providerMissing ? `
       UPDATE custom_domains
       SET provider_hostname_id = NULL, status = 'error', last_error = ?, updated_at = datetime('now')
-      WHERE hostname = ?
+      WHERE hostname = ? AND provider_hostname_id = ? AND status = ?
     ` : `
       UPDATE custom_domains SET status = 'error', last_error = ?, updated_at = datetime('now')
-      WHERE hostname = ?
-    `).bind(message, domain.hostname).run();
+      WHERE hostname = ? AND provider_hostname_id = ? AND status = ?
+    `).bind(message, domain.hostname, domain.provider_hostname_id, domain.status).run();
+    if (updated.meta?.changes === 0) {
+      return await findDomainByHostname(env, domain.hostname) || domain;
+    }
     return {
       ...domain,
       provider_hostname_id: providerMissing ? null : domain.provider_hostname_id,
@@ -252,7 +292,7 @@ export async function resumeDomainsAfterUpgrade(env: Env, userId: string): Promi
           continue;
         }
         try {
-          const provider = await createProviderHostname(env, domain.hostname, domain.managed_dns === 1);
+          const provider = await adoptOrCreateProviderHostname(env, domain.hostname, domain.managed_dns === 1);
           await env.DB.prepare(`
             UPDATE custom_domains
             SET provider_hostname_id = ?, status = ?, dns_records = ?, last_error = ?,
@@ -285,7 +325,6 @@ export async function resumeDomainsAfterUpgrade(env: Env, userId: string): Promi
 }
 
 export async function maintainCustomDomains(env: Env): Promise<void> {
-  if (!customDomainsConfigured(env)) return;
   try {
     const expiring = await env.DB.prepare(`
       SELECT hostname, user_id, channel, parent_hostname, managed_dns, provider_hostname_id, status, dns_records, last_error,
@@ -293,23 +332,76 @@ export async function maintainCustomDomains(env: Env): Promise<void> {
       FROM custom_domains
       WHERE (grace_expires_at IS NOT NULL AND datetime(grace_expires_at) <= datetime('now'))
          OR status = 'deleting'
+         OR (status = 'suspended' AND provider_hostname_id IS NOT NULL)
       LIMIT 100
     `).all<CustomDomain>();
 
     for (const domain of expiring.results || []) {
+      if (domain.status !== 'deleting' && domain.status !== 'suspended') {
+        await env.DB.prepare(`
+          UPDATE custom_domains
+          SET status = 'suspended', grace_expires_at = NULL, updated_at = datetime('now')
+          WHERE hostname = ?
+        `).bind(domain.hostname).run();
+      }
+
       if (domain.provider_hostname_id) {
+        if (!customDomainsConfigured(env)) {
+          await env.DB.prepare(`
+            UPDATE custom_domains
+            SET last_error = 'Custom domain provider is not configured', updated_at = datetime('now')
+            WHERE hostname = ?
+          `).bind(domain.hostname).run();
+          continue;
+        }
         try {
           await deleteProviderHostname(env, domain.provider_hostname_id);
-        } catch {
+        } catch (error) {
+          await env.DB.prepare(`
+            UPDATE custom_domains
+            SET last_error = ?, updated_at = datetime('now')
+            WHERE hostname = ?
+          `).bind(providerErrorMessage(error), domain.hostname).run();
           continue;
         }
       }
+
       if (domain.status === 'deleting') {
+        if (!domain.provider_hostname_id) {
+          if (Date.parse(domain.updated_at) > Date.now() - PROVISIONING_DELETE_GRACE_MS) {
+            continue;
+          }
+          if (!customDomainsConfigured(env)) {
+            await env.DB.prepare(`
+              UPDATE custom_domains
+              SET last_error = 'Custom domain provider is not configured', updated_at = datetime('now')
+              WHERE hostname = ?
+            `).bind(domain.hostname).run();
+            continue;
+          }
+          try {
+            const orphan = await findProviderHostnameByExactName(
+              env,
+              domain.hostname,
+              domain.managed_dns === 1,
+            );
+            if (orphan) {
+              await deleteProviderHostname(env, orphan.providerId);
+            }
+          } catch (error) {
+            await env.DB.prepare(`
+              UPDATE custom_domains
+              SET last_error = ?, updated_at = datetime('now')
+              WHERE hostname = ?
+            `).bind(providerErrorMessage(error), domain.hostname).run();
+            continue;
+          }
+        }
         await env.DB.prepare('DELETE FROM custom_domains WHERE hostname = ?').bind(domain.hostname).run();
       } else {
         await env.DB.prepare(`
           UPDATE custom_domains
-          SET provider_hostname_id = NULL, status = 'suspended', grace_expires_at = NULL,
+          SET provider_hostname_id = NULL, status = 'suspended', grace_expires_at = NULL, last_error = NULL,
               updated_at = datetime('now')
           WHERE hostname = ?
         `).bind(domain.hostname).run();
@@ -318,6 +410,14 @@ export async function maintainCustomDomains(env: Env): Promise<void> {
   } catch (error) {
     if (!isMissingCustomDomainsTable(error)) throw error;
   }
+}
+
+async function findDomainByHostname(env: Env, hostname: string): Promise<CustomDomain | null> {
+  return env.DB.prepare(`
+    SELECT hostname, user_id, channel, parent_hostname, managed_dns, provider_hostname_id, status, dns_records, last_error,
+           verified_at, grace_expires_at, created_at, updated_at
+    FROM custom_domains WHERE hostname = ?
+  `).bind(hostname).first<CustomDomain>();
 }
 
 function providerState(
