@@ -118,14 +118,56 @@ Stable owner-scoped channels create the first URL, then update it on later runs:
 vanish site ./demo --root index.html --channel pr-42 --verify --json --no-clipboard
 ```
 
+Protect an authenticated site with a shared password:
+
+```bash
+printf '%s' "$CLIENT_PREVIEW_PASSWORD" |
+  vanish sites access pr-42 --mode password --password-stdin
+
+# Restore normal link access
+vanish sites access pr-42 --mode link
+```
+
+### Custom domains
+
+Pro accounts can attach one custom subdomain to a stable channel:
+
+```bash
+vanish domains add preview.example.com --channel client-preview
+# Add the CNAME/TXT records printed by the command
+vanish domains verify preview.example.com
+```
+
+Once configured, the domain follows the channel across every update:
+
+```bash
+vanish site ./demo \
+  --root index.html \
+  --channel client-preview \
+  --domain preview.example.com \
+  --verify
+```
+
+Domain lifecycle commands:
+
+```bash
+vanish domains ls
+vanish domains attach preview.example.com --channel another-preview
+vanish domains rm preview.example.com
+```
+
+Custom domains support subdomains in the first release. Apex domains such as
+`example.com` are intentionally rejected.
+
 Lifecycle commands:
 
 ```bash
 vanish sites ls --json
-vanish site info quiet-river-42 --json
-vanish site verify quiet-river-42 --json
-vanish site extend quiet-river-42 --days 90 --json
-vanish site rm quiet-river-42 --json
+vanish sites info quiet-river-42 --json
+vanish sites verify quiet-river-42 --json
+printf '%s' "$PREVIEW_PASSWORD" | vanish sites verify quiet-river-42 --password-stdin --json
+vanish sites extend quiet-river-42 --days 90 --json
+vanish sites rm quiet-river-42 --json
 ```
 
 ## File Uploads
@@ -182,6 +224,8 @@ vanish update      # update the CLI to the latest version
 | Account needed | No | GitHub login | GitHub login |
 | Mini-sites | Static folders | Static folders | Static folders |
 | Site URL | Readable random | Readable random | Random or custom slug |
+| Custom domain | No | No | 1 subdomain |
+| Password protection | No | Yes | Yes |
 | Site limits | 10 MB, 100 files | 500 files, within 50 MB total | 5,000 files, within 10 GB total |
 | File uploads | Images only | All except executables | All except executables |
 | Max file size | 5 MB | 50 MB | 1 GB |
@@ -220,6 +264,36 @@ For production mini-site URLs, route `*.your-domain` to the Worker. Local develo
 Set `SELF_HOSTED=true` and `DEFAULT_TIER=pro` to give newly authenticated users Pro access without billing.
 
 Product events are disabled by default. Set `PRODUCT_EVENTS=true` to record privacy-light funnel events without filenames, paths, tokens, keys, or content.
+
+Password protection requires a secret of at least 32 characters:
+
+```bash
+wrangler secret put ACCESS_SESSION_SECRET
+```
+
+Managed custom domains use Cloudflare for SaaS. Configure the Worker with:
+
+```bash
+wrangler secret put CLOUDFLARE_API_TOKEN
+wrangler secret put CLOUDFLARE_ZONE_ID
+```
+
+`CUSTOM_DOMAIN_FALLBACK_HOST` defaults to `fallback.vanish.sh` in
+`wrangler.toml`; change it for another installation before deploying.
+
+For the hosted GitHub Actions deployments, configure these repository secrets
+before merging:
+
+- `VANISH_ACCESS_SESSION_SECRET`
+
+`CLOUDFLARE_CUSTOM_HOSTNAMES_API_TOKEN` is recommended as a least-privilege
+token with zone-read and custom-hostname permissions. Until it is set,
+deployment uses the existing `CLOUDFLARE_API_TOKEN` and resolves the zone ID
+automatically.
+
+The fallback hostname must already be configured as the Cloudflare for SaaS
+fallback origin. Without these values, the domain API returns
+`domain_provisioning_unavailable`; ordinary Vanish URLs remain functional.
 
 ## Architecture
 

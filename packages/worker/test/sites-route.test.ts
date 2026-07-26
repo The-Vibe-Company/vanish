@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import worker from '../src/index.js';
 import { hashApiKey } from '../src/middleware/auth.js';
-import type { Env, Site, SiteFile, Tier, User } from '../src/types.js';
+import type { Env, Site, SiteAccess, SiteFile, Tier, User } from '../src/types.js';
 
 describe('site routes', () => {
   let env: Env;
@@ -250,6 +250,7 @@ describe('site routes', () => {
   });
 
   it('lets an authenticated owner replace a published site at the same URL', async () => {
+    env.ACCESS_SESSION_SECRET = 'test-access-secret-with-enough-entropy';
     const key = await addUser(db, 'user1', 'free');
     const draft = await createSite(env, {
       rootPath: 'index.html',
@@ -293,15 +294,40 @@ describe('site routes', () => {
     const publish = await request(env, `/sites/${draft.id}/replacements/${replacementDraft.id}/publish`, {
       method: 'POST',
       headers: authHeaders(key, { 'Content-Type': 'application/json', 'X-Site-Token': replacementDraft.token }),
-      body: JSON.stringify({}),
+      body: JSON.stringify({
+        access: { mode: 'password', password: 'replacement-secret' },
+      }),
     });
     expect(publish.status).toBe(200);
-    expect(await publish.json()).toMatchObject({ id: draft.id, url: draft.url });
+    expect(await publish.json()).toMatchObject({
+      id: draft.id,
+      url: draft.url,
+      access: { mode: 'password', passwordConfigured: true },
+    });
 
-    const root = await request(env, `/s/${draft.id}/`);
+    const gatedRoot = await request(env, `/s/${draft.id}/`);
+    expect(await gatedRoot.text()).toContain('protected preview');
+    const unlock = await request(env, '/.vanish/access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        site: draft.id,
+        password: 'replacement-secret',
+        return: `/s/${draft.id}/`,
+      }),
+      redirect: 'manual',
+    });
+    const root = await request(env, `/s/${draft.id}/`, {
+      headers: { Cookie: unlock.headers.get('Set-Cookie')!.split(';')[0] },
+    });
     expect(await root.text()).toBe('<h1>new</h1>');
-    expect(await request(env, `/s/${draft.id}/old.js`)).toHaveProperty('status', 404);
-    expect(await request(env, `/s/${draft.id}/new.css`)).toHaveProperty('status', 200);
+    const accessCookie = unlock.headers.get('Set-Cookie')!.split(';')[0];
+    expect(await request(env, `/s/${draft.id}/old.js`, {
+      headers: { Cookie: accessCookie },
+    })).toHaveProperty('status', 404);
+    expect(await request(env, `/s/${draft.id}/new.css`, {
+      headers: { Cookie: accessCookie },
+    })).toHaveProperty('status', 200);
     for (const key of oldKeys) {
       expect(bucket.objects.has(key)).toBe(false);
     }
@@ -516,6 +542,80 @@ describe('site routes', () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ error: 'Root file not found: missing.html' });
   });
+
+  it('protects every site path with a password and invalidates anonymous access', async () => {
+    env.ACCESS_SESSION_SECRET = 'test-access-secret-with-enough-entropy';
+    const key = await addUser(db, 'user1', 'free');
+    const draft = await createSite(env, { rootPath: 'index.html', fileCount: 2, totalBytes: 32 }, key);
+    await uploadSiteFile(env, draft.id, draft.token, 'index.html', '<h1>private</h1>', key);
+    await uploadSiteFile(env, draft.id, draft.token, 'asset.js', 'private asset', key);
+    const publish = await request(env, `/sites/${draft.id}/publish`, {
+      method: 'POST',
+      headers: authHeaders(key, {
+        'Content-Type': 'application/json',
+        'X-Site-Token': draft.token,
+      }),
+      body: JSON.stringify({
+        access: { mode: 'password', password: 'client-secret' },
+      }),
+    });
+    expect(publish.status).toBe(200);
+    expect(await publish.json()).toMatchObject({
+      access: { mode: 'password', passwordConfigured: true },
+    });
+
+    const gate = await request(env, `/s/${draft.id}/asset.js`);
+    expect(gate.status).toBe(200);
+    expect(gate.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(gate.headers.get('X-Vanish-Access')).toBe('password-required');
+    const gateHtml = await gate.text();
+    expect(gateHtml).toContain('protected preview');
+    expect(gateHtml).toContain(`value="/s/${draft.id}/asset.js"`);
+
+    const denied = await request(env, '/.vanish/access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ site: draft.id, password: 'wrong-pass', return: `/s/${draft.id}/asset.js` }),
+    });
+    expect(denied.status).toBe(401);
+
+    const accepted = await request(env, '/.vanish/access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ site: draft.id, password: 'client-secret', return: `/s/${draft.id}/asset.js` }),
+      redirect: 'manual',
+    });
+    expect(accepted.status).toBe(303);
+    const cookie = accepted.headers.get('Set-Cookie');
+    expect(cookie).toContain('HttpOnly');
+    expect(cookie).toContain('SameSite=Lax');
+
+    const asset = await request(env, `/s/${draft.id}/asset.js`, {
+      headers: { Cookie: cookie!.split(';')[0] },
+    });
+    expect(asset.status).toBe(200);
+    expect(asset.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(await asset.text()).toBe('private asset');
+
+    const linkPolicy = await request(env, `/sites/${draft.id}/access`, {
+      method: 'PATCH',
+      headers: authHeaders(key, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ mode: 'link' }),
+    });
+    expect(linkPolicy.status).toBe(200);
+    expect(await (await request(env, `/s/${draft.id}/`)).text()).toBe('<h1>private</h1>');
+  });
+
+  it('rejects the reserved .vanish upload path', async () => {
+    const draft = await createSite(env, { rootPath: 'index.html', fileCount: 1, totalBytes: 12 });
+    const response = await request(env, `/sites/${draft.id}/files?path=.vanish/access`, {
+      method: 'PUT',
+      headers: { 'X-Site-Token': draft.token, 'Content-Type': 'text/html' },
+      body: 'collision',
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: 'The .vanish path is reserved for access control' });
+  });
 });
 
 async function createSite(env: Env, body: { rootPath: string; fileCount: number; totalBytes: number }, apiKey?: string) {
@@ -619,6 +719,7 @@ class FakeBucket {
 class FakeDB {
   sites = new Map<string, Site>();
   siteFiles = new Map<string, SiteFile>();
+  siteAccess = new Map<string, SiteAccess>();
   users = new Map<string, User>();
   apiKeys = new Map<string, User>();
   pendingR2Deletions = new Set<string>();
@@ -654,6 +755,11 @@ class FakeStatement {
     if (sql.includes('FROM api_keys ak JOIN users u')) {
       const [keyHash] = this.args as [string];
       return (this.db.apiKeys.get(keyHash) || null) as T | null;
+    }
+
+    if (sql.includes('FROM site_access')) {
+      const [siteId] = this.args as [string];
+      return (this.db.siteAccess.get(siteId) || null) as T | null;
     }
 
     if (sql.includes('SELECT COUNT(*) as count FROM rate_limits')) {
@@ -794,6 +900,30 @@ class FakeStatement {
     if (sql.includes('INSERT INTO rate_limits')) {
       const [identifier, action] = this.args as [string, string];
       this.db.rateLimits.push({ identifier, action });
+      return;
+    }
+
+    if (sql.includes('INSERT INTO site_access')) {
+      const [siteId, passwordHash, passwordSalt, policyVersion] = this.args as [
+        string,
+        string | number | null,
+        string | null,
+        number?,
+      ];
+      const isLink = sql.includes("VALUES (?, 'link'");
+      const previous = this.db.siteAccess.get(siteId);
+      const version = isLink
+        ? Number(passwordHash)
+        : Number(policyVersion);
+      this.db.siteAccess.set(siteId, {
+        site_id: siteId,
+        mode: isLink ? 'link' : 'password',
+        password_hash: isLink ? null : String(passwordHash),
+        password_salt: isLink ? null : passwordSalt,
+        policy_version: version,
+        created_at: previous?.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
       return;
     }
 

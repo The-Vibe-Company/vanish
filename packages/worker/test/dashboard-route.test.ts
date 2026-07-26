@@ -58,6 +58,23 @@ describe('dashboard route', () => {
     expect(guardCss).toMatch(/background:\s*#1649e8/);
     expect(guardCss).toMatch(/pointer-events:\s*none/);
   });
+
+  it('exposes custom domain and password-protection management', async () => {
+    const html = await fetchDashboardHtml();
+
+    expect(html).toContain("{ id: 'domains', label: 'Domains'");
+    expect(html).toContain("apiFetch('/domains')");
+    expect(html).toContain('data-domain-form');
+    expect(html).toContain("data-action=\"protect-site\"");
+    expect(html).toContain("JSON.stringify({ mode: 'password', password: password })");
+    expect(html).toContain('data-modal-password type="password"');
+    expect(html).toContain('Remove password protection?');
+    expect(html).toContain('disabled aria-current="true"');
+    expect(html).toContain('<span>Hostname</span><input name="hostname"');
+    expect(html).toContain('<span>Channel</span><input name="channel"');
+    expect(html).not.toContain("window.prompt('Password");
+    expect(html).toContain('Apex domains are not supported yet');
+  });
 });
 
 async function fetchDashboardHtml(): Promise<string> {

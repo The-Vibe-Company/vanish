@@ -408,10 +408,22 @@ class BillingStatement {
     return null;
   }
 
+  async all<T>(): Promise<{ results: T[] }> {
+    const sql = normalizeSql(this.sql);
+    if (sql.includes('FROM custom_domains WHERE user_id = ?')) {
+      return { results: [] };
+    }
+    throw new Error(`Unhandled all query: ${sql}`);
+  }
+
   async run(): Promise<void> {
     const sql = normalizeSql(this.sql);
 
     if (sql.includes('UPDATE api_keys SET last_used_at')) {
+      return;
+    }
+
+    if (sql.includes('UPDATE custom_domains')) {
       return;
     }
 

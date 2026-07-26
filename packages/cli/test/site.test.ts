@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const mocks = vi.hoisted(() => ({
+  stdin: { value: 'client-secret\n' },
   loadConfig: vi.fn(),
   copyToClipboard: vi.fn(),
   client: {
@@ -15,8 +16,25 @@ const mocks = vi.hoisted(() => ({
     publishSiteReplacement: vi.fn(),
     patchSite: vi.fn(),
     deleteSite: vi.fn(),
+    getSiteChannel: vi.fn(),
+    setSiteAccess: vi.fn(),
+    listDomains: vi.fn(),
+    createDomain: vi.fn(),
+    attachDomain: vi.fn(),
+    deleteDomain: vi.fn(),
   },
 }));
+
+vi.mock('node:fs', async () => {
+  const actual = await vi.importActual<typeof import('node:fs')>('node:fs');
+  return {
+    ...actual,
+    readFileSync: (path: Parameters<typeof actual.readFileSync>[0], ...args: unknown[]) =>
+      path === 0
+        ? mocks.stdin.value
+        : (actual.readFileSync as (...values: unknown[]) => unknown)(path, ...args),
+  };
+});
 
 vi.mock('../src/lib/config.js', () => ({
   loadConfig: mocks.loadConfig,
@@ -97,6 +115,16 @@ describe('siteCommand', () => {
       expires: '2026-05-11T00:00:00.000Z',
     });
     mocks.client.deleteSite.mockResolvedValue(undefined);
+    mocks.client.getSiteChannel.mockResolvedValue(null);
+    mocks.client.listDomains.mockResolvedValue({ domains: [], limit: 1 });
+    mocks.client.createDomain.mockResolvedValue({
+      hostname: 'preview.example.com',
+      channel: 'client-preview',
+      status: 'pending_dns',
+      dnsRecords: [{ type: 'CNAME', name: 'preview.example.com', value: 'fallback.vanish.sh' }],
+      url: 'https://preview.example.com/',
+    });
+    mocks.client.deleteDomain.mockResolvedValue({ ok: true });
 
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((code?: string | number | null) => {
       throw new Error(`exit ${code}`);
@@ -108,6 +136,7 @@ describe('siteCommand', () => {
 
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
@@ -120,7 +149,7 @@ describe('siteCommand', () => {
       totalBytes: expect.any(Number),
     }));
     expect(mocks.client.uploadSiteFile).toHaveBeenCalledTimes(2);
-    expect(mocks.client.publishSite).toHaveBeenCalledWith('site123', 'vnst_token');
+    expect(mocks.client.publishSite).toHaveBeenCalledWith('site123', 'vnst_token', { access: undefined });
     expect(JSON.parse(String(logSpy.mock.calls[0][0]))).toMatchObject({
       url: 'https://site123.vanish.sh/',
       id: 'site123',
@@ -212,12 +241,323 @@ describe('siteCommand', () => {
     expect(mocks.client.publishSiteReplacement).toHaveBeenCalledWith('site123', 'draft456', 'vnst_update', {
       slug: undefined,
       days: undefined,
+      access: undefined,
     });
     expect(JSON.parse(String(logSpy.mock.calls[0][0]))).toMatchObject({
       url: 'https://quiet-river-42.vanish.sh/',
       id: 'site123',
       rootPath: 'index.html',
       fileCount: 2,
+    });
+  });
+
+  it('publishes a Pro channel and provisions its custom domain', async () => {
+    mocks.loadConfig.mockReturnValue({ api_url: 'https://vanish.test', api_key: 'vnsh_key' });
+    mocks.client.me.mockResolvedValue({
+      id: 'user1',
+      username: 'stan',
+      email: null,
+      tier: 'pro',
+      created_at: '2026-05-10T00:00:00.000Z',
+      stats: { total_uploads: 0, total_sites: 0, total_bytes: 0 },
+      limits: {
+        maxFileSize: 1024 * 1024 * 1024,
+        maxSiteSize: 10 * 1024 * 1024 * 1024,
+        maxSiteFiles: 5000,
+        maxTotalStorage: 10 * 1024 * 1024 * 1024,
+        maxExpiryHours: 720,
+        imageOnly: false,
+        customTtl: true,
+        rateLimit: 500,
+      },
+    });
+
+    await siteCommand(dir, {
+      root: 'index.html',
+      channel: 'client-preview',
+      domain: 'preview.example.com',
+      json: true,
+      clipboard: false,
+    });
+
+    expect(mocks.client.createSite).toHaveBeenCalledWith(expect.objectContaining({ channel: 'client-preview' }));
+    expect(mocks.client.createDomain).toHaveBeenCalledWith('preview.example.com', 'client-preview');
+    expect(mocks.client.createDomain.mock.invocationCallOrder[0])
+      .toBeLessThan(mocks.client.publishSite.mock.invocationCallOrder[0]);
+    expect(JSON.parse(String(logSpy.mock.calls[0][0]))).toMatchObject({
+      canonicalUrl: 'https://site123.vanish.sh/',
+      domain: {
+        hostname: 'preview.example.com',
+        status: 'pending_dns',
+      },
+    });
+  });
+
+  it('rolls back a preflighted domain when publication later fails', async () => {
+    mocks.loadConfig.mockReturnValue({ api_url: 'https://vanish.test', api_key: 'vnsh_key' });
+    mocks.client.me.mockResolvedValue({
+      id: 'user1',
+      username: 'stan',
+      email: null,
+      tier: 'pro',
+      created_at: '2026-05-10T00:00:00.000Z',
+      stats: { total_uploads: 0, total_sites: 0, total_bytes: 0 },
+      limits: {
+        maxFileSize: 1024 * 1024 * 1024,
+        maxSiteSize: 10 * 1024 * 1024 * 1024,
+        maxSiteFiles: 5000,
+        maxTotalStorage: 10 * 1024 * 1024 * 1024,
+        maxExpiryHours: 720,
+        imageOnly: false,
+        customTtl: true,
+        rateLimit: 500,
+      },
+    });
+    mocks.client.publishSite.mockRejectedValue(new Error('publish failed'));
+
+    await expect(siteCommand(dir, {
+      root: 'index.html',
+      channel: 'client-preview',
+      domain: 'preview.example.com',
+      clipboard: false,
+    })).rejects.toThrow('exit 1');
+
+    expect(mocks.client.createDomain.mock.invocationCallOrder[0])
+      .toBeLessThan(mocks.client.publishSite.mock.invocationCallOrder[0]);
+    expect(mocks.client.deleteDomain).toHaveBeenCalledWith('preview.example.com');
+    expect(mocks.client.deleteSite).toHaveBeenCalledWith('site123', 'vnst_token');
+  });
+
+  it('does not move an existing live domain until publication succeeds', async () => {
+    mocks.loadConfig.mockReturnValue({ api_url: 'https://vanish.test', api_key: 'vnsh_key' });
+    mocks.client.me.mockResolvedValue({
+      id: 'user1',
+      username: 'stan',
+      email: null,
+      tier: 'pro',
+      created_at: '2026-05-10T00:00:00.000Z',
+      stats: { total_uploads: 0, total_sites: 0, total_bytes: 0 },
+      limits: {
+        maxFileSize: 1024 * 1024 * 1024,
+        maxSiteSize: 10 * 1024 * 1024 * 1024,
+        maxSiteFiles: 5000,
+        maxTotalStorage: 10 * 1024 * 1024 * 1024,
+        maxExpiryHours: 720,
+        imageOnly: false,
+        customTtl: true,
+        rateLimit: 500,
+      },
+    });
+    const existingDomain = {
+      hostname: 'preview.example.com',
+      channel: 'production',
+      status: 'active',
+      dnsRecords: [],
+      lastError: null,
+      verifiedAt: '2026-05-10T00:00:00.000Z',
+      graceExpiresAt: null,
+      createdAt: '2026-05-10T00:00:00.000Z',
+      updatedAt: '2026-05-10T00:00:00.000Z',
+      url: 'https://preview.example.com/',
+    };
+    mocks.client.listDomains.mockResolvedValue({ domains: [existingDomain], limit: 1 });
+    mocks.client.publishSite.mockRejectedValue(new Error('publish failed'));
+
+    await expect(siteCommand(dir, {
+      root: 'index.html',
+      channel: 'client-preview',
+      domain: 'preview.example.com',
+      clipboard: false,
+    })).rejects.toThrow('exit 1');
+
+    expect(mocks.client.attachDomain).not.toHaveBeenCalled();
+    expect(mocks.client.deleteDomain).not.toHaveBeenCalled();
+    expect(mocks.client.deleteSite).toHaveBeenCalledWith('site123', 'vnst_token');
+  });
+
+  it('keeps a successful publish usable when an existing domain reattachment fails', async () => {
+    mocks.loadConfig.mockReturnValue({ api_url: 'https://vanish.test', api_key: 'vnsh_key' });
+    mocks.client.me.mockResolvedValue({
+      id: 'user1',
+      username: 'stan',
+      email: null,
+      tier: 'pro',
+      created_at: '2026-05-10T00:00:00.000Z',
+      stats: { total_uploads: 0, total_sites: 0, total_bytes: 0 },
+      limits: {
+        maxFileSize: 1024 * 1024 * 1024,
+        maxSiteSize: 10 * 1024 * 1024 * 1024,
+        maxSiteFiles: 5000,
+        maxTotalStorage: 10 * 1024 * 1024 * 1024,
+        maxExpiryHours: 720,
+        imageOnly: false,
+        customTtl: true,
+        rateLimit: 500,
+      },
+    });
+    mocks.client.listDomains.mockResolvedValue({
+      domains: [{
+        hostname: 'preview.example.com',
+        channel: 'production',
+        status: 'active',
+        dnsRecords: [],
+        lastError: null,
+        verifiedAt: '2026-05-10T00:00:00.000Z',
+        graceExpiresAt: null,
+        createdAt: '2026-05-10T00:00:00.000Z',
+        updatedAt: '2026-05-10T00:00:00.000Z',
+        url: 'https://preview.example.com/',
+      }],
+      limit: 1,
+    });
+    mocks.client.attachDomain.mockRejectedValue(new Error('provider unavailable'));
+
+    await siteCommand(dir, {
+      root: 'index.html',
+      channel: 'client-preview',
+      domain: 'preview.example.com',
+      json: true,
+      clipboard: false,
+    });
+
+    expect(mocks.client.publishSite.mock.invocationCallOrder[0])
+      .toBeLessThan(mocks.client.attachDomain.mock.invocationCallOrder[0]);
+    expect(mocks.client.attachDomain).toHaveBeenCalledWith('preview.example.com', 'client-preview');
+    expect(JSON.parse(String(logSpy.mock.calls[0][0]))).toMatchObject({
+      url: 'https://site123.vanish.sh/',
+      canonicalUrl: 'https://site123.vanish.sh/',
+      domainError: 'provider unavailable',
+    });
+  });
+
+  it('publishes password protection atomically instead of patching after publication', async () => {
+    mocks.loadConfig.mockReturnValue({ api_url: 'https://vanish.test', api_key: 'vnsh_key' });
+    mocks.client.me.mockResolvedValue({
+      id: 'user1',
+      username: 'stan',
+      email: null,
+      tier: 'free',
+      created_at: '2026-05-10T00:00:00.000Z',
+      stats: { total_uploads: 0, total_sites: 0, total_bytes: 0 },
+      limits: {
+        maxFileSize: 50 * 1024 * 1024,
+        maxSiteSize: 50 * 1024 * 1024,
+        maxSiteFiles: 500,
+        maxTotalStorage: 50 * 1024 * 1024,
+        maxExpiryHours: 48,
+        imageOnly: false,
+        customTtl: false,
+        rateLimit: 50,
+      },
+    });
+    mocks.client.publishSite.mockResolvedValue({
+      ok: true,
+      id: 'site123',
+      url: 'https://site123.vanish.sh/',
+      rootPath: 'index.html',
+      size: 28,
+      fileCount: 2,
+      expires: '2026-05-11T00:00:00.000Z',
+      access: {
+        siteId: 'site123',
+        mode: 'password',
+        policyVersion: 1,
+        passwordConfigured: true,
+      },
+    });
+
+    await siteCommand(dir, {
+      root: 'index.html',
+      passwordStdin: true,
+      json: true,
+      clipboard: false,
+    });
+
+    expect(mocks.client.publishSite).toHaveBeenCalledWith('site123', 'vnst_token', {
+      access: { mode: 'password', password: 'client-secret' },
+    });
+    expect(mocks.client.setSiteAccess).not.toHaveBeenCalled();
+    expect(JSON.parse(String(logSpy.mock.calls[0][0]))).toMatchObject({
+      access: { mode: 'password', passwordConfigured: true },
+    });
+  });
+
+  it('unlocks a protected publication before verifying its content', async () => {
+    mocks.loadConfig.mockReturnValue({ api_url: 'https://vanish.test', api_key: 'vnsh_key' });
+    mocks.client.me.mockResolvedValue({
+      id: 'user1',
+      username: 'stan',
+      email: null,
+      tier: 'free',
+      created_at: '2026-05-10T00:00:00.000Z',
+      stats: { total_uploads: 0, total_sites: 0, total_bytes: 0 },
+      limits: {
+        maxFileSize: 50 * 1024 * 1024,
+        maxSiteSize: 50 * 1024 * 1024,
+        maxSiteFiles: 500,
+        maxTotalStorage: 50 * 1024 * 1024,
+        maxExpiryHours: 48,
+        imageOnly: false,
+        customTtl: false,
+        rateLimit: 50,
+      },
+    });
+    mocks.client.publishSite.mockResolvedValue({
+      ok: true,
+      id: 'site123',
+      url: 'https://site123.vanish.sh/',
+      rootPath: 'index.html',
+      size: 28,
+      fileCount: 2,
+      expires: '2026-05-11T00:00:00.000Z',
+      access: {
+        siteId: 'site123',
+        mode: 'password',
+        policyVersion: 1,
+        passwordConfigured: true,
+      },
+    });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('{"ok":true}', {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Set-Cookie': 'vnsh_access_site123=session-token; Path=/; HttpOnly',
+        },
+      }))
+      .mockResolvedValueOnce(new Response('<h1>ok</h1><script src="assets/app.js"></script>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      }))
+      .mockResolvedValueOnce(new Response('window.ok = true;', {
+        status: 200,
+        headers: { 'Content-Type': 'text/javascript; charset=utf-8' },
+      }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await siteCommand(dir, {
+      root: 'index.html',
+      passwordStdin: true,
+      verify: true,
+      json: true,
+      clipboard: false,
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, new URL('https://site123.vanish.sh/.vanish/access'), expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ site: 'site123', password: 'client-secret', return: '/' }),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://site123.vanish.sh/', {
+      redirect: 'follow',
+      headers: { Cookie: 'vnsh_access_site123=session-token' },
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(3, 'https://site123.vanish.sh/assets/app.js', {
+      redirect: 'follow',
+      headers: { Cookie: 'vnsh_access_site123=session-token' },
+    });
+    expect(JSON.parse(String(logSpy.mock.calls[0][0]))).toMatchObject({
+      verified: true,
+      verification: { verified: true },
     });
   });
 

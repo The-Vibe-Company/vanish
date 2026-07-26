@@ -603,6 +603,14 @@ code { font-family: var(--mono); }
 }
 .form-row input:focus, .form-row select:focus { outline: none; border-color: var(--accent-dim); }
 .form-hint { color: var(--fg-mute); font-size: .68rem; }
+.domain-fields { display: flex; justify-content: flex-end; align-items: flex-end; gap: .5rem; flex-wrap: wrap; }
+.domain-field { display: flex; flex-direction: column; gap: .3rem; min-width: 170px; }
+.domain-field span { color: var(--fg-dim); font-size: .68rem; }
+.domain-field input {
+  padding: .55rem; border: 1px solid var(--border-2); background: var(--bg-3);
+  color: var(--fg-white); border-radius: 4px;
+}
+.domain-field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Keys */
 .key-reveal {
@@ -1504,6 +1512,7 @@ body:has(.login-screen) { background: #1649e8; }
     sites: [],
     uploads: [],
     keys: [],
+    domains: [],
     section: 'overview',
     sitesFilter: 'all',
     sitesQuery: '',
@@ -1665,7 +1674,16 @@ body:has(.login-screen) { background: #1649e8; }
       '<div class="modal-bg" data-action="modal-cancel">' +
         '<div class="modal" data-stop>' +
           '<div class="modal-head">' + escapeHtml(c.title) + '</div>' +
-          '<div class="modal-body">' + escapeHtml(c.body) + '</div>' +
+          '<div class="modal-body">' +
+            '<div>' + escapeHtml(c.body) + '</div>' +
+            (c.passwordInput
+              ? '<div class="form-row" style="margin-top:1rem">' +
+                  '<label for="modal-password">Shared password</label>' +
+                  '<input id="modal-password" data-modal-password type="password" minlength="8" maxlength="128" autocomplete="new-password" required aria-describedby="modal-password-hint">' +
+                  '<div class="form-hint" id="modal-password-hint">Use 8–128 characters. The password stays masked while you type.</div>' +
+                '</div>'
+              : '') +
+          '</div>' +
           '<div class="modal-actions">' +
             '<button class="btn ghost" data-action="modal-cancel">Cancel</button>' +
             '<button class="btn ' + (c.destructive === false ? 'solid' : 'danger') + '" data-action="modal-confirm">' +
@@ -1674,17 +1692,23 @@ body:has(.login-screen) { background: #1649e8; }
           '</div>' +
         '</div>' +
       '</div>';
-    var btn = modalHost.querySelector('[data-action="modal-confirm"]');
-    if (btn) btn.focus();
+    var initialFocus = modalHost.querySelector('[data-modal-password]') || modalHost.querySelector('[data-action="modal-confirm"]');
+    if (initialFocus) initialFocus.focus();
+  }
+  function confirmModal() {
+    var fn = confirmCfg && confirmCfg.onConfirm;
+    var passwordInput = modalHost.querySelector('[data-modal-password]');
+    var value = passwordInput ? passwordInput.value : undefined;
+    closeModal();
+    fn && fn(value);
   }
 
   document.addEventListener('keydown', function(e) {
     if (!confirmCfg) return;
     if (e.key === 'Escape') closeModal();
     if (e.key === 'Enter') {
-      var fn = confirmCfg.onConfirm;
-      closeModal();
-      fn && fn();
+      e.preventDefault();
+      confirmModal();
     }
   });
 
@@ -1709,7 +1733,8 @@ body:has(.login-screen) { background: #1649e8; }
       apiFetch('/me'),
       apiFetch('/sites?limit=100&active=false'),
       apiFetch('/uploads?limit=100&active=false'),
-      apiFetch('/keys')
+      apiFetch('/keys'),
+      apiFetch('/domains')
     ]).then(function(rs) {
       if (!rs[0] || rs[0].error || !rs[0].id) {
         localStorage.removeItem('vanish_api_key');
@@ -1721,6 +1746,7 @@ body:has(.login-screen) { background: #1649e8; }
       state.sites = (rs[1].sites || []).filter(function(s) { return !s.deleted; }).map(normalizeSite);
       state.uploads = (rs[2].uploads || []).filter(function(u) { return !u.deleted; }).map(normalizeUpload);
       state.keys = (rs[3].keys || []);
+      state.domains = (rs[4].domains || []);
       refreshTimerBuckets();
       render();
     });
@@ -1757,6 +1783,7 @@ body:has(.login-screen) { background: #1649e8; }
       lastActivity: lastActivityAt || 0,
       expires: expiresAt || 0,
       published_at: parseSqlDate(s.published_at),
+      access_mode: s.access_mode || 'link',
       draft: !s.published_at,
       hasExpiry: expiresAt != null,
       expired: expiresAt != null && expiresAt <= Date.now()
@@ -1803,6 +1830,7 @@ body:has(.login-screen) { background: #1649e8; }
       case 'sites': return renderSitesPage();
       case 'files': return renderFilesPage();
       case 'keys': return renderKeysPage();
+      case 'domains': return renderDomainsPage();
       case 'billing': return renderBillingPage();
       case 'settings': return renderSettingsPage();
       default: return renderOverview();
@@ -1822,6 +1850,7 @@ body:has(.login-screen) { background: #1649e8; }
       { id: 'overview', label: 'Home', icon: '<path d="M3 3h5v5H3V3zm0 7h5v5H3v-5zm7-7h5v5h-5V3zm0 7h5v5h-5v-5z"/>' },
       { id: 'sites', label: 'Sites', icon: '<path d="M2 4h12v9H2V4zm1 1v1h10V5H3zm0 2v5h10V7H3z"/>' },
       { id: 'files', label: 'Files', icon: '<path d="M4 2h5l3 3v9H4V2zm5 0v3h3"/>' },
+      { id: 'domains', label: 'Domains', icon: '<path d="M2 8a6 6 0 1 0 12 0A6 6 0 0 0 2 8zm1.5 0h9M8 2c2 2 2 10 0 12M8 2C6 4 6 12 8 14"/>' },
       { id: 'keys', label: 'Access keys', icon: '<path d="M11 6a3 3 0 1 1-2.83 4H5v2H3v-2H1v-2h7.17A3 3 0 0 1 11 6zm0 2a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/>' },
       { id: 'billing', label: 'Plan', icon: '<path d="M2 4h12v3H2V4zm0 4h12v5H2V8zm2 2v1h3v-1H4z"/>' },
       { id: 'settings', label: 'Settings', icon: '<path d="M8 5a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm5.5 4.2.9.7-1 1.7-1.1-.3-1.1.6-.3 1.1H8.1l-.3-1.1-1.1-.6-1.1.3-1-1.7.9-.7v-1.4l-.9-.7 1-1.7 1.1.3 1.1-.6.3-1.1h2.8l.3 1.1 1.1.6 1.1-.3 1 1.7-.9.7v1.4z"/>' }
@@ -2128,12 +2157,15 @@ body:has(.login-screen) { background: #1649e8; }
             '<div class="sd-field"><div class="sd-label">Files</div><div class="sd-val">' + s.file_count + '</div></div>' +
             '<div class="sd-field"><div class="sd-label">Size</div><div class="sd-val">' + fmtBytes(s.size_bytes) + '</div></div>' +
             '<div class="sd-field"><div class="sd-label">Root</div><code class="sd-mono">' + escapeHtml(s.root_path) + '</code></div>' +
+            '<div class="sd-field"><div class="sd-label">Access</div><div class="sd-val">' + (s.access_mode === 'password' ? 'Password protected' : 'Anyone with link') + '</div></div>' +
             '<div class="sd-field"><div class="sd-label">Created</div><div class="sd-val">' + fmtDate(s.created) + ' · ' + fmtAgo(s.created) + '</div></div>' +
           '</div>' +
           '<div class="sd-actions">' +
             (s.draft ? '' :
               '<button class="btn ghost btn-sm" data-action="copy" data-text="' + attr(s.url) + '" data-msg="URL copied">Copy URL</button>' +
               '<button class="btn ghost btn-sm" data-action="copy" data-text="' + attr('vanish site ./local --update ' + s.id) + '" data-msg="Update command copied">Copy update cmd</button>' +
+              '<button class="btn ghost btn-sm" data-action="protect-site" data-id="' + attr(s.id) + '">' + (s.access_mode === 'password' ? 'Change password' : 'Set password') + '</button>' +
+              '<button class="btn ghost btn-sm" data-action="link-site" data-id="' + attr(s.id) + '"' + (s.access_mode === 'link' ? ' disabled aria-current="true"' : '') + '>Anyone with link</button>' +
               '<a class="btn ghost btn-sm" href="' + attr(s.url) + '" target="_blank" rel="noopener">Open ↗</a>') +
             '<div class="sd-spacer"></div>' +
             (s.expired ? '' : '<button class="btn danger-ghost btn-sm" data-action="delete-site" data-id="' + attr(s.id) + '" data-name="' + attr(label) + '">Delete</button>') +
@@ -2160,6 +2192,43 @@ body:has(.login-screen) { background: #1649e8; }
         '<div class="site-chev"><svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 5l3 3 3-3"/></svg></div>' +
       '</button>' +
       detail +
+    '</div>';
+  }
+
+  function renderDomainsPage() {
+    var domains = state.domains || [];
+    var canAdd = state.me && state.me.tier === 'pro' && domains.length === 0;
+    var rows = domains.length ? domains.map(function(d) {
+      var tone = d.status === 'active' ? 'green' : (d.status === 'error' || d.status === 'suspended' ? 'red' : 'gold');
+      var dns = (d.dnsRecords || []).map(function(r) {
+        return '<div class="set-hint"><code>' + escapeHtml(r.type) + ' ' + escapeHtml(r.name) + '</code> → <code>' + escapeHtml(r.value) + '</code></div>';
+      }).join('');
+      return '<div class="set-row" style="align-items:flex-start">' +
+        '<div><div class="set-label">' + escapeHtml(d.hostname) + ' <span class="pill pill-' + tone + '">' + escapeHtml(d.status) + '</span></div>' +
+          '<div class="set-hint">channel <code>' + escapeHtml(d.channel) + '</code></div>' + dns +
+          (d.lastError ? '<div class="set-hint" style="color:var(--red)">' + escapeHtml(d.lastError) + '</div>' : '') +
+        '</div>' +
+        '<div class="set-row-r">' +
+          '<button class="btn ghost btn-sm" data-action="verify-domain" data-hostname="' + attr(d.hostname) + '">Verify</button>' +
+          '<button class="btn danger-ghost btn-sm" data-action="delete-domain" data-hostname="' + attr(d.hostname) + '">Remove</button>' +
+        '</div>' +
+      '</div>';
+    }).join('') : '<div class="empty subtle"><span class="empty-mark">∅</span>no custom domain configured</div>';
+
+    var form = canAdd
+      ? '<form class="set-rows" data-domain-form style="margin-bottom:1rem">' +
+          '<div class="set-row"><div style="flex:1"><div class="set-label">Custom subdomain</div><div class="set-hint" id="domain-hint">Use a subdomain such as preview.example.com. Apex domains are not supported yet.</div></div>' +
+          '<div class="domain-fields"><label class="domain-field"><span>Hostname</span><input name="hostname" required autocomplete="url" placeholder="preview.example.com" aria-describedby="domain-hint"></label>' +
+          '<label class="domain-field"><span>Channel</span><input name="channel" required autocomplete="off" placeholder="client-preview" aria-describedby="domain-hint"></label>' +
+          '<button class="btn solid btn-sm" type="submit">Connect</button></div></div></form>'
+      : (state.me && state.me.tier !== 'pro'
+        ? '<p class="set-blurb" style="margin-bottom:1rem">Custom domains require Pro. Your vanish.sh URLs continue to work normally.</p>'
+        : '');
+
+    return '<div class="page page-domains">' +
+      '<header class="page-head"><div><h1 class="page-title">Domains</h1><p class="page-sub">one branded handoff domain attached to a stable channel</p></div></header>' +
+      '<section class="set-section"><h2>Custom domain</h2>' + form + '<div class="set-rows">' + rows + '</div></section>' +
+      '<section class="set-section"><h2>CLI</h2><p class="set-blurb"><code>vanish domains add preview.example.com --channel client-preview</code></p></section>' +
     '</div>';
   }
 
@@ -2578,9 +2647,7 @@ body:has(.login-screen) { background: #1649e8; }
     }
     if (action === 'modal-cancel') { closeModal(); return; }
     if (action === 'modal-confirm') {
-      var fn = confirmCfg && confirmCfg.onConfirm;
-      closeModal();
-      fn && fn();
+      confirmModal();
       return;
     }
 
@@ -2617,6 +2684,87 @@ body:has(.login-screen) { background: #1649e8; }
             } else {
               toast('error: ' + ((r && r.error) || 'failed'));
             }
+          });
+        }
+      });
+      return;
+    }
+    if (action === 'protect-site') {
+      var protectedSiteId = el.getAttribute('data-id');
+      openConfirm({
+        title: 'Protect this mini-site',
+        body: 'Visitors will need this shared password before any site content is served.',
+        confirmLabel: 'Enable password',
+        destructive: false,
+        passwordInput: true,
+        onConfirm: function(password) {
+          if (!password || password.length < 8 || password.length > 128) {
+            toast('password must be 8–128 characters');
+            return;
+          }
+          apiFetch('/sites/' + encodeURIComponent(protectedSiteId) + '/access', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'password', password: password })
+          }).then(function(r) {
+            if (r && !r.error) {
+              var site = state.sites.find(function(s) { return s.id === protectedSiteId; });
+              if (site) site.access_mode = 'password';
+              toast('password protection enabled');
+              rerenderMain();
+            } else toast('error: ' + ((r && r.error) || 'failed'));
+          });
+        }
+      });
+      return;
+    }
+    if (action === 'link-site') {
+      var linkedSiteId = el.getAttribute('data-id');
+      openConfirm({
+        title: 'Remove password protection?',
+        body: 'Anyone who has the site URL will be able to open it immediately.',
+        confirmLabel: 'Allow link access',
+        onConfirm: function() {
+          apiFetch('/sites/' + encodeURIComponent(linkedSiteId) + '/access', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'link' })
+          }).then(function(r) {
+            if (r && !r.error) {
+              var site = state.sites.find(function(s) { return s.id === linkedSiteId; });
+              if (site) site.access_mode = 'link';
+              toast('link access enabled');
+              rerenderMain();
+            } else toast('error: ' + ((r && r.error) || 'failed'));
+          });
+        }
+      });
+      return;
+    }
+    if (action === 'verify-domain') {
+      var verifyHostname = el.getAttribute('data-hostname');
+      apiFetch('/domains/' + encodeURIComponent(verifyHostname) + '/verify', { method: 'POST' }).then(function(r) {
+        if (r && !r.error) {
+          state.domains = state.domains.map(function(d) { return d.hostname === r.hostname ? r : d; });
+          toast('domain status: ' + r.status);
+          rerenderMain();
+        } else toast('error: ' + ((r && r.error) || 'failed'));
+      });
+      return;
+    }
+    if (action === 'delete-domain') {
+      var deleteHostname = el.getAttribute('data-hostname');
+      openConfirm({
+        title: 'Remove custom domain?',
+        body: deleteHostname + ' will stop serving this Vanish channel. The canonical vanish.sh URL remains available.',
+        confirmLabel: 'Remove domain',
+        onConfirm: function() {
+          apiFetch('/domains/' + encodeURIComponent(deleteHostname), { method: 'DELETE' }).then(function(r) {
+            if (r && r.ok) {
+              state.domains = state.domains.filter(function(d) { return d.hostname !== deleteHostname; });
+              toast(r.status === 'deleting' ? 'domain removal queued' : 'domain removed');
+              rerenderMain();
+            } else toast('error: ' + ((r && r.error) || 'failed'));
           });
         }
       });
@@ -2746,6 +2894,7 @@ body:has(.login-screen) { background: #1649e8; }
   document.addEventListener('click', function(e) {
     var el = e.target.closest('[data-action]');
     if (!el) return;
+    if (el.getAttribute('data-action') === 'modal-cancel' && e.target !== el) return;
     e.preventDefault();
     performAction(el.getAttribute('data-action'), el);
   });
@@ -2777,10 +2926,29 @@ body:has(.login-screen) { background: #1649e8; }
 
   document.addEventListener('submit', function(e) {
     var form = e.target;
-    if (!form || !form.matches || !form.matches('[data-login-key-form]')) return;
-    e.preventDefault();
-    var input = form.querySelector('input[name="api_key"]');
-    loginWithApiKey(input && input.value);
+    if (!form || !form.matches) return;
+    if (form.matches('[data-login-key-form]')) {
+      e.preventDefault();
+      var input = form.querySelector('input[name="api_key"]');
+      loginWithApiKey(input && input.value);
+      return;
+    }
+    if (form.matches('[data-domain-form]')) {
+      e.preventDefault();
+      var hostnameInput = form.querySelector('input[name="hostname"]');
+      var channelInput = form.querySelector('input[name="channel"]');
+      apiFetch('/domains', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostname: hostnameInput && hostnameInput.value, channel: channelInput && channelInput.value })
+      }).then(function(r) {
+        if (r && !r.error) {
+          state.domains.unshift(r);
+          toast('domain added');
+          rerenderMain();
+        } else toast('error: ' + ((r && r.error) || 'failed'));
+      });
+    }
   });
 
   // — Ticker (live countdowns) —

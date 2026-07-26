@@ -13,6 +13,8 @@ import landingRoutes from './routes/landing.js';
 import dashboardRoutes from './routes/dashboard.js';
 import siteRoutes from './routes/sites.js';
 import bundleRoutes from './routes/bundles.js';
+import domainRoutes, { customDomainMiddleware } from './routes/domains.js';
+import siteAccessRoutes from './routes/site-access.js';
 import { handleCleanup } from './cron/cleanup.js';
 import { structuredError } from './lib/api-response.js';
 
@@ -28,14 +30,23 @@ app.use('*', cors({
 // Auth middleware for all routes
 app.use('*', authMiddleware);
 
+// Resolve customer-owned hosts before any canonical route can answer.
+app.use('*', customDomainMiddleware);
+
 // Rate limit upload endpoint
 app.use('/upload', rateLimitMiddleware);
 
 // Health check
 app.get('/health', (c) => c.json({ status: 'ok', version: '0.1.0' }));
 
+// Resolve customer-owned hosts before the canonical vanish.sh routes.
+app.route('/', domainRoutes);
+
 // Sites need to run before the landing page so *.vanish.sh can serve /.
 app.route('/', siteRoutes);
+
+// Owner access settings and visitor password exchange.
+app.route('/', siteAccessRoutes);
 
 // Bundles expose public /b/:id URLs and authenticated management endpoints.
 app.route('/', bundleRoutes);

@@ -12,8 +12,10 @@
     "db:migrate": "wrangler d1 migrations apply vanish-db --local"
   },
   "dependencies": {
+    "@noble/hashes": "^2.2.0",
     "hono": "^4.12.18",
-    "nanoid": "^5.1.2"
+    "nanoid": "^5.1.2",
+    "tldts": "^7.4.9"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.16.3",

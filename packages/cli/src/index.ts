@@ -11,9 +11,16 @@ import { lsCommand } from './commands/ls.js';
 import { rmCommand } from './commands/rm.js';
 import { statusCommand } from './commands/status.js';
 import { updateCommand } from './commands/update.js';
-import { sitesListCommand, siteInfoCommand, siteRmCommand, siteExtendCommand, siteVerifyCommand } from './commands/sites.js';
+import { sitesListCommand, siteInfoCommand, siteRmCommand, siteExtendCommand, siteVerifyCommand, siteAccessCommand } from './commands/sites.js';
 import { keysCreateCommand, keysListCommand, keysRevokeCommand } from './commands/keys.js';
 import { bundleCommand } from './commands/bundle.js';
+import {
+  domainAddCommand,
+  domainAttachCommand,
+  domainRemoveCommand,
+  domainsListCommand,
+  domainVerifyCommand,
+} from './commands/domains.js';
 import { printVersionNoticeIfNeeded } from './lib/version-check.js';
 import { CliExit } from './lib/output.js';
 
@@ -47,6 +54,8 @@ program
   .option('--update <site>', 'Replace an existing owned site by ID or slug')
   .option('--slug <slug>', 'Custom vanish.sh subdomain slug (paid plans)')
   .option('--channel <channel>', 'Owned stable channel that creates or updates the same site URL')
+  .option('--domain <hostname>', 'Attach or create a custom domain for this channel (Pro)')
+  .option('--password-stdin', 'Protect the published site using a password read from stdin')
   .option('--days <days>', 'Custom retention in days (paid plans, 1-365)', parseInt)
   .option('--dry-run', 'Inspect and print the site manifest without uploading')
   .option('--verify', 'Fetch the published root and referenced assets after publish')
@@ -92,8 +101,58 @@ sites
   .command('verify')
   .description('Verify a published mini-site root and referenced assets')
   .argument('<site>', 'site ID or slug')
+  .option('--password-stdin', 'Read the protected site password from stdin')
   .option('--json', 'Output as JSON')
   .action(siteVerifyCommand);
+
+sites
+  .command('access')
+  .description('Set link or password access for an owned mini-site')
+  .argument('<site>', 'site ID, slug, or resolved channel site')
+  .requiredOption('--mode <mode>', 'Access mode: link or password')
+  .option('--password-stdin', 'Read the password from stdin')
+  .option('--json', 'Output as JSON')
+  .action(siteAccessCommand);
+
+const domains = program
+  .command('domains')
+  .description('Manage custom domains');
+
+domains
+  .command('add')
+  .description('Add a custom domain and attach it to a channel')
+  .argument('<hostname>', 'custom subdomain, for example preview.example.com')
+  .requiredOption('--channel <channel>', 'stable site channel')
+  .option('--json', 'Output as JSON')
+  .action(domainAddCommand);
+
+domains
+  .command('ls')
+  .description('List custom domains')
+  .option('--json', 'Output as JSON')
+  .action(domainsListCommand);
+
+domains
+  .command('verify')
+  .description('Refresh DNS and TLS status')
+  .argument('<hostname>', 'custom hostname')
+  .option('--json', 'Output as JSON')
+  .action(domainVerifyCommand);
+
+domains
+  .command('attach')
+  .description('Attach a custom domain to another channel')
+  .argument('<hostname>', 'custom hostname')
+  .requiredOption('--channel <channel>', 'stable site channel')
+  .option('--json', 'Output as JSON')
+  .action(domainAttachCommand);
+
+domains
+  .command('rm')
+  .description('Remove a custom domain')
+  .argument('<hostname>', 'custom hostname')
+  .option('--json', 'Output as JSON')
+  .action(domainRemoveCommand);
 
 program
   .command('bundle')
@@ -255,7 +314,7 @@ if (args[0] === 'site' && siteLifecycleSubcommands.includes(args[1] || '') && (!
   args.splice(0, 2, 'sites', args[1]);
 }
 
-if (args.length > 0 && !args[0].startsWith('-') && !['upload', 'up', 'site', 'sites', 'bundle', 'keys', 'login', 'logout', 'upgrade', 'whoami', 'ls', 'rm', 'status', 'update', 'help', 'mcp-serve'].includes(args[0])) {
+if (args.length > 0 && !args[0].startsWith('-') && !['upload', 'up', 'site', 'sites', 'domains', 'bundle', 'keys', 'login', 'logout', 'upgrade', 'whoami', 'ls', 'rm', 'status', 'update', 'help', 'mcp-serve'].includes(args[0])) {
   // Shorthand: `vanish file.png` = `vanish upload file.png`
   process.argv.splice(2, 0, 'upload');
 }
