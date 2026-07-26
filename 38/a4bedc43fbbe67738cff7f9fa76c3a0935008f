@@ -57,6 +57,7 @@ packages/cli/src/lib/api-client.ts
 packages/worker/test/dashboard-route.test.ts
   s_4b07bc14bf11a4::t_2b44341fc28e45 70-75
   s_4b07bc14bf11a4::t_b90f48dee9321f 41,62-69,76-77
+  s_4b07bc14bf11a4::t_ce4c350b986f01 61
 packages/cli/src/index.ts
   s_4b07bc14bf11a4::t_fd9cca4ad494ee 14,17-23,57-58,107-154
   s_4b07bc14bf11a4::t_8efed0d1671346 316
