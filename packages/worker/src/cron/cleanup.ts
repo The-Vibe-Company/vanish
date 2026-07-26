@@ -1,4 +1,5 @@
 import type { Env } from '../types.js';
+import { maintainCustomDomains } from '../lib/custom-domains.js';
 
 const BATCH_SIZE = 100;
 
@@ -12,6 +13,8 @@ export async function handleCleanup(env: Env): Promise<void> {
   let totalDraftsDeleted = 0;
   let totalBundlesDeleted = 0;
   let totalPendingObjectsDeleted = 0;
+
+  await maintainCustomDomains(env);
 
   while (true) {
     // Find expired uploads not yet cleaned up

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import worker from '../src/index.js';
 import { hashApiKey } from '../src/middleware/auth.js';
-import type { Env, Site, SiteFile, Tier, User } from '../src/types.js';
+import type { Env, Site, SiteAccess, SiteFile, Tier, User } from '../src/types.js';
 
 describe('site routes', () => {
   let env: Env;
@@ -250,6 +250,7 @@ describe('site routes', () => {
   });
 
   it('lets an authenticated owner replace a published site at the same URL', async () => {
+    env.ACCESS_SESSION_SECRET = 'test-access-secret-with-enough-entropy';
     const key = await addUser(db, 'user1', 'free');
     const draft = await createSite(env, {
       rootPath: 'index.html',
@@ -279,6 +280,13 @@ describe('site routes', () => {
       method: 'POST',
       headers: authHeaders(key, { 'X-Site-Token': draft.token }),
     });
+    const initialAccess = await request(env, `/sites/${draft.id}/access`, {
+      method: 'PATCH',
+      headers: authHeaders(key, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ mode: 'password', password: 'initial-secret' }),
+    });
+    expect(initialAccess.status).toBe(200);
+    expect(await initialAccess.json()).toMatchObject({ policyVersion: 1 });
 
     const replacement = await request(env, `/sites/${draft.id}/replacements`, {
       method: 'POST',
@@ -293,15 +301,40 @@ describe('site routes', () => {
     const publish = await request(env, `/sites/${draft.id}/replacements/${replacementDraft.id}/publish`, {
       method: 'POST',
       headers: authHeaders(key, { 'Content-Type': 'application/json', 'X-Site-Token': replacementDraft.token }),
-      body: JSON.stringify({}),
+      body: JSON.stringify({
+        access: { mode: 'password', password: 'replacement-secret' },
+      }),
     });
     expect(publish.status).toBe(200);
-    expect(await publish.json()).toMatchObject({ id: draft.id, url: draft.url });
+    expect(await publish.json()).toMatchObject({
+      id: draft.id,
+      url: draft.url,
+      access: { mode: 'password', policyVersion: 2, passwordConfigured: true },
+    });
 
-    const root = await request(env, `/s/${draft.id}/`);
+    const gatedRoot = await request(env, `/s/${draft.id}/`);
+    expect(await gatedRoot.text()).toContain('protected preview');
+    const unlock = await request(env, '/.vanish/access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        site: draft.id,
+        password: 'replacement-secret',
+        return: `/s/${draft.id}/`,
+      }),
+      redirect: 'manual',
+    });
+    const root = await request(env, `/s/${draft.id}/`, {
+      headers: { Cookie: unlock.headers.get('Set-Cookie')!.split(';')[0] },
+    });
     expect(await root.text()).toBe('<h1>new</h1>');
-    expect(await request(env, `/s/${draft.id}/old.js`)).toHaveProperty('status', 404);
-    expect(await request(env, `/s/${draft.id}/new.css`)).toHaveProperty('status', 200);
+    const accessCookie = unlock.headers.get('Set-Cookie')!.split(';')[0];
+    expect(await request(env, `/s/${draft.id}/old.js`, {
+      headers: { Cookie: accessCookie },
+    })).toHaveProperty('status', 404);
+    expect(await request(env, `/s/${draft.id}/new.css`, {
+      headers: { Cookie: accessCookie },
+    })).toHaveProperty('status', 200);
     for (const key of oldKeys) {
       expect(bucket.objects.has(key)).toBe(false);
     }
@@ -498,6 +531,47 @@ describe('site routes', () => {
     expect(response.status).toBe(409);
   });
 
+  it('rejects custom slugs reserved as Vanish namespaces', async () => {
+    db.domainReservations.add('studio');
+    const key = await addUser(db, 'user1', 'pro');
+    const response = await request(env, '/sites', {
+      method: 'POST',
+      headers: authHeaders(key, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        name: 'reserved namespace conflict',
+        rootPath: 'index.html',
+        fileCount: 1,
+        totalBytes: 12,
+        slug: 'studio',
+      }),
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: 'Slug "studio" is already taken' });
+  });
+
+  it('maps a namespace claimed after site preflight to slug_already_taken', async () => {
+    const key = await addUser(db, 'user1', 'pro');
+    db.rejectNextNamespaceClaim = true;
+
+    const response = await request(env, '/sites', {
+      method: 'POST',
+      headers: authHeaders(key, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        name: 'concurrent namespace conflict',
+        rootPath: 'index.html',
+        fileCount: 1,
+        totalBytes: 12,
+        slug: 'studio',
+      }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      code: 'slug_already_taken',
+      error: 'Slug "studio" is reserved as a Vanish namespace',
+    });
+  });
+
   it('rejects config-only root updates when the file is missing', async () => {
     const key = await addUser(db, 'user1', 'free');
     const draft = await createSite(env, { rootPath: 'index.html', fileCount: 1, totalBytes: 12 }, key);
@@ -515,6 +589,138 @@ describe('site routes', () => {
 
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ error: 'Root file not found: missing.html' });
+  });
+
+  it('protects every site path with a password and invalidates anonymous access', async () => {
+    env.ACCESS_SESSION_SECRET = 'test-access-secret-with-enough-entropy';
+    const key = await addUser(db, 'user1', 'free');
+    const draft = await createSite(env, { rootPath: 'index.html', fileCount: 2, totalBytes: 32 }, key);
+    await uploadSiteFile(env, draft.id, draft.token, 'index.html', '<h1>private</h1>', key);
+    await uploadSiteFile(env, draft.id, draft.token, 'asset.js', 'private asset', key);
+    const publish = await request(env, `/sites/${draft.id}/publish`, {
+      method: 'POST',
+      headers: authHeaders(key, {
+        'Content-Type': 'application/json',
+        'X-Site-Token': draft.token,
+      }),
+      body: JSON.stringify({
+        access: { mode: 'password', password: 'client-secret' },
+      }),
+    });
+    expect(publish.status).toBe(200);
+    expect(await publish.json()).toMatchObject({
+      access: { mode: 'password', policyVersion: 1, passwordConfigured: true },
+    });
+
+    const gate = await request(env, `/s/${draft.id}/asset.js`);
+    expect(gate.status).toBe(200);
+    expect(gate.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(gate.headers.get('X-Vanish-Access')).toBe('password-required');
+    const gateHtml = await gate.text();
+    expect(gateHtml).toContain('protected preview');
+    expect(gateHtml).toContain(`value="/s/${draft.id}/asset.js"`);
+
+    const rateLimitCountBeforeOversizedPassword = db.rateLimits.length;
+    const invalidTypes = await request(env, '/.vanish/access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ site: draft.id, password: 12345678, return: [] }),
+    });
+    expect(invalidTypes.status).toBe(400);
+    expect(await invalidTypes.json()).toMatchObject({ code: 'invalid_request' });
+    expect(db.rateLimits).toHaveLength(rateLimitCountBeforeOversizedPassword);
+
+    const oversized = await request(env, '/.vanish/access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ site: draft.id, password: 'x'.repeat(129), return: '/' }),
+    });
+    expect(oversized.status).toBe(400);
+    expect(await oversized.json()).toMatchObject({ code: 'invalid_password' });
+    expect(db.rateLimits).toHaveLength(rateLimitCountBeforeOversizedPassword);
+
+    const denied = await request(env, '/.vanish/access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ site: draft.id, password: 'wrong-pass', return: `/s/${draft.id}/asset.js` }),
+    });
+    expect(denied.status).toBe(401);
+    const deniedHtml = await denied.text();
+    expect(deniedHtml).toContain('id="password-error" role="alert"');
+    expect(deniedHtml).toContain('aria-invalid="true" aria-describedby="password-error"');
+
+    const accepted = await request(env, '/.vanish/access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ site: draft.id, password: 'client-secret', return: `/s/${draft.id}/asset.js` }),
+      redirect: 'manual',
+    });
+    expect(accepted.status).toBe(303);
+    const passwordAttempts = () => db.rateLimits.filter(
+      attempt => attempt.action === `site-password:${draft.id}`
+    );
+    expect(passwordAttempts()).toHaveLength(2);
+    const cookie = accepted.headers.get('Set-Cookie');
+    expect(cookie).toContain('HttpOnly');
+    expect(cookie).toContain('SameSite=Lax');
+
+    const asset = await request(env, `/s/${draft.id}/asset.js`, {
+      headers: { Cookie: cookie!.split(';')[0] },
+    });
+    expect(asset.status).toBe(200);
+    expect(asset.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(await asset.text()).toBe('private asset');
+
+    const reservedAttempt = passwordAttempts()[0];
+    while (passwordAttempts().length < 10) {
+      db.rateLimits.push({ ...reservedAttempt });
+    }
+    const limited = await request(env, '/.vanish/access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ site: draft.id, password: 'client-secret', return: '/' }),
+    });
+    expect(limited.status).toBe(429);
+    expect(passwordAttempts()).toHaveLength(10);
+
+    const linkPolicy = await request(env, `/sites/${draft.id}/access`, {
+      method: 'PATCH',
+      headers: authHeaders(key, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ mode: 'link' }),
+    });
+    expect(linkPolicy.status).toBe(200);
+    expect(await linkPolicy.json()).toMatchObject({ policyVersion: 2 });
+
+    const concurrentPolicies = await Promise.all([
+      request(env, `/sites/${draft.id}/access`, {
+        method: 'PATCH',
+        headers: authHeaders(key, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ mode: 'link' }),
+      }),
+      request(env, `/sites/${draft.id}/access`, {
+        method: 'PATCH',
+        headers: authHeaders(key, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ mode: 'link' }),
+      }),
+    ]);
+    expect(concurrentPolicies.map(response => response.status)).toEqual([200, 200]);
+    const concurrentVersions = await Promise.all(
+      concurrentPolicies.map(response => response.json().then(body => Number((body as { policyVersion: number }).policyVersion)))
+    );
+    expect(concurrentVersions.sort((a, b) => a - b)).toEqual([3, 4]);
+    expect(db.siteAccess.get(draft.id)?.policy_version).toBe(4);
+    expect(await (await request(env, `/s/${draft.id}/`)).text()).toBe('<h1>private</h1>');
+  });
+
+  it('rejects the reserved .vanish upload path', async () => {
+    const draft = await createSite(env, { rootPath: 'index.html', fileCount: 1, totalBytes: 12 });
+    const response = await request(env, `/sites/${draft.id}/files?path=.vanish/access`, {
+      method: 'PUT',
+      headers: { 'X-Site-Token': draft.token, 'Content-Type': 'text/html' },
+      body: 'collision',
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: 'The .vanish path is reserved for access control' });
   });
 });
 
@@ -619,11 +825,14 @@ class FakeBucket {
 class FakeDB {
   sites = new Map<string, Site>();
   siteFiles = new Map<string, SiteFile>();
+  siteAccess = new Map<string, SiteAccess>();
   users = new Map<string, User>();
   apiKeys = new Map<string, User>();
   pendingR2Deletions = new Set<string>();
   rateLimits: Array<{ identifier: string; action: string }> = [];
   events: Array<{ id: string; name: string; user_id: string | null; site_id: string | null; upload_id: string | null; properties: string }> = [];
+  domainReservations = new Set<string>();
+  rejectNextNamespaceClaim = false;
 
   prepare(sql: string): FakeStatement {
     return new FakeStatement(this, sql);
@@ -651,9 +860,35 @@ class FakeStatement {
   async first<T>(): Promise<T | null> {
     const sql = normalizeSql(this.sql);
 
+    if (sql.includes('INSERT INTO site_access') && sql.includes('RETURNING policy_version')) {
+      const [siteId, passwordHash, passwordSalt] = this.args as [
+        string,
+        string | undefined,
+        string | undefined,
+      ];
+      const isLink = sql.includes("VALUES (?, 'link'");
+      const previous = this.db.siteAccess.get(siteId);
+      const policyVersion = (previous?.policy_version || 0) + 1;
+      this.db.siteAccess.set(siteId, {
+        site_id: siteId,
+        mode: isLink ? 'link' : 'password',
+        password_hash: isLink ? null : String(passwordHash),
+        password_salt: isLink ? null : String(passwordSalt),
+        policy_version: policyVersion,
+        created_at: previous?.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+      return { policy_version: policyVersion } as T;
+    }
+
     if (sql.includes('FROM api_keys ak JOIN users u')) {
       const [keyHash] = this.args as [string];
       return (this.db.apiKeys.get(keyHash) || null) as T | null;
+    }
+
+    if (sql.includes('FROM site_access')) {
+      const [siteId] = this.args as [string];
+      return (this.db.siteAccess.get(siteId) || null) as T | null;
     }
 
     if (sql.includes('SELECT COUNT(*) as count FROM rate_limits')) {
@@ -679,6 +914,11 @@ class FakeStatement {
     if (sql.includes('SELECT id FROM sites WHERE slug = ?')) {
       const [slug] = this.args as [string];
       return (Array.from(this.db.sites.values()).find(site => site.slug === slug && site.deleted_at === null) || null) as T | null;
+    }
+
+    if (sql.includes('SELECT hostname FROM domain_reservations WHERE slug = ?')) {
+      const slug = String(this.args[0]);
+      return (this.db.domainReservations.has(slug) ? { hostname: `${slug}.vanish.sh` } : null) as T | null;
     }
 
     if (sql.includes('FROM sites WHERE slug = ? AND deleted_at IS NULL')) {
@@ -788,12 +1028,44 @@ class FakeStatement {
     throw new Error(`Unhandled all query: ${sql}`);
   }
 
-  async run(): Promise<void> {
+  async run(): Promise<unknown> {
     const sql = normalizeSql(this.sql);
 
     if (sql.includes('INSERT INTO rate_limits')) {
       const [identifier, action] = this.args as [string, string];
+      if (sql.includes('SELECT ?, ?')) {
+        const recentAttempts = this.db.rateLimits.filter(
+          record => record.identifier === identifier && record.action === action
+        ).length;
+        if (recentAttempts >= 10) {
+          return { meta: { changes: 0 } };
+        }
+      }
       this.db.rateLimits.push({ identifier, action });
+      return { meta: { changes: 1 } };
+    }
+
+    if (sql.includes('INSERT INTO site_access')) {
+      const [siteId, passwordHash, passwordSalt, policyVersion] = this.args as [
+        string,
+        string | number | null,
+        string | null,
+        number?,
+      ];
+      const isLink = sql.includes("VALUES (?, 'link'");
+      const previous = this.db.siteAccess.get(siteId);
+      const version = sql.includes('policy_version = site_access.policy_version + 1')
+        ? (previous?.policy_version || 0) + 1
+        : (isLink ? Number(passwordHash) : Number(policyVersion));
+      this.db.siteAccess.set(siteId, {
+        site_id: siteId,
+        mode: isLink ? 'link' : 'password',
+        password_hash: isLink ? null : String(passwordHash),
+        password_salt: isLink ? null : passwordSalt,
+        policy_version: version,
+        created_at: previous?.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
       return;
     }
 
@@ -864,6 +1136,10 @@ class FakeStatement {
         number,
         string,
       ];
+      if (this.db.rejectNextNamespaceClaim) {
+        this.db.rejectNextNamespaceClaim = false;
+        throw new Error('site_namespace_claim_conflict');
+      }
       this.assertUniqueSlug(slug);
       this.db.sites.set(id, {
         id,

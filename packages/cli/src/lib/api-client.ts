@@ -45,6 +45,7 @@ export interface PublishSiteResult {
   fileCount: number;
   expectedFileCount?: number;
   expires: string | null;
+  access?: SiteAccessInfo;
 }
 
 export interface ApiError {
@@ -107,6 +108,7 @@ export interface SiteInfo {
   published_at: string | null;
   expired: boolean;
   deleted: boolean;
+  access_mode?: 'link' | 'password';
 }
 
 export interface SiteFileInfo {
@@ -122,6 +124,46 @@ export interface KeyInfo {
   created_at: string;
   last_used_at: string | null;
   revoked: boolean;
+}
+
+export type DomainStatus = 'pending_dns' | 'pending_tls' | 'active' | 'error' | 'suspended' | 'deleting';
+
+export interface DomainInfo {
+  hostname: string;
+  channel: string;
+  parentHostname: string | null;
+  managedDns: boolean;
+  kind: 'custom_domain' | 'domain_route';
+  status: DomainStatus;
+  dnsRecords: Array<{ type: 'CNAME' | 'TXT'; name: string; value: string }>;
+  lastError: string | null;
+  verifiedAt: string | null;
+  graceExpiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  url: string;
+}
+
+export interface DomainReservationInfo {
+  hostname: string;
+  slug: string;
+  url: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DomainListInfo {
+  domains: DomainInfo[];
+  reservation?: DomainReservationInfo | null;
+  limit: number;
+  routeLimit?: number;
+}
+
+export interface SiteAccessInfo {
+  siteId: string;
+  mode: 'link' | 'password';
+  policyVersion: number;
+  passwordConfigured: boolean;
 }
 
 export interface CreateKeyResult {
@@ -175,6 +217,13 @@ export interface BundleInfo {
 
 interface RequestOptions {
   idempotencyKey?: string;
+}
+
+interface PublishSiteOptions extends RequestOptions {
+  access?: {
+    mode: 'password';
+    password: string;
+  };
 }
 
 export class VanishApiError extends Error {
@@ -308,8 +357,9 @@ export class VanishClient {
     }
   }
 
-  async publishSite(siteId: string, token: string, options?: RequestOptions): Promise<PublishSiteResult> {
+  async publishSite(siteId: string, token: string, options?: PublishSiteOptions): Promise<PublishSiteResult> {
     const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
       'X-Site-Token': token,
     };
 
@@ -323,6 +373,7 @@ export class VanishClient {
     const response = await fetch(`${this.apiUrl}/sites/${siteId}/publish`, {
       method: 'POST',
       headers,
+      body: JSON.stringify(options?.access ? { access: options.access } : {}),
     });
 
     if (!response.ok) {
@@ -336,7 +387,14 @@ export class VanishClient {
     siteIdOrSlug: string,
     draftId: string,
     token: string,
-    options?: { slug?: string; days?: number },
+    options?: {
+      slug?: string;
+      days?: number;
+      access?: {
+        mode: 'password';
+        password: string;
+      };
+    },
     requestOptions?: RequestOptions,
   ): Promise<PublishSiteResult> {
     const headers: Record<string, string> = {
@@ -445,6 +503,118 @@ export class VanishClient {
     if (!response.ok) {
       await throwApiError(response, 'Failed to delete site');
     }
+  }
+
+  async getSiteAccess(siteIdOrSlug: string): Promise<SiteAccessInfo> {
+    const response = await fetch(`${this.apiUrl}/sites/${encodeURIComponent(siteIdOrSlug)}/access`, {
+      headers: this.authHeaders(),
+    });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to get site access');
+    }
+    return response.json() as Promise<SiteAccessInfo>;
+  }
+
+  async setSiteAccess(
+    siteIdOrSlug: string,
+    input: { mode: 'link' } | { mode: 'password'; password: string },
+  ): Promise<SiteAccessInfo> {
+    const response = await fetch(`${this.apiUrl}/sites/${encodeURIComponent(siteIdOrSlug)}/access`, {
+      method: 'PATCH',
+      headers: this.jsonHeaders(),
+      body: JSON.stringify(input),
+    });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to update site access');
+    }
+    return response.json() as Promise<SiteAccessInfo>;
+  }
+
+  async createDomain(hostname: string, channel: string): Promise<DomainInfo> {
+    const response = await fetch(`${this.apiUrl}/domains`, {
+      method: 'POST',
+      headers: this.jsonHeaders(),
+      body: JSON.stringify({ hostname, channel }),
+    });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to add custom domain');
+    }
+    return response.json() as Promise<DomainInfo>;
+  }
+
+  async listDomains(): Promise<DomainListInfo> {
+    const response = await fetch(`${this.apiUrl}/domains`, { headers: this.authHeaders() });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to list custom domains');
+    }
+    return response.json() as Promise<DomainListInfo>;
+  }
+
+  async reserveDomainNamespace(slug: string): Promise<DomainReservationInfo> {
+    const response = await fetch(`${this.apiUrl}/domains/reservation`, {
+      method: 'POST',
+      headers: this.jsonHeaders(),
+      body: JSON.stringify({ slug }),
+    });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to reserve Vanish namespace');
+    }
+    return response.json() as Promise<DomainReservationInfo>;
+  }
+
+  async releaseDomainNamespace(): Promise<{ ok: true; hostname: string }> {
+    const response = await fetch(`${this.apiUrl}/domains/reservation`, {
+      method: 'DELETE',
+      headers: this.authHeaders(),
+    });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to release Vanish namespace');
+    }
+    return response.json() as Promise<{ ok: true; hostname: string }>;
+  }
+
+  async getDomain(hostname: string): Promise<DomainInfo> {
+    const response = await fetch(`${this.apiUrl}/domains/${encodeURIComponent(hostname)}`, {
+      headers: this.authHeaders(),
+    });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to get custom domain');
+    }
+    return response.json() as Promise<DomainInfo>;
+  }
+
+  async verifyDomain(hostname: string): Promise<DomainInfo> {
+    const response = await fetch(`${this.apiUrl}/domains/${encodeURIComponent(hostname)}/verify`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+    });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to verify custom domain');
+    }
+    return response.json() as Promise<DomainInfo>;
+  }
+
+  async attachDomain(hostname: string, channel: string): Promise<DomainInfo> {
+    const response = await fetch(`${this.apiUrl}/domains/${encodeURIComponent(hostname)}`, {
+      method: 'PATCH',
+      headers: this.jsonHeaders(),
+      body: JSON.stringify({ channel }),
+    });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to attach custom domain');
+    }
+    return response.json() as Promise<DomainInfo>;
+  }
+
+  async deleteDomain(hostname: string): Promise<{ ok: true; hostname: string; status?: string }> {
+    const response = await fetch(`${this.apiUrl}/domains/${encodeURIComponent(hostname)}`, {
+      method: 'DELETE',
+      headers: this.authHeaders(),
+    });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to remove custom domain');
+    }
+    return response.json() as Promise<{ ok: true; hostname: string; status?: string }>;
   }
 
   async listKeys(): Promise<KeyInfo[]> {

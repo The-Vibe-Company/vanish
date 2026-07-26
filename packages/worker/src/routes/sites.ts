@@ -10,6 +10,13 @@ import { normalizeSitePath, normalizeSiteSlug } from '../lib/site-path.js';
 import { buildSiteUrl, getSiteIdentifierFromHost, supportsPathSiteUrls } from '../lib/site-url.js';
 import { getRateLimitIdentifier } from '../lib/rate-limit.js';
 import { hasProductEvent, logProductEvent, productEventsEnabled } from '../lib/events.js';
+import {
+  accessProtectionConfigured,
+  getSiteAccess,
+  hasSiteAccess,
+  hashSitePassword,
+  renderPasswordGate,
+} from '../lib/site-access.js';
 import { rateLimitMiddleware } from '../middleware/rate-limit.js';
 import {
   getIdempotencyKey,
@@ -52,6 +59,16 @@ interface PatchSiteRequest {
   rootPath?: string;
   slug?: string;
   days?: number;
+  access?: SiteAccessRequest;
+}
+
+interface SiteAccessRequest {
+  mode?: string;
+  password?: string;
+}
+
+interface PublishSiteRequest {
+  access?: SiteAccessRequest;
 }
 
 sites.use('*', async (c, next) => {
@@ -247,6 +264,11 @@ sites.post('/sites', rateLimitMiddleware, async (c) => {
         console.error('Failed to clear site create idempotency reservation:', clearErr);
       });
     }
+    if (isNamespaceClaimConflict(err)) {
+      return c.json({
+        ...structuredError('slug_already_taken', `Slug "${slug}" is reserved as a Vanish namespace`, 409),
+      }, 409);
+    }
     throw err;
   }
 
@@ -295,11 +317,24 @@ sites.patch('/sites/:id', async (c) => {
     return c.json({ error: patch.error }, patch.status);
   }
 
-  await c.env.DB.prepare(`
-    UPDATE sites
-    SET root_path = ?, slug = ?, expires_at = ?
-    WHERE id = ?
-  `).bind(patch.rootPath, patch.slug, patch.expiresAt, site.id).run();
+  try {
+    const updatedConfig = await c.env.DB.prepare(`
+      UPDATE sites
+      SET root_path = ?, slug = ?, expires_at = ?
+      WHERE id = ? AND deleted_at IS NULL
+    `).bind(patch.rootPath, patch.slug, patch.expiresAt, site.id).run();
+    if (updatedConfig?.meta && updatedConfig.meta.changes !== 1) {
+      return c.json({ error: 'Site not found', code: 'site_not_found' }, 404);
+    }
+  } catch (error) {
+    if (isNamespaceClaimConflict(error)) {
+      return c.json({
+        error: `Slug "${patch.slug}" is reserved as a Vanish namespace`,
+        code: 'slug_already_taken',
+      }, 409);
+    }
+    throw error;
+  }
 
   const updated = await getSite(c.env, site.id);
   return c.json(siteToJson(c.env.BASE_URL)(updated || site));
@@ -371,10 +406,26 @@ sites.post('/sites/:id/replacements', async (c) => {
   const uploadToken = SITE_TOKEN_PREFIX + nanoid(32);
   const name = `${REPLACEMENT_NAME_PREFIX}${target.id}:${sanitizeSiteName(payload.name || target.name)}`;
 
-  await c.env.DB.prepare(`
-    INSERT INTO sites (id, user_id, name, root_path, slug, upload_token, size_bytes, file_count, expected_file_count, expires_at)
-    VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
-  `).bind(id, user.id, name, rootPath, null, uploadToken, plannedFileCount, target.expires_at).run();
+  try {
+    const inserted = await c.env.DB.prepare(`
+      INSERT INTO sites (id, user_id, name, root_path, slug, upload_token, size_bytes, file_count, expected_file_count, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
+    `).bind(id, user.id, name, rootPath, null, uploadToken, plannedFileCount, target.expires_at).run();
+    if (inserted?.meta && inserted.meta.changes !== 1) {
+      return c.json({
+        error: 'The replacement draft identifier is reserved as a Vanish namespace',
+        code: 'site_identifier_conflict',
+      }, 409);
+    }
+  } catch (error) {
+    if (isNamespaceClaimConflict(error)) {
+      return c.json({
+        error: 'The replacement draft identifier is reserved as a Vanish namespace',
+        code: 'site_identifier_conflict',
+      }, 409);
+    }
+    throw error;
+  }
 
   await logProductEvent(c.env, {
     name: 'site_publish_started',
@@ -433,6 +484,9 @@ sites.put('/sites/:id/files', async (c) => {
   const path = c.req.query('path') ? normalizeSitePath(c.req.query('path') || '') : null;
   if (!path) {
     return c.json({ error: 'path query parameter is required and must be a relative file path' }, 400);
+  }
+  if (path === '.vanish' || path.startsWith('.vanish/')) {
+    return c.json({ error: 'The .vanish path is reserved for access control' }, 400);
   }
 
   const ext = getExtension(path);
@@ -562,6 +616,13 @@ sites.post('/sites/:id/publish', async (c) => {
     return c.json(rateLimit.body, 429);
   }
 
+  const payload = c.req.header('Content-Type')?.includes('application/json')
+    ? await readJson<PublishSiteRequest>(c.req.raw)
+    : {};
+  if (!payload) {
+    return c.json({ error: 'Invalid JSON body', code: 'invalid_json' }, 400);
+  }
+
   const root = await c.env.DB.prepare(`
     SELECT path FROM site_files WHERE site_id = ? AND path = ?
   `).bind(site.id, site.root_path).first<{ path: string }>();
@@ -587,12 +648,22 @@ sites.post('/sites/:id/publish', async (c) => {
     return c.json(quota, 413);
   }
 
+  const preparedAccess = await preparePublishedSiteAccess(c.env, site.id, auth.userId, payload.access);
+  if (!preparedAccess.ok) {
+    return c.json({ error: preparedAccess.error, code: preparedAccess.code }, preparedAccess.status);
+  }
+
   const publishedAt = freshSite.published_at || new Date().toISOString();
-  await c.env.DB.prepare(`
-    UPDATE sites
-    SET published_at = ?, upload_token = NULL
-    WHERE id = ?
-  `).bind(publishedAt, site.id).run();
+  const publishStatements = [
+    c.env.DB.prepare(`
+      UPDATE sites
+      SET published_at = ?, upload_token = NULL
+      WHERE id = ?
+    `).bind(publishedAt, site.id),
+  ];
+  if (preparedAccess.statement) publishStatements.push(preparedAccess.statement);
+  await c.env.DB.batch(publishStatements);
+  const accessResponse = await publishedAccessResponse(c.env, preparedAccess.response);
 
   await logSitePublished(c, freshSite, auth, false);
 
@@ -606,6 +677,7 @@ sites.post('/sites/:id/publish', async (c) => {
     fileCount: freshSite.file_count,
     expectedFileCount: freshSite.expected_file_count,
     expires: freshSite.expires_at,
+    ...(accessResponse ? { access: accessResponse } : {}),
   });
 });
 
@@ -677,8 +749,13 @@ sites.post('/sites/:id/replacements/:draftId/publish', async (c) => {
     return c.json(quota, 413);
   }
 
+  const preparedAccess = await preparePublishedSiteAccess(c.env, target.id, user.id, payload.access);
+  if (!preparedAccess.ok) {
+    return c.json({ error: preparedAccess.error, code: preparedAccess.code }, preparedAccess.status);
+  }
+
   const oldFiles = await listSiteObjectKeys(c.env, target.id);
-  await c.env.DB.batch([
+  const replacementStatements = [
     c.env.DB.prepare(`
       INSERT OR IGNORE INTO pending_r2_deletions (r2_key)
       SELECT r2_key FROM site_files WHERE site_id = ?
@@ -717,7 +794,20 @@ sites.post('/sites/:id/replacements/:draftId/publish', async (c) => {
       SET upload_token = NULL, size_bytes = 0, file_count = 0, deleted_at = datetime('now')
       WHERE id = ?
     `).bind(freshDraft.id),
-  ]);
+  ];
+  if (preparedAccess.statement) replacementStatements.push(preparedAccess.statement);
+  try {
+    await c.env.DB.batch(replacementStatements);
+  } catch (error) {
+    if (isNamespaceClaimConflict(error)) {
+      return c.json({
+        error: `Slug "${patch.slug}" is reserved as a Vanish namespace`,
+        code: 'slug_already_taken',
+      }, 409);
+    }
+    throw error;
+  }
+  const accessResponse = await publishedAccessResponse(c.env, preparedAccess.response);
 
   await deletePendingR2Objects(c.env, oldFiles);
 
@@ -733,6 +823,7 @@ sites.post('/sites/:id/replacements/:draftId/publish', async (c) => {
     fileCount: updated?.file_count || freshDraft.file_count,
     expectedFileCount: updated?.expected_file_count || freshDraft.expected_file_count,
     expires: updated?.expires_at || patch.expiresAt,
+    ...(accessResponse ? { access: accessResponse } : {}),
   });
 });
 
@@ -747,15 +838,17 @@ sites.get('/sites', async (c) => {
   const activeOnly = c.req.query('active') !== 'false';
 
   let query = `
-    SELECT id, user_id, name, root_path, slug, upload_token, size_bytes, file_count, expected_file_count,
-           expires_at, published_at, created_at, last_activity_at, deleted_at
-    FROM sites
-    WHERE user_id = ?
+    SELECT s.id, s.user_id, s.name, s.root_path, s.slug, s.upload_token, s.size_bytes,
+           s.file_count, s.expected_file_count, s.expires_at, s.published_at, s.created_at,
+           s.last_activity_at, s.deleted_at,
+           COALESCE((SELECT sa.mode FROM site_access sa WHERE sa.site_id = s.id), 'link') AS access_mode
+    FROM sites s
+    WHERE s.user_id = ?
   `;
   if (activeOnly) {
-    query += ` AND deleted_at IS NULL AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))`;
+    query += ` AND s.deleted_at IS NULL AND (s.expires_at IS NULL OR datetime(s.expires_at) > datetime('now'))`;
   }
-  query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+  query += ` ORDER BY s.created_at DESC LIMIT ? OFFSET ?`;
 
   const result = await c.env.DB.prepare(query).bind(user.id, limit, offset).all<Site>();
   const listedSites = (result.results || []).map(siteToJson(c.env.BASE_URL));
@@ -863,10 +956,20 @@ sites.get('/s/:sitePath{.+}', async (c) => {
   }
 
   const [identifier, ...pathParts] = c.req.param('sitePath').split('/');
-  return serveSite(c, identifier, pathParts.length > 0 ? '/' + pathParts.join('/') : '/');
+  return serveSite(
+    c,
+    identifier,
+    pathParts.length > 0 ? '/' + pathParts.join('/') : '/',
+    new URL(c.req.url).pathname,
+  );
 });
 
-async function serveSite(c: AppContext, identifier: string, pathname: string): Promise<Response> {
+export async function serveSite(
+  c: AppContext,
+  identifier: string,
+  pathname: string,
+  browserReturnPath = pathname,
+): Promise<Response> {
   const site = await getPublishedSiteByIdentifier(c.env, identifier);
 
   if (!site) {
@@ -876,6 +979,11 @@ async function serveSite(c: AppContext, identifier: string, pathname: string): P
   if (isExpired(site.expires_at)) {
     c.executionCtx.waitUntil(deleteSiteObjectsAndMarkDeleted(c.env, site.id));
     return c.json({ error: 'This site has expired' }, 410);
+  }
+
+  const access = await getSiteAccess(c.env, site.id);
+  if (access?.mode === 'password' && !(await hasSiteAccess(c.req.raw, c.env, access))) {
+    return renderPasswordGate(site.id, browserReturnPath);
   }
 
   const path = pathname === '/'
@@ -908,7 +1016,7 @@ async function serveSite(c: AppContext, identifier: string, pathname: string): P
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
   headers.set('Referrer-Policy', 'no-referrer');
-  headers.set('Cache-Control', 'public, max-age=300');
+  headers.set('Cache-Control', access?.mode === 'password' ? 'private, no-store' : 'public, max-age=300');
   headers.set('Content-Disposition', `inline; filename="${escapeHeaderFilename(file.path.split('/').pop() || 'index')}"`);
   headers.set('Access-Control-Allow-Origin', '*');
   headers.set('Link', '<mailto:abuse@vanish.sh>; rel="abuse"');
@@ -1159,7 +1267,7 @@ function normalizeChannel(input: string): string | null {
   return channel;
 }
 
-async function getSiteByChannel(env: Env, userId: string, channel: string): Promise<Site | null> {
+export async function getSiteByChannel(env: Env, userId: string, channel: string): Promise<Site | null> {
   return env.DB.prepare(`
     SELECT s.id, s.user_id, s.name, s.root_path, s.slug, s.upload_token, s.size_bytes,
            s.file_count, s.expected_file_count, s.expires_at, s.published_at, s.created_at,
@@ -1185,6 +1293,19 @@ async function getSiteBySlug(env: Env, slug: string): Promise<Site | null> {
 }
 
 async function getSlugConflict(env: Env, slug: string, currentSiteId?: string): Promise<Site | null> {
+  try {
+    const reservation = await env.DB.prepare(`
+      SELECT hostname FROM domain_reservations WHERE slug = ? LIMIT 1
+    `).bind(slug).first<{ hostname: string }>();
+    if (reservation) {
+      return { id: reservation.hostname } as Site;
+    }
+  } catch (error) {
+    if (!(error instanceof Error && /no such table: domain_reservations/i.test(error.message))) {
+      throw error;
+    }
+  }
+
   const idMatch = await getSite(env, slug);
   if (idMatch) {
     return idMatch;
@@ -1203,7 +1324,7 @@ async function getSiteIdentifierConflict(env: Env, identifier: string): Promise<
   return getSiteBySlug(env, identifier);
 }
 
-async function getSiteByIdentifier(env: Env, identifier: string): Promise<Site | null> {
+export async function getSiteByIdentifier(env: Env, identifier: string): Promise<Site | null> {
   return getSiteIdentifierConflict(env, identifier);
 }
 
@@ -1330,6 +1451,7 @@ function siteToJson(baseUrl: string) {
       published_at: site.published_at,
       expired: site.expires_at ? new Date(site.expires_at) < new Date() : false,
       deleted: site.deleted_at !== null,
+      access_mode: site.access_mode || 'link',
     };
   };
 }
@@ -1369,6 +1491,103 @@ async function deleteSiteObjectsAndMarkDeleted(env: Env, id: string): Promise<vo
   }
 
   await markSiteDeleted(env, id);
+}
+
+async function preparePublishedSiteAccess(
+  env: Env,
+  siteId: string,
+  userId: string | null,
+  input: SiteAccessRequest | undefined,
+): Promise<
+  | {
+      ok: true;
+      statement: D1PreparedStatement | null;
+      response: {
+        siteId: string;
+        mode: 'link' | 'password';
+        passwordConfigured: boolean;
+      } | null;
+    }
+  | { ok: false; error: string; code: string; status: 400 | 401 | 503 }
+> {
+  if (!input) {
+    return { ok: true, statement: null, response: null };
+  }
+  if (!userId) {
+    return {
+      ok: false,
+      error: 'Password-protected publishing requires login',
+      code: 'auth_required',
+      status: 401,
+    };
+  }
+  if (input.mode !== 'password') {
+    return {
+      ok: false,
+      error: 'Publish access mode must be password',
+      code: 'invalid_access_mode',
+      status: 400,
+    };
+  }
+  if (!accessProtectionConfigured(env)) {
+    return {
+      ok: false,
+      error: 'Password access is not configured on this instance',
+      code: 'access_protection_unavailable',
+      status: 503,
+    };
+  }
+  if (typeof input.password !== 'string' || input.password.length < 8 || input.password.length > 128) {
+    return {
+      ok: false,
+      error: 'password must contain between 8 and 128 characters',
+      code: 'invalid_password',
+      status: 400,
+    };
+  }
+
+  const password = await hashSitePassword(input.password);
+  return {
+    ok: true,
+    statement: env.DB.prepare(`
+      INSERT INTO site_access (site_id, mode, password_hash, password_salt, policy_version)
+      VALUES (?, 'password', ?, ?, 1)
+      ON CONFLICT(site_id) DO UPDATE SET
+        mode = 'password',
+        password_hash = excluded.password_hash,
+        password_salt = excluded.password_salt,
+        policy_version = site_access.policy_version + 1,
+        updated_at = datetime('now')
+    `).bind(siteId, password.hash, password.salt),
+    response: {
+      siteId,
+      mode: 'password',
+      passwordConfigured: true,
+    },
+  };
+}
+
+async function publishedAccessResponse(
+  env: Env,
+  prepared: {
+    siteId: string;
+    mode: 'link' | 'password';
+    passwordConfigured: boolean;
+  } | null,
+): Promise<{
+  siteId: string;
+  mode: 'link' | 'password';
+  policyVersion: number;
+  passwordConfigured: boolean;
+} | null> {
+  if (!prepared) return null;
+  const current = await getSiteAccess(env, prepared.siteId);
+  return {
+    siteId: prepared.siteId,
+    mode: current?.mode || prepared.mode,
+    policyVersion: current?.policy_version || 1,
+    passwordConfigured: current?.mode === 'password',
+  };
 }
 
 async function readJson<T>(request: Request): Promise<T | null> {
@@ -1420,6 +1639,10 @@ function getExtension(path: string): string {
 
 function escapeHeaderFilename(filename: string): string {
   return filename.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function isNamespaceClaimConflict(error: unknown): boolean {
+  return error instanceof Error && error.message.includes('site_namespace_claim_conflict');
 }
 
 export default sites;

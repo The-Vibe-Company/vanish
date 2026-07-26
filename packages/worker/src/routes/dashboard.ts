@@ -72,7 +72,7 @@ code { font-family: var(--mono); }
 
 /* Layout */
 .app { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
-@media (max-width: 760px) { .app { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .app { grid-template-columns: minmax(0, 1fr); } }
 .main { padding: 2.5rem 3rem 4rem; max-width: 1180px; width: 100%; }
 @media (max-width: 1100px) { .main { padding: 2rem 2rem 4rem; } }
 @media (max-width: 760px)  { .main { padding: 1.4rem 1.2rem 4rem; } }
@@ -603,6 +603,20 @@ code { font-family: var(--mono); }
 }
 .form-row input:focus, .form-row select:focus { outline: none; border-color: var(--accent-dim); }
 .form-hint { color: var(--fg-mute); font-size: .68rem; }
+.form-error { color: var(--red); font-size: .7rem; line-height: 1.5; margin-top: .5rem; }
+.form-error[hidden] { display: none; }
+.domain-fields {
+  display: flex; justify-content: flex-end; align-items: flex-end; gap: .5rem;
+  flex-wrap: wrap; min-width: 0;
+}
+.domain-field { display: flex; flex: 1 1 170px; flex-direction: column; gap: .3rem; min-width: min(170px, 100%); }
+.domain-field span { color: var(--fg-dim); font-size: .68rem; }
+.domain-field input {
+  padding: .55rem; border: 1px solid var(--border-2); background: var(--bg-3);
+  color: var(--fg-white); border-radius: 4px; min-width: 0; width: 100%;
+}
+.domain-field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.domain-value, .domain-record code { overflow-wrap: anywhere; word-break: break-word; }
 
 /* Keys */
 .key-reveal {
@@ -730,10 +744,11 @@ code { font-family: var(--mono); }
   align-items: center; padding: 1rem 1.2rem;
   border-bottom: 1px solid var(--hairline);
 }
+.set-row > * { min-width: 0; }
 .set-row:last-child { border-bottom: 0; }
 .set-label { color: var(--fg-bright); font-size: .82rem; }
 .set-hint { color: var(--fg-dim); font-size: .7rem; margin-top: .2rem; line-height: 1.5; }
-.set-row-r { display: flex; justify-content: flex-end; align-items: center; }
+.set-row-r { display: flex; justify-content: flex-end; align-items: center; gap: .5rem; flex-wrap: wrap; min-width: 0; }
 .set-readonly { color: var(--fg-dim); font-size: .82rem; text-align: right; }
 .danger-section h2 { color: var(--red); border-color: color-mix(in srgb, var(--red) 25%, transparent); }
 .danger-section .set-rows { border-color: color-mix(in srgb, var(--red) 25%, transparent); }
@@ -1311,7 +1326,7 @@ body:has(.login-screen) { background: #1649e8; }
   .ov-grid { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 760px) {
-  .app { grid-template-columns: 1fr; }
+  .app { grid-template-columns: minmax(0, 1fr); }
   .main {
     min-width: 0;
     padding:
@@ -1469,7 +1484,7 @@ body:has(.login-screen) { background: #1649e8; }
   .filter-tools { grid-template-columns: 1fr; }
   .sort, .view-toggle { max-width: none; width: 100%; }
   .view-toggle button { flex: 1; }
-  .set-row { grid-template-columns: 1fr; gap: .6rem; }
+  .set-row { grid-template-columns: minmax(0, 1fr); gap: .6rem; }
   .set-row-r { justify-content: flex-start; }
   .set-readonly { text-align: left; }
 }
@@ -1504,6 +1519,14 @@ body:has(.login-screen) { background: #1649e8; }
     sites: [],
     uploads: [],
     keys: [],
+    domains: [],
+    domainReservation: null,
+    domainRouteLimit: 20,
+    domainPending: { connect: false, reserve: false, verify: {}, delete: {}, release: false },
+    domainErrors: { connect: '', reserve: '', verify: {}, delete: {}, release: '' },
+    domainDraft: { hostname: '', channel: '', slug: '' },
+    accessPending: {},
+    accessErrors: {},
     section: 'overview',
     sitesFilter: 'all',
     sitesQuery: '',
@@ -1647,13 +1670,22 @@ body:has(.login-screen) { background: #1649e8; }
 
   // — Confirm modal —
   var confirmCfg = null;
+  var modalReturnFocus = null;
   function openConfirm(cfg) {
+    if (!confirmCfg) {
+      modalReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    }
     confirmCfg = cfg;
+    rootEl.setAttribute('inert', '');
     renderModal();
   }
   function closeModal() {
+    var returnFocus = modalReturnFocus;
     confirmCfg = null;
+    modalReturnFocus = null;
     renderModal();
+    rootEl.removeAttribute('inert');
+    if (returnFocus && document.contains(returnFocus)) returnFocus.focus();
   }
   function renderModal() {
     if (!confirmCfg) {
@@ -1663,9 +1695,19 @@ body:has(.login-screen) { background: #1649e8; }
     var c = confirmCfg;
     modalHost.innerHTML =
       '<div class="modal-bg" data-action="modal-cancel">' +
-        '<div class="modal" data-stop>' +
-          '<div class="modal-head">' + escapeHtml(c.title) + '</div>' +
-          '<div class="modal-body">' + escapeHtml(c.body) + '</div>' +
+        '<div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-description" data-stop>' +
+          '<div class="modal-head" id="modal-title">' + escapeHtml(c.title) + '</div>' +
+          '<div class="modal-body">' +
+            '<div id="modal-description">' + escapeHtml(c.body) + '</div>' +
+            (c.passwordInput
+              ? '<div class="form-row" style="margin-top:1rem">' +
+                  '<label for="modal-password">Shared password</label>' +
+                  '<input id="modal-password" data-modal-password type="password" minlength="8" maxlength="128" autocomplete="new-password" required aria-describedby="modal-password-hint modal-password-error">' +
+                  '<div class="form-hint" id="modal-password-hint">Use 8–128 characters. The password stays masked while you type.</div>' +
+                  '<div class="form-error" id="modal-password-error" role="alert" hidden></div>' +
+                '</div>'
+              : '') +
+          '</div>' +
           '<div class="modal-actions">' +
             '<button class="btn ghost" data-action="modal-cancel">Cancel</button>' +
             '<button class="btn ' + (c.destructive === false ? 'solid' : 'danger') + '" data-action="modal-confirm">' +
@@ -1674,19 +1716,64 @@ body:has(.login-screen) { background: #1649e8; }
           '</div>' +
         '</div>' +
       '</div>';
-    var btn = modalHost.querySelector('[data-action="modal-confirm"]');
-    if (btn) btn.focus();
+    var initialFocus = modalHost.querySelector('[data-modal-password]') ||
+      modalHost.querySelector(c.destructive === false ? '[data-action="modal-confirm"]' : 'button[data-action="modal-cancel"]');
+    if (initialFocus) initialFocus.focus();
+  }
+  function confirmModal() {
+    var fn = confirmCfg && confirmCfg.onConfirm;
+    var passwordInput = modalHost.querySelector('[data-modal-password]');
+    var value = passwordInput ? passwordInput.value : undefined;
+    if (passwordInput && !passwordInput.checkValidity()) {
+      var passwordError = modalHost.querySelector('#modal-password-error');
+      passwordInput.setAttribute('aria-invalid', 'true');
+      if (passwordError) {
+        passwordError.textContent = 'Password must contain between 8 and 128 characters.';
+        passwordError.hidden = false;
+      }
+      passwordInput.focus();
+      return;
+    }
+    closeModal();
+    fn && fn(value);
   }
 
   document.addEventListener('keydown', function(e) {
     if (!confirmCfg) return;
-    if (e.key === 'Escape') closeModal();
-    if (e.key === 'Enter') {
-      var fn = confirmCfg.onConfirm;
+    if (e.key === 'Escape') {
+      e.preventDefault();
       closeModal();
-      fn && fn();
+      return;
+    }
+    if (e.key === 'Tab') {
+      trapModalFocus(e);
+      return;
+    }
+    if (e.key === 'Enter') {
+      var target = e.target;
+      if (target && target.closest && target.closest('[data-action="modal-cancel"]')) return;
+      e.preventDefault();
+      confirmModal();
     }
   });
+  function trapModalFocus(e) {
+    var focusable = Array.from(modalHost.querySelectorAll(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+    ));
+    if (!focusable.length) return;
+    var first = focusable[0];
+    var last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    } else if (!modalHost.contains(document.activeElement)) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
 
   // — API —
   function apiFetch(path, opts) {
@@ -1709,7 +1796,8 @@ body:has(.login-screen) { background: #1649e8; }
       apiFetch('/me'),
       apiFetch('/sites?limit=100&active=false'),
       apiFetch('/uploads?limit=100&active=false'),
-      apiFetch('/keys')
+      apiFetch('/keys'),
+      apiFetch('/domains')
     ]).then(function(rs) {
       if (!rs[0] || rs[0].error || !rs[0].id) {
         localStorage.removeItem('vanish_api_key');
@@ -1721,6 +1809,9 @@ body:has(.login-screen) { background: #1649e8; }
       state.sites = (rs[1].sites || []).filter(function(s) { return !s.deleted; }).map(normalizeSite);
       state.uploads = (rs[2].uploads || []).filter(function(u) { return !u.deleted; }).map(normalizeUpload);
       state.keys = (rs[3].keys || []);
+      state.domains = (rs[4].domains || []);
+      state.domainReservation = rs[4].reservation || null;
+      state.domainRouteLimit = rs[4].routeLimit || 20;
       refreshTimerBuckets();
       render();
     });
@@ -1757,6 +1848,7 @@ body:has(.login-screen) { background: #1649e8; }
       lastActivity: lastActivityAt || 0,
       expires: expiresAt || 0,
       published_at: parseSqlDate(s.published_at),
+      access_mode: s.access_mode || 'link',
       draft: !s.published_at,
       hasExpiry: expiresAt != null,
       expired: expiresAt != null && expiresAt <= Date.now()
@@ -1803,6 +1895,7 @@ body:has(.login-screen) { background: #1649e8; }
       case 'sites': return renderSitesPage();
       case 'files': return renderFilesPage();
       case 'keys': return renderKeysPage();
+      case 'domains': return renderDomainsPage();
       case 'billing': return renderBillingPage();
       case 'settings': return renderSettingsPage();
       default: return renderOverview();
@@ -1822,6 +1915,7 @@ body:has(.login-screen) { background: #1649e8; }
       { id: 'overview', label: 'Home', icon: '<path d="M3 3h5v5H3V3zm0 7h5v5H3v-5zm7-7h5v5h-5V3zm0 7h5v5h-5v-5z"/>' },
       { id: 'sites', label: 'Sites', icon: '<path d="M2 4h12v9H2V4zm1 1v1h10V5H3zm0 2v5h10V7H3z"/>' },
       { id: 'files', label: 'Files', icon: '<path d="M4 2h5l3 3v9H4V2zm5 0v3h3"/>' },
+      { id: 'domains', label: 'Domains', icon: '<path d="M2 8a6 6 0 1 0 12 0A6 6 0 0 0 2 8zm1.5 0h9M8 2c2 2 2 10 0 12M8 2C6 4 6 12 8 14"/>' },
       { id: 'keys', label: 'Access keys', icon: '<path d="M11 6a3 3 0 1 1-2.83 4H5v2H3v-2H1v-2h7.17A3 3 0 0 1 11 6zm0 2a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/>' },
       { id: 'billing', label: 'Plan', icon: '<path d="M2 4h12v3H2V4zm0 4h12v5H2V8zm2 2v1h3v-1H4z"/>' },
       { id: 'settings', label: 'Settings', icon: '<path d="M8 5a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm5.5 4.2.9.7-1 1.7-1.1-.3-1.1.6-.3 1.1H8.1l-.3-1.1-1.1-.6-1.1.3-1-1.7.9-.7v-1.4l-.9-.7 1-1.7 1.1.3 1.1-.6.3-1.1h2.8l.3 1.1 1.1.6 1.1-.3 1 1.7-.9.7v1.4z"/>' }
@@ -2102,6 +2196,8 @@ body:has(.login-screen) { background: #1649e8; }
     var pillTone = status === 'live' ? 'green' : (status === 'expiring' || status === 'draft') ? 'gold' : 'mute';
     var dotTone = status === 'live' ? 'green' : (status === 'expiring' || status === 'draft') ? 'gold' : 'mute';
     var pulse = status !== 'expired' ? ' dot-pulse' : '';
+    var accessPending = Boolean(state.accessPending[s.id]);
+    var accessError = state.accessErrors[s.id] || '';
     var timeHtml;
     if (s.expired) {
       timeHtml = '<div class="site-time-label">expired</div><div class="site-time-val expired"' + countdownAttr(s.expires, 'ago') + '>' + fmtAgo(s.expires) + '</div>';
@@ -2117,7 +2213,7 @@ body:has(.login-screen) { background: #1649e8; }
     var detail = '';
     if (open) {
       detail =
-        '<div class="site-detail">' +
+        '<div class="site-detail" data-site-access-region="' + attr(s.id) + '" tabindex="-1" aria-busy="' + (accessPending ? 'true' : 'false') + '">' +
           '<div class="sd-grid">' +
             (s.draft ?
               '<div class="sd-field"><div class="sd-label">Status</div><div class="sd-val">Unpublished upload draft</div></div>' :
@@ -2128,12 +2224,20 @@ body:has(.login-screen) { background: #1649e8; }
             '<div class="sd-field"><div class="sd-label">Files</div><div class="sd-val">' + s.file_count + '</div></div>' +
             '<div class="sd-field"><div class="sd-label">Size</div><div class="sd-val">' + fmtBytes(s.size_bytes) + '</div></div>' +
             '<div class="sd-field"><div class="sd-label">Root</div><code class="sd-mono">' + escapeHtml(s.root_path) + '</code></div>' +
+            '<div class="sd-field"><div class="sd-label">Access</div><div class="sd-val">' + (s.access_mode === 'password' ? 'Password protected' : 'Anyone with link') + '</div></div>' +
             '<div class="sd-field"><div class="sd-label">Created</div><div class="sd-val">' + fmtDate(s.created) + ' · ' + fmtAgo(s.created) + '</div></div>' +
           '</div>' +
+          (accessError ? '<div class="form-error" role="alert">' + escapeHtml(accessError) + '</div>' : '') +
           '<div class="sd-actions">' +
             (s.draft ? '' :
               '<button class="btn ghost btn-sm" data-action="copy" data-text="' + attr(s.url) + '" data-msg="URL copied">Copy URL</button>' +
               '<button class="btn ghost btn-sm" data-action="copy" data-text="' + attr('vanish site ./local --update ' + s.id) + '" data-msg="Update command copied">Copy update cmd</button>' +
+              '<button class="btn ghost btn-sm" data-action="protect-site" data-id="' + attr(s.id) + '"' +
+                (accessPending ? ' disabled aria-busy="true"' : '') + '>' +
+                (accessPending ? 'Updating access…' : (s.access_mode === 'password' ? 'Change password' : 'Set password')) + '</button>' +
+              '<button class="btn ghost btn-sm" data-action="link-site" data-id="' + attr(s.id) + '"' +
+                (accessPending || s.access_mode === 'link' ? ' disabled' : '') +
+                (s.access_mode === 'link' ? ' aria-current="true"' : '') + '>Anyone with link</button>' +
               '<a class="btn ghost btn-sm" href="' + attr(s.url) + '" target="_blank" rel="noopener">Open ↗</a>') +
             '<div class="sd-spacer"></div>' +
             (s.expired ? '' : '<button class="btn danger-ghost btn-sm" data-action="delete-site" data-id="' + attr(s.id) + '" data-name="' + attr(label) + '">Delete</button>') +
@@ -2160,6 +2264,92 @@ body:has(.login-screen) { background: #1649e8; }
         '<div class="site-chev"><svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 5l3 3 3-3"/></svg></div>' +
       '</button>' +
       detail +
+    '</div>';
+  }
+
+  function renderDomainsPage() {
+    var domains = state.domains || [];
+    var roots = domains.filter(function(d) { return !d.parentHostname; });
+    var routes = domains.filter(function(d) { return Boolean(d.parentHostname); });
+    var isPro = state.me && state.me.tier === 'pro';
+    var canAddRoot = isPro && roots.length === 0;
+    var canAddRoute = isPro && routes.length < state.domainRouteLimit &&
+      (Boolean(state.domainReservation) || roots.length > 0);
+    var connectPending = state.domainPending.connect;
+    var reservePending = state.domainPending.reserve;
+    var releasePending = state.domainPending.release;
+    var rows = domains.length ? domains.map(function(d) {
+      var tone = d.status === 'active' ? 'green' : (d.status === 'error' || d.status === 'suspended' ? 'red' : 'gold');
+      var verifyPending = Boolean(state.domainPending.verify[d.hostname]);
+      var deletePending = Boolean(state.domainPending.delete[d.hostname]);
+      var verifyError = state.domainErrors.verify[d.hostname] || '';
+      var deleteError = state.domainErrors.delete[d.hostname] || '';
+      var dns = (d.dnsRecords || []).map(function(r) {
+        return '<div class="set-hint domain-record"><code>' + escapeHtml(r.type) + ' ' + escapeHtml(r.name) + '</code> → <code>' + escapeHtml(r.value) + '</code></div>';
+      }).join('');
+      return '<div class="set-row" style="align-items:flex-start" data-domain-region="' + attr(d.hostname) +
+        '" tabindex="-1" aria-busy="' + (deletePending || verifyPending ? 'true' : 'false') + '">' +
+        '<div><div class="set-label"><span class="domain-value">' + escapeHtml(d.hostname) + '</span> <span class="pill pill-' + tone + '">' + escapeHtml(d.status) + '</span></div>' +
+          '<div class="set-hint">channel <code>' + escapeHtml(d.channel) + '</code>' +
+            (d.parentHostname ? ' · namespace <code class="domain-value">' + escapeHtml(d.parentHostname) + '</code>' : '') + '</div>' + dns +
+          (d.managedDns && d.status !== 'active' ? '<div class="set-hint">DNS managed by Vanish · TLS provisioning in progress</div>' : '') +
+          (d.lastError ? '<div class="set-hint" style="color:var(--red)">' + escapeHtml(d.lastError) + '</div>' : '') +
+          (verifyError ? '<div class="form-error" role="alert">' + escapeHtml(verifyError) + '</div>' : '') +
+          (deleteError ? '<div class="form-error" role="alert">' + escapeHtml(deleteError) + '</div>' : '') +
+        '</div>' +
+        '<div class="set-row-r">' +
+          '<button class="btn ghost btn-sm" data-action="verify-domain" data-hostname="' + attr(d.hostname) + '"' +
+            (verifyPending || deletePending ? ' disabled' : '') + (verifyPending ? ' aria-busy="true"' : '') + '>' +
+            (verifyPending ? 'Verifying…' : 'Verify') + '</button>' +
+          '<button class="btn danger-ghost btn-sm" data-action="delete-domain" data-hostname="' + attr(d.hostname) + '"' +
+            (deletePending ? ' disabled aria-busy="true"' : '') + '>' + (deletePending ? 'Removing…' : 'Remove') + '</button>' +
+        '</div>' +
+      '</div>';
+    }).join('') : '<div class="empty subtle"><span class="empty-mark">∅</span>no domain route configured</div>';
+
+    var form = (canAddRoot || canAddRoute)
+      ? '<form class="set-rows" data-domain-form tabindex="-1" style="margin-bottom:1rem" aria-busy="' + (connectPending ? 'true' : 'false') + '">' +
+          '<div class="set-row"><div style="flex:1"><div class="set-label">Connect a hostname</div><div class="set-hint" id="domain-hint">' +
+            (canAddRoute
+              ? 'Use a direct child such as site.' + escapeHtml((state.domainReservation && state.domainReservation.hostname) || (roots[0] && roots[0].hostname)) + '.'
+              : 'Use a custom subdomain such as studio.example.com. Apex domains are not supported yet.') +
+          '</div>' +
+          '<div class="form-error" id="domain-form-error" role="alert"' + (state.domainErrors.connect ? '' : ' hidden') + '>' +
+            escapeHtml(state.domainErrors.connect) + '</div></div>' +
+          '<div class="domain-fields"><label class="domain-field"><span>Hostname</span><input name="hostname" required autocomplete="url" placeholder="' +
+            (canAddRoute ? 'site.' + attr((state.domainReservation && state.domainReservation.hostname) || (roots[0] && roots[0].hostname)) : 'studio.example.com') +
+          '" value="' + attr(state.domainDraft.hostname) + '" aria-describedby="domain-hint domain-form-error"' + (connectPending ? ' disabled' : '') + '></label>' +
+          '<label class="domain-field"><span>Channel</span><input name="channel" required autocomplete="off" placeholder="client-preview" value="' +
+            attr(state.domainDraft.channel) + '" aria-describedby="domain-hint domain-form-error"' + (connectPending ? ' disabled' : '') + '></label>' +
+          '<button class="btn solid btn-sm" type="submit"' + (connectPending ? ' disabled' : '') + '>' +
+            (connectPending ? 'Connecting…' : 'Connect') + '</button></div></div></form>'
+      : (!isPro
+        ? '<p class="set-blurb" style="margin-bottom:1rem">Custom domains require Pro. Your vanish.sh URLs continue to work normally.</p>'
+        : '');
+
+    var reservation = state.domainReservation
+      ? '<div class="set-row" data-namespace-region tabindex="-1" aria-busy="' + (releasePending ? 'true' : 'false') + '"><div><div class="set-label domain-value">' +
+          escapeHtml(state.domainReservation.hostname) + '</div>' +
+          '<div class="set-hint">reserved namespace · publish on <code class="domain-value">site.' + escapeHtml(state.domainReservation.hostname) + '</code></div>' +
+          (state.domainErrors.release ? '<div class="form-error" role="alert">' + escapeHtml(state.domainErrors.release) + '</div>' : '') + '</div>' +
+          '<button class="btn danger-ghost btn-sm" data-action="release-namespace"' +
+            (releasePending ? ' disabled aria-busy="true"' : '') + '>' + (releasePending ? 'Releasing…' : 'Release') + '</button></div>'
+      : (isPro
+        ? '<form class="set-row" data-namespace-form tabindex="-1" aria-busy="' + (reservePending ? 'true' : 'false') + '"><div style="flex:1"><div class="set-label">Reserve your vanish.sh namespace</div>' +
+            '<div class="set-hint">One permanent identity, then up to ' + state.domainRouteLimit + ' site subdomains below it.</div>' +
+            '<div class="form-error" id="namespace-form-error" role="alert"' + (state.domainErrors.reserve ? '' : ' hidden') + '>' +
+              escapeHtml(state.domainErrors.reserve) + '</div></div>' +
+            '<div class="domain-fields"><label class="domain-field"><span>Namespace</span><input name="slug" required autocomplete="off" placeholder="studio" value="' +
+              attr(state.domainDraft.slug) + '" aria-describedby="namespace-form-error"' + (reservePending ? ' disabled' : '') + '></label>' +
+            '<button class="btn solid btn-sm" type="submit"' + (reservePending ? ' disabled' : '') + '>' +
+              (reservePending ? 'Reserving…' : 'Reserve') + '</button></div></form>'
+        : '<p class="set-blurb">Namespace reservations require Pro.</p>');
+
+    return '<div class="page page-domains">' +
+      '<header class="page-head"><div><h1 class="page-title">Domains</h1><p class="page-sub">reserve an identity and route every site through its own hostname</p></div></header>' +
+      '<section class="set-section"><h2>Vanish namespace</h2><div class="set-rows">' + reservation + '</div></section>' +
+      '<section class="set-section"><h2>Domains &amp; site routes</h2>' + form + '<div class="set-rows">' + rows + '</div></section>' +
+      '<section class="set-section"><h2>CLI</h2><p class="set-blurb"><code>vanish domains reserve studio</code><br><code>vanish site ./portfolio --root index.html --channel portfolio --domain portfolio.studio.vanish.sh</code></p></section>' +
     '</div>';
   }
 
@@ -2558,6 +2748,71 @@ body:has(.login-screen) { background: #1649e8; }
   }
 
   // — Actions —
+  function focusSiteAccessRegion(siteId, preferredAction) {
+    var preferred = Array.from(document.querySelectorAll('[data-action="' + preferredAction + '"]')).find(function(node) {
+      return node.getAttribute('data-id') === siteId && !node.disabled;
+    });
+    var fallback = Array.from(document.querySelectorAll('[data-action="protect-site"]')).find(function(node) {
+      return node.getAttribute('data-id') === siteId && !node.disabled;
+    });
+    var region = Array.from(document.querySelectorAll('[data-site-access-region]')).find(function(node) {
+      return node.getAttribute('data-site-access-region') === siteId;
+    });
+    var target = preferred || fallback || region;
+    if (target) target.focus();
+  }
+
+  function focusDomainMutation(hostname) {
+    var remove = Array.from(document.querySelectorAll('[data-action="delete-domain"]')).find(function(node) {
+      return node.getAttribute('data-hostname') === hostname && !node.disabled;
+    });
+    var region = Array.from(document.querySelectorAll('[data-domain-region]')).find(function(node) {
+      return node.getAttribute('data-domain-region') === hostname;
+    });
+    var fallback = document.querySelector('.page-domains input, .page-domains button:not([disabled]), .page-domains [tabindex="-1"]');
+    var target = remove || region || fallback;
+    if (target) target.focus();
+  }
+
+  function focusDomainVerification(hostname) {
+    var verify = Array.from(document.querySelectorAll('[data-action="verify-domain"]')).find(function(node) {
+      return node.getAttribute('data-hostname') === hostname && !node.disabled;
+    });
+    var region = Array.from(document.querySelectorAll('[data-domain-region]')).find(function(node) {
+      return node.getAttribute('data-domain-region') === hostname;
+    });
+    var target = verify || region;
+    if (target) target.focus();
+  }
+
+  function focusDomainForm(hostname) {
+    var region = hostname && Array.from(document.querySelectorAll('[data-domain-region]')).find(function(node) {
+      return node.getAttribute('data-domain-region') === hostname;
+    });
+    var input = document.querySelector('[data-domain-form] input[name="hostname"]:not([disabled])');
+    var form = document.querySelector('[data-domain-form]');
+    var fallback = document.querySelector('.page-domains button:not([disabled]), .page-domains [tabindex="-1"]');
+    var target = region || input || form || fallback;
+    if (target) target.focus();
+  }
+
+  function focusNamespaceReservation(reserved) {
+    var region = reserved ? document.querySelector('[data-namespace-region]') : null;
+    var input = document.querySelector('[data-namespace-form] input[name="slug"]:not([disabled])');
+    var form = document.querySelector('[data-namespace-form]');
+    var fallback = document.querySelector('.page-domains button:not([disabled]), .page-domains [tabindex="-1"]');
+    var target = region || input || form || fallback;
+    if (target) target.focus();
+  }
+
+  function focusNamespaceMutation() {
+    var release = document.querySelector('[data-action="release-namespace"]:not([disabled])');
+    var region = document.querySelector('[data-namespace-region]');
+    var fallback = document.querySelector('[data-namespace-form] input, .page-domains button:not([disabled]), .page-domains [tabindex="-1"]');
+    var target = release || region || fallback;
+    if (target) target.focus();
+  }
+
   function performAction(action, el) {
     if (action === 'nav') {
       state.section = el.getAttribute('data-section');
@@ -2578,9 +2833,7 @@ body:has(.login-screen) { background: #1649e8; }
     }
     if (action === 'modal-cancel') { closeModal(); return; }
     if (action === 'modal-confirm') {
-      var fn = confirmCfg && confirmCfg.onConfirm;
-      closeModal();
-      fn && fn();
+      confirmModal();
       return;
     }
 
@@ -2617,6 +2870,174 @@ body:has(.login-screen) { background: #1649e8; }
             } else {
               toast('error: ' + ((r && r.error) || 'failed'));
             }
+          });
+        }
+      });
+      return;
+    }
+    if (action === 'protect-site') {
+      var protectedSiteId = el.getAttribute('data-id');
+      if (!protectedSiteId || state.accessPending[protectedSiteId]) return;
+      openConfirm({
+        title: 'Protect this mini-site',
+        body: 'Visitors will need this shared password before any site content is served.',
+        confirmLabel: 'Enable password',
+        destructive: false,
+        passwordInput: true,
+        onConfirm: function(password) {
+          if (!password || password.length < 8 || password.length > 128) {
+            toast('password must be 8–128 characters');
+            return;
+          }
+          state.accessPending[protectedSiteId] = true;
+          delete state.accessErrors[protectedSiteId];
+          rerenderMain();
+          focusSiteAccessRegion(protectedSiteId, 'protect-site');
+          apiFetch('/sites/' + encodeURIComponent(protectedSiteId) + '/access', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'password', password: password })
+          }).then(function(r) {
+            delete state.accessPending[protectedSiteId];
+            if (r && !r.error) {
+              var site = state.sites.find(function(s) { return s.id === protectedSiteId; });
+              if (site) site.access_mode = 'password';
+              toast('password protection enabled');
+            } else {
+              state.accessErrors[protectedSiteId] = (r && r.error) || 'Unable to update password protection.';
+            }
+            rerenderMain();
+            focusSiteAccessRegion(protectedSiteId, 'protect-site');
+          }).catch(function() {
+            delete state.accessPending[protectedSiteId];
+            state.accessErrors[protectedSiteId] = 'Network error. Check your connection and try again.';
+            rerenderMain();
+            focusSiteAccessRegion(protectedSiteId, 'protect-site');
+          });
+        }
+      });
+      return;
+    }
+    if (action === 'link-site') {
+      var linkedSiteId = el.getAttribute('data-id');
+      if (!linkedSiteId || state.accessPending[linkedSiteId]) return;
+      openConfirm({
+        title: 'Remove password protection?',
+        body: 'Anyone who has the site URL will be able to open it immediately.',
+        confirmLabel: 'Allow link access',
+        onConfirm: function() {
+          state.accessPending[linkedSiteId] = true;
+          delete state.accessErrors[linkedSiteId];
+          rerenderMain();
+          focusSiteAccessRegion(linkedSiteId, 'link-site');
+          apiFetch('/sites/' + encodeURIComponent(linkedSiteId) + '/access', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'link' })
+          }).then(function(r) {
+            delete state.accessPending[linkedSiteId];
+            if (r && !r.error) {
+              var site = state.sites.find(function(s) { return s.id === linkedSiteId; });
+              if (site) site.access_mode = 'link';
+              toast('link access enabled');
+            } else {
+              state.accessErrors[linkedSiteId] = (r && r.error) || 'Unable to enable link access.';
+            }
+            rerenderMain();
+            focusSiteAccessRegion(linkedSiteId, 'link-site');
+          }).catch(function() {
+            delete state.accessPending[linkedSiteId];
+            state.accessErrors[linkedSiteId] = 'Network error. Check your connection and try again.';
+            rerenderMain();
+            focusSiteAccessRegion(linkedSiteId, 'link-site');
+          });
+        }
+      });
+      return;
+    }
+    if (action === 'verify-domain') {
+      var verifyHostname = el.getAttribute('data-hostname');
+      if (!verifyHostname || state.domainPending.verify[verifyHostname]) return;
+      state.domainPending.verify[verifyHostname] = true;
+      delete state.domainErrors.verify[verifyHostname];
+      rerenderMain();
+      focusDomainVerification(verifyHostname);
+      apiFetch('/domains/' + encodeURIComponent(verifyHostname) + '/verify', { method: 'POST' }).then(function(r) {
+        delete state.domainPending.verify[verifyHostname];
+        if (r && !r.error) {
+          state.domains = state.domains.map(function(d) { return d.hostname === r.hostname ? r : d; });
+          toast('domain status: ' + r.status);
+        } else {
+          state.domainErrors.verify[verifyHostname] = (r && r.error) || 'Unable to verify this domain.';
+        }
+        rerenderMain();
+        focusDomainVerification(verifyHostname);
+      }).catch(function() {
+        delete state.domainPending.verify[verifyHostname];
+        state.domainErrors.verify[verifyHostname] = 'Network error. Check your connection and try again.';
+        rerenderMain();
+        focusDomainVerification(verifyHostname);
+      });
+      return;
+    }
+    if (action === 'delete-domain') {
+      var deleteHostname = el.getAttribute('data-hostname');
+      if (!deleteHostname || state.domainPending.delete[deleteHostname]) return;
+      openConfirm({
+        title: 'Remove custom domain?',
+        body: deleteHostname + ' will stop serving this Vanish channel. The canonical vanish.sh URL remains available.',
+        confirmLabel: 'Remove domain',
+        onConfirm: function() {
+          state.domainPending.delete[deleteHostname] = true;
+          delete state.domainErrors.delete[deleteHostname];
+          rerenderMain();
+          focusDomainMutation(deleteHostname);
+          apiFetch('/domains/' + encodeURIComponent(deleteHostname), { method: 'DELETE' }).then(function(r) {
+            delete state.domainPending.delete[deleteHostname];
+            if (r && r.ok) {
+              state.domains = state.domains.filter(function(d) { return d.hostname !== deleteHostname; });
+              toast(r.status === 'deleting' ? 'domain removal queued' : 'domain removed');
+            } else {
+              state.domainErrors.delete[deleteHostname] = (r && r.error) || 'Unable to remove this domain.';
+            }
+            rerenderMain();
+            focusDomainMutation(deleteHostname);
+          }).catch(function() {
+            delete state.domainPending.delete[deleteHostname];
+            state.domainErrors.delete[deleteHostname] = 'Network error. Check your connection and try again.';
+            rerenderMain();
+            focusDomainMutation(deleteHostname);
+          });
+        }
+      });
+      return;
+    }
+    if (action === 'release-namespace') {
+      if (state.domainPending.release) return;
+      openConfirm({
+        title: 'Release Vanish namespace?',
+        body: 'The namespace can only be released after all of its site routes have been removed.',
+        confirmLabel: 'Release namespace',
+        onConfirm: function() {
+          state.domainPending.release = true;
+          state.domainErrors.release = '';
+          rerenderMain();
+          focusNamespaceMutation();
+          apiFetch('/domains/reservation', { method: 'DELETE' }).then(function(r) {
+            state.domainPending.release = false;
+            if (r && r.ok) {
+              state.domainReservation = null;
+              toast('namespace released');
+            } else {
+              state.domainErrors.release = (r && r.error) || 'Unable to release this namespace.';
+            }
+            rerenderMain();
+            focusNamespaceMutation();
+          }).catch(function() {
+            state.domainPending.release = false;
+            state.domainErrors.release = 'Network error. Check your connection and try again.';
+            rerenderMain();
+            focusNamespaceMutation();
           });
         }
       });
@@ -2746,6 +3167,7 @@ body:has(.login-screen) { background: #1649e8; }
   document.addEventListener('click', function(e) {
     var el = e.target.closest('[data-action]');
     if (!el) return;
+    if (el.getAttribute('data-action') === 'modal-cancel' && e.target !== el) return;
     e.preventDefault();
     performAction(el.getAttribute('data-action'), el);
   });
@@ -2777,10 +3199,83 @@ body:has(.login-screen) { background: #1649e8; }
 
   document.addEventListener('submit', function(e) {
     var form = e.target;
-    if (!form || !form.matches || !form.matches('[data-login-key-form]')) return;
-    e.preventDefault();
-    var input = form.querySelector('input[name="api_key"]');
-    loginWithApiKey(input && input.value);
+    if (!form || !form.matches) return;
+    if (form.matches('[data-login-key-form]')) {
+      e.preventDefault();
+      var input = form.querySelector('input[name="api_key"]');
+      loginWithApiKey(input && input.value);
+      return;
+    }
+    if (form.matches('[data-domain-form]')) {
+      e.preventDefault();
+      if (state.domainPending.connect) return;
+      var hostnameInput = form.querySelector('input[name="hostname"]');
+      var channelInput = form.querySelector('input[name="channel"]');
+      state.domainDraft.hostname = hostnameInput ? hostnameInput.value : '';
+      state.domainDraft.channel = channelInput ? channelInput.value : '';
+      state.domainErrors.connect = '';
+      state.domainPending.connect = true;
+      rerenderMain();
+      focusDomainForm('');
+      apiFetch('/domains', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostname: state.domainDraft.hostname, channel: state.domainDraft.channel })
+      }).then(function(r) {
+        state.domainPending.connect = false;
+        var connectedHostname = '';
+        if (r && !r.error) {
+          state.domains.unshift(r);
+          connectedHostname = r.hostname;
+          state.domainDraft.hostname = '';
+          state.domainDraft.channel = '';
+          toast('domain added');
+        } else {
+          state.domainErrors.connect = (r && r.error) || 'Unable to connect this hostname.';
+        }
+        rerenderMain();
+        focusDomainForm(connectedHostname);
+      }).catch(function() {
+        state.domainPending.connect = false;
+        state.domainErrors.connect = 'Network error. Check your connection and try again.';
+        rerenderMain();
+        focusDomainForm('');
+      });
+      return;
+    }
+    if (form.matches('[data-namespace-form]')) {
+      e.preventDefault();
+      if (state.domainPending.reserve) return;
+      var slugInput = form.querySelector('input[name="slug"]');
+      state.domainDraft.slug = slugInput ? slugInput.value : '';
+      state.domainErrors.reserve = '';
+      state.domainPending.reserve = true;
+      rerenderMain();
+      focusNamespaceReservation(false);
+      apiFetch('/domains/reservation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: state.domainDraft.slug })
+      }).then(function(r) {
+        state.domainPending.reserve = false;
+        var reserved = false;
+        if (r && !r.error) {
+          state.domainReservation = r;
+          reserved = true;
+          state.domainDraft.slug = '';
+          toast('namespace reserved');
+        } else {
+          state.domainErrors.reserve = (r && r.error) || 'Unable to reserve this namespace.';
+        }
+        rerenderMain();
+        focusNamespaceReservation(reserved);
+      }).catch(function() {
+        state.domainPending.reserve = false;
+        state.domainErrors.reserve = 'Network error. Check your connection and try again.';
+        rerenderMain();
+        focusNamespaceReservation(false);
+      });
+    }
   });
 
   // — Ticker (live countdowns) —

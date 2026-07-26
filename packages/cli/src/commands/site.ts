@@ -1,11 +1,12 @@
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { basename, extname, isAbsolute, relative, resolve } from 'node:path';
-import type { CreateReplacementResult, CreateSiteResult } from '../lib/api-client.js';
+import type { CreateReplacementResult, CreateSiteResult, DomainInfo } from '../lib/api-client.js';
 import { loadConfig } from '../lib/config.js';
 import { VanishClient } from '../lib/api-client.js';
 import { copyToClipboard } from '../lib/clipboard.js';
 import { Spinner, formatBytes } from '../lib/progress.js';
 import { fail, failWithUnknownError } from '../lib/output.js';
+import { isPasswordGate, unlockSiteForVerification } from '../lib/site-access-session.js';
 
 const ANONYMOUS_SITE_MAX_BYTES = 10 * 1024 * 1024;
 const BLOCKED_SITE_EXTENSIONS = new Set([
@@ -24,6 +25,8 @@ export interface SiteOptions {
   idempotencyKey?: string;
   channel?: string;
   verify?: boolean;
+  domain?: string;
+  passwordStdin?: boolean;
 }
 
 interface SiteFile {
@@ -78,6 +81,16 @@ export async function siteCommand(folder: string, options: SiteOptions): Promise
   const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
   const config = loadConfig();
   const client = new VanishClient(config);
+  if (options.domain && !options.channel) {
+    fail('Error: --domain requires --channel so the hostname remains stable across publishes.', options, 'domain_requires_channel');
+  }
+  if (options.dryRun && (options.domain || options.passwordStdin)) {
+    fail('Error: --domain and --password-stdin cannot be used with --dry-run.', options, 'dry_run_configuration_conflict');
+  }
+  if ((options.domain || options.passwordStdin) && !config.api_key) {
+    fail('Error: --domain and --password-stdin require login. Use: vanish login', options, 'auth_required');
+  }
+  const requestedPassword = options.passwordStdin ? readPasswordFromStdin(options) : undefined;
   let updateTarget = options.update;
   if (options.channel) {
     if (!config.api_key) {
@@ -122,6 +135,9 @@ export async function siteCommand(folder: string, options: SiteOptions): Promise
       if ((options.slug || options.days) && me.tier !== 'pro') {
         fail(`Error: ${options.slug ? '--slug' : '--days'} requires a paid account. Current tier: ${me.tier}.`, options, 'pro_required');
       }
+      if (options.domain && me.tier !== 'pro') {
+        fail(`Error: --domain requires a Pro account. Current tier: ${me.tier}.`, options, 'pro_required');
+      }
       if (!isUpdate && me.limits.maxTotalStorage && me.stats.total_bytes + totalBytes > me.limits.maxTotalStorage) {
         fail(
           `Error: Storage quota exceeded. ${formatBytes(me.stats.total_bytes)} used of ${formatBytes(me.limits.maxTotalStorage)}; ` +
@@ -158,6 +174,10 @@ export async function siteCommand(folder: string, options: SiteOptions): Promise
   const spinner = new Spinner(`${isUpdate ? 'Updating' : 'Creating'} site (${files.length} files, ${formatBytes(totalBytes)})`);
   const shouldCopy = options.clipboard !== false;
   let draft: CreateSiteResult | CreateReplacementResult | null = null;
+  let customDomain: DomainInfo | undefined;
+  let createdDomain = false;
+  let pendingDomainAttachment: { hostname: string; channel: string } | null = null;
+  let domainError: string | null = null;
 
   try {
     spinner.start();
@@ -184,6 +204,25 @@ export async function siteCommand(folder: string, options: SiteOptions): Promise
         : await client.createSite(createInput);
     }
 
+    if (options.domain && options.channel) {
+      const existing = (await client.listDomains()).domains
+        .find(domain => domain.hostname.toLowerCase() === options.domain!.toLowerCase());
+      if (existing) {
+        if (existing.channel === options.channel) {
+          customDomain = existing;
+        } else {
+          customDomain = existing;
+          pendingDomainAttachment = {
+            hostname: options.domain,
+            channel: options.channel,
+          };
+        }
+      } else {
+        customDomain = await client.createDomain(options.domain, options.channel);
+        createdDomain = true;
+      }
+    }
+
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       spinner.update(`Uploading ${file.sitePath} (${i + 1}/${files.length})`);
@@ -191,27 +230,59 @@ export async function siteCommand(folder: string, options: SiteOptions): Promise
     }
 
     spinner.update(isUpdate ? 'Publishing update' : 'Publishing site');
+    const publishAccess = requestedPassword
+      ? { mode: 'password' as const, password: requestedPassword }
+      : undefined;
     const published = isUpdate
       ? (options.idempotencyKey
         ? await client.publishSiteReplacement(updateTarget!, draft.id, draft.token, {
           slug: options.slug,
           days: options.days,
+          access: publishAccess,
         }, { idempotencyKey: `${options.idempotencyKey}:publish` })
         : await client.publishSiteReplacement(updateTarget!, draft.id, draft.token, {
           slug: options.slug,
           days: options.days,
+          access: publishAccess,
         }))
       : (options.idempotencyKey
-        ? await client.publishSite(draft.id, draft.token, { idempotencyKey: `${options.idempotencyKey}:publish` })
-        : await client.publishSite(draft.id, draft.token));
+        ? await client.publishSite(draft.id, draft.token, {
+          idempotencyKey: `${options.idempotencyKey}:publish`,
+          access: publishAccess,
+        })
+        : await client.publishSite(draft.id, draft.token, { access: publishAccess }));
     spinner.stop();
+    draft = null;
+
+    if (pendingDomainAttachment) {
+      try {
+        customDomain = await client.attachDomain(
+          pendingDomainAttachment.hostname,
+          pendingDomainAttachment.channel,
+        );
+      } catch (err) {
+        domainError = err instanceof Error ? err.message : 'Failed to attach custom domain';
+      }
+    }
+
+    const access = published.access;
+
+    const shareUrl = !domainError && customDomain?.status === 'active'
+      ? customDomain.url
+      : published.url;
 
     const verification = options.verify
-      ? await verifyPublishedSite(published.url, rootPath, files)
+      ? await verifyPublishedSite(
+        shareUrl,
+        rootPath,
+        files,
+        requestedPassword ? { siteId: published.id, password: requestedPassword } : undefined,
+      )
       : undefined;
 
     const result = {
-      url: published.url,
+      url: shareUrl,
+      canonicalUrl: published.url,
       id: published.id,
       rootPath: published.rootPath,
       size: published.size,
@@ -222,6 +293,9 @@ export async function siteCommand(folder: string, options: SiteOptions): Promise
       verified: verification?.verified,
       verification,
       channel: options.channel,
+      domain: customDomain,
+      domainError: domainError || undefined,
+      access,
       updateCommand: canManageSite
         ? buildUpdateCommand(folder, rootPath, published.id)
         : undefined,
@@ -233,11 +307,11 @@ export async function siteCommand(folder: string, options: SiteOptions): Promise
     if (options.json) {
       console.log(JSON.stringify(result, null, 2));
     } else {
-      console.log(published.url);
+      console.log(shareUrl);
     }
 
     if (shouldCopy && !options.json) {
-      const copied = copyToClipboard(published.url);
+      const copied = copyToClipboard(shareUrl);
       if (copied) {
         process.stderr.write('Copied to clipboard.\n');
       }
@@ -256,9 +330,30 @@ export async function siteCommand(folder: string, options: SiteOptions): Promise
       if (verification && !verification.verified) {
         process.stderr.write(`Verification failed: ${verification.checks.filter(check => !check.ok).map(check => check.message).join('; ')}\n`);
       }
+      if (customDomain && customDomain.status !== 'active') {
+        process.stderr.write(`Custom domain ${customDomain.hostname}: ${customDomain.status}\n`);
+        for (const record of customDomain.dnsRecords) {
+          process.stderr.write(`DNS ${record.type} ${record.name} -> ${record.value}\n`);
+        }
+        process.stderr.write(`Verify later: vanish domains verify ${customDomain.hostname}\n`);
+      }
+      if (domainError) {
+        process.stderr.write(`Custom domain update failed: ${domainError}\n`);
+        process.stderr.write(`Published successfully at: ${published.url}\n`);
+      }
+      if (access?.passwordConfigured) {
+        process.stderr.write('Password protection enabled.\n');
+      }
     }
   } catch (err) {
     spinner.stop();
+    if (createdDomain && customDomain) {
+      try {
+        await client.deleteDomain(customDomain.hostname);
+      } catch {
+        // Best-effort rollback of a domain created for a publish that never completed.
+      }
+    }
     if (draft) {
       try {
         await client.deleteSite(draft.id, draft.token);
@@ -268,6 +363,17 @@ export async function siteCommand(folder: string, options: SiteOptions): Promise
     }
     failWithUnknownError(err, options);
   }
+}
+
+function readPasswordFromStdin(options: SiteOptions): string {
+  if (process.stdin.isTTY) {
+    fail('Error: --password-stdin expects a password on stdin.', options, 'password_stdin_required');
+  }
+  const password = readFileSync(0, 'utf8').trimEnd();
+  if (password.length < 8 || password.length > 128) {
+    fail('Error: password from stdin must contain between 8 and 128 characters.', options, 'invalid_password');
+  }
+  return password;
 }
 
 function buildDryRunResult(
@@ -325,20 +431,31 @@ function buildPrivacyWarnings(paths: string[]): string[] {
   return Array.from(warnings);
 }
 
-async function verifyPublishedSite(url: string, rootPath: string, files: SiteFile[]) {
+async function verifyPublishedSite(
+  url: string,
+  rootPath: string,
+  files: SiteFile[],
+  protectedAccess?: { siteId: string; password: string },
+) {
   const checks: Array<{ name: string; ok: boolean; message: string }> = [];
 
   try {
-    const root = await fetch(url, { redirect: 'follow' });
+    const headers = protectedAccess
+      ? await unlockSiteForVerification(url, protectedAccess.siteId, protectedAccess.password)
+      : undefined;
+    const root = await fetch(url, { redirect: 'follow', headers });
+    const passwordGate = isPasswordGate(root);
     checks.push({
       name: 'root',
-      ok: root.ok,
-      message: root.ok ? `Root responded ${root.status}` : `Root responded ${root.status}`,
+      ok: root.ok && !passwordGate,
+      message: passwordGate
+        ? 'Password required; uploaded content was not verified'
+        : `Root responded ${root.status}`,
     });
 
     const expectedContentType = guessContentType(rootPath);
     const contentType = root.headers.get('content-type') || '';
-    if (root.ok && expectedContentType !== 'application/octet-stream') {
+    if (root.ok && !passwordGate && expectedContentType !== 'application/octet-stream') {
       checks.push({
         name: 'root-content-type',
         ok: contentType.includes(expectedContentType.split(';')[0]),
@@ -355,7 +472,7 @@ async function verifyPublishedSite(url: string, rootPath: string, files: SiteFil
       });
     }
 
-    const rootText = root.ok ? await root.text() : '';
+    const rootText = root.ok && !passwordGate ? await root.text() : '';
     const assetPaths = Array.from(extractAssetPaths(rootText)).slice(0, 10);
 
     for (const assetPath of assetPaths) {
@@ -369,11 +486,14 @@ async function verifyPublishedSite(url: string, rootPath: string, files: SiteFil
       }
 
       const assetUrl = new URL(assetPath, url).toString();
-      const asset = await fetch(assetUrl, { redirect: 'follow' });
+      const asset = await fetch(assetUrl, { redirect: 'follow', headers });
+      const assetPasswordGate = isPasswordGate(asset);
       checks.push({
         name: `asset:${assetPath}`,
-        ok: asset.ok,
-        message: asset.ok ? `${assetPath} responded ${asset.status}` : `${assetPath} responded ${asset.status}`,
+        ok: asset.ok && !assetPasswordGate,
+        message: assetPasswordGate
+          ? `${assetPath} returned a password gate instead of uploaded content`
+          : `${assetPath} responded ${asset.status}`,
       });
     }
   } catch (err) {

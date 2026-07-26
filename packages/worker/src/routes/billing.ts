@@ -4,6 +4,7 @@ import type { Env, PaidTier, Tier } from '../types.js';
 import { TIER_LIMITS } from '../types.js';
 import { StripeClient, verifyWebhookSignature } from '../lib/stripe.js';
 import { logProductEvent } from '../lib/events.js';
+import { beginDomainGrace, resumeDomainsAfterUpgrade } from '../lib/custom-domains.js';
 
 const billing = new Hono<{ Bindings: Env }>();
 
@@ -370,6 +371,7 @@ async function setUserPaidTier(
     SET stripe_customer_id = ?, stripe_subscription_id = ?, tier = ?, updated_at = datetime('now')
     WHERE id = ?
   `).bind(customerId, subscriptionId, paidTier, user.id).run();
+  await resumeDomainsAfterUpgrade(env, user.id);
 
   if (alreadyRecorded) {
     return;
@@ -423,6 +425,7 @@ async function downgradeSubscription(
       WHERE id = ?
     `).bind(user.id).run();
   }
+  await beginDomainGrace(env, user.id);
 
   console.log(`Subscription ${redactIdentifier(subscriptionId)} status ${status} - user ${redactIdentifier(user.id)} downgraded to free`);
 }

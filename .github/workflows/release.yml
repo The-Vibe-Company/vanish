@@ -81,16 +81,32 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      - name: Resolve the custom-domain zone
+        id: handoff-zone
+        working-directory: packages/worker
+        env:
+          CUSTOM_HOSTNAMES_API_TOKEN: ${{ secrets.CLOUDFLARE_CUSTOM_HOSTNAMES_API_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+        run: echo "zone_id=$(node ../../scripts/resolve-cloudflare-zone-id.mjs vanish.sh)" >> "$GITHUB_OUTPUT"
+
       - name: Provision Worker secrets
         working-directory: packages/worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CUSTOM_HOSTNAMES_API_TOKEN: ${{ secrets.CLOUDFLARE_CUSTOM_HOSTNAMES_API_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          WORKER_ZONE_ID: ${{ steps.handoff-zone.outputs.zone_id }}
+          ACCESS_SECRET: ${{ secrets.VANISH_ACCESS_SESSION_SECRET }}
         run: |
+          test -n "$CUSTOM_HOSTNAMES_API_TOKEN"
+          test -n "$WORKER_ZONE_ID"
+          test -n "$ACCESS_SECRET"
           echo "${{ secrets.GH_OAUTH_CLIENT_ID }}" | npx wrangler secret put GITHUB_CLIENT_ID
           echo "${{ secrets.GH_OAUTH_CLIENT_SECRET }}" | npx wrangler secret put GITHUB_CLIENT_SECRET
           echo "${{ secrets.STRIPE_SECRET_KEY }}" | npx wrangler secret put STRIPE_SECRET_KEY
           echo "${{ secrets.STRIPE_WEBHOOK_SECRET }}" | npx wrangler secret put STRIPE_WEBHOOK_SECRET
+          printf '%s' "$CUSTOM_HOSTNAMES_API_TOKEN" | npx wrangler secret put CLOUDFLARE_API_TOKEN
+          printf '%s' "$WORKER_ZONE_ID" | npx wrangler secret put CLOUDFLARE_ZONE_ID
+          printf '%s' "$ACCESS_SECRET" | npx wrangler secret put ACCESS_SESSION_SECRET
 
       - name: Deploy to Cloudflare
         run: npx wrangler deploy

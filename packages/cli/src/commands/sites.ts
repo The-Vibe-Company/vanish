@@ -1,11 +1,42 @@
 import { extname } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { loadConfig } from '../lib/config.js';
 import { VanishClient } from '../lib/api-client.js';
 import { formatBytes } from '../lib/progress.js';
 import { fail, failWithUnknownError } from '../lib/output.js';
+import { isPasswordGate, unlockSiteForVerification } from '../lib/site-access-session.js';
 
 interface JsonOptions {
   json?: boolean;
+}
+
+export async function siteAccessCommand(
+  id: string,
+  options: JsonOptions & { mode?: 'link' | 'password'; passwordStdin?: boolean },
+): Promise<void> {
+  if (options.mode !== 'link' && options.mode !== 'password') {
+    fail('Error: --mode must be link or password', options, 'invalid_access_mode');
+  }
+  if (options.mode === 'password' && !options.passwordStdin) {
+    fail('Error: password mode requires --password-stdin', options, 'password_stdin_required');
+  }
+
+  const client = authedClient(options);
+  try {
+    const channel = await client.getSiteChannel(id);
+    const target = channel?.site.id || id;
+    const access = options.mode === 'password'
+      ? await client.setSiteAccess(target, { mode: 'password', password: readPasswordFromStdin(options) })
+      : await client.setSiteAccess(target, { mode: 'link' });
+    if (options.json) {
+      console.log(JSON.stringify(access, null, 2));
+    } else {
+      console.log(`Access mode: ${access.mode}`);
+      console.log(access.passwordConfigured ? 'Password protection enabled.' : 'Anyone with the link can view this site.');
+    }
+  } catch (error) {
+    failWithUnknownError(error, options, 'Failed to update site access');
+  }
 }
 
 export async function sitesListCommand(options: JsonOptions & { active?: boolean }): Promise<void> {
@@ -95,12 +126,15 @@ export async function siteExtendCommand(id: string, options: JsonOptions & { day
   }
 }
 
-export async function siteVerifyCommand(id: string, options: JsonOptions): Promise<void> {
+export async function siteVerifyCommand(id: string, options: JsonOptions & { passwordStdin?: boolean }): Promise<void> {
   const client = authedClient(options);
 
   try {
     const { site, files } = await client.getSiteFiles(id);
-    const result = await verifySite(site.url, site.root_path, files.map(file => file.path));
+    const headers = options.passwordStdin
+      ? await unlockSiteForVerification(site.url, site.id, readPasswordFromStdin(options))
+      : undefined;
+    const result = await verifySite(site.url, site.root_path, files.map(file => file.path), headers);
     if (options.json) {
       console.log(JSON.stringify({ site, ...result }, null, 2));
       if (!result.verified) {
@@ -129,15 +163,37 @@ function authedClient(options: JsonOptions): VanishClient {
   return new VanishClient(config);
 }
 
-async function verifySite(url: string, rootPath: string, files: string[]) {
+function readPasswordFromStdin(options: JsonOptions): string {
+  const password = process.stdin.isTTY
+    ? ''
+    : requireStdin().trimEnd();
+  if (password.length < 8 || password.length > 128) {
+    fail('Error: password from stdin must contain between 8 and 128 characters', options, 'invalid_password');
+  }
+  return password;
+}
+
+function requireStdin(): string {
+  return readFileSync(0, 'utf8');
+}
+
+async function verifySite(
+  url: string,
+  rootPath: string,
+  files: string[],
+  headers?: Record<string, string>,
+) {
   const checks: Array<{ name: string; ok: boolean; message: string }> = [];
 
   try {
-    const root = await fetch(url, { redirect: 'follow' });
+    const root = await fetch(url, { redirect: 'follow', headers });
+    const passwordGate = isPasswordGate(root);
     checks.push({
       name: 'root',
-      ok: root.ok,
-      message: `Root responded ${root.status}`,
+      ok: root.ok && !passwordGate,
+      message: passwordGate
+        ? 'Password required; rerun with --password-stdin'
+        : `Root responded ${root.status}`,
     });
 
     if (!files.includes(rootPath)) {
@@ -148,7 +204,7 @@ async function verifySite(url: string, rootPath: string, files: string[]) {
       });
     }
 
-    const rootText = root.ok ? await root.text() : '';
+    const rootText = root.ok && !passwordGate ? await root.text() : '';
     const assets = Array.from(extractAssetPaths(rootText)).slice(0, 10);
 
     for (const asset of assets) {
@@ -161,11 +217,14 @@ async function verifySite(url: string, rootPath: string, files: string[]) {
         continue;
       }
 
-      const response = await fetch(new URL(asset, url), { redirect: 'follow' });
+      const response = await fetch(new URL(asset, url), { redirect: 'follow', headers });
+      const passwordGate = isPasswordGate(response);
       checks.push({
         name: `asset:${asset}`,
-        ok: response.ok,
-        message: `${asset} responded ${response.status}`,
+        ok: response.ok && !passwordGate,
+        message: passwordGate
+          ? `${asset} returned a password gate instead of uploaded content`
+          : `${asset} responded ${response.status}`,
       });
     }
   } catch (err) {

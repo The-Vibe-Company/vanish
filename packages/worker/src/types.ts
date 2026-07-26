@@ -11,6 +11,10 @@ export interface Env {
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PRICE_ID?: string;
   STRIPE_PRO_PRICE_ID_EUR_10?: string;
+  CLOUDFLARE_API_TOKEN?: string;
+  CLOUDFLARE_ZONE_ID?: string;
+  CUSTOM_DOMAIN_FALLBACK_HOST?: string;
+  ACCESS_SESSION_SECRET?: string;
 }
 
 export type Tier = 'anonymous' | 'free' | 'pro';
@@ -54,6 +58,7 @@ export interface Site {
   created_at: string;
   last_activity_at?: string | null;
   deleted_at: string | null;
+  access_mode?: 'link' | 'password';
 }
 
 export interface SiteFile {
@@ -63,6 +68,48 @@ export interface SiteFile {
   size_bytes: number;
   r2_key: string;
   created_at: string;
+}
+
+export type CustomDomainStatus =
+  | 'pending_dns'
+  | 'pending_tls'
+  | 'active'
+  | 'error'
+  | 'suspended'
+  | 'deleting';
+
+export interface CustomDomain {
+  hostname: string;
+  user_id: string;
+  channel: string;
+  parent_hostname: string | null;
+  managed_dns: number;
+  provider_hostname_id: string | null;
+  status: CustomDomainStatus;
+  dns_records: string;
+  last_error: string | null;
+  verified_at: string | null;
+  grace_expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DomainReservation {
+  hostname: string;
+  slug: string;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SiteAccess {
+  site_id: string;
+  mode: 'link' | 'password';
+  password_hash: string | null;
+  password_salt: string | null;
+  policy_version: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Bundle {
