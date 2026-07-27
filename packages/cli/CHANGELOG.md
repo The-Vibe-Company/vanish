@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.23](https://github.com/The-Vibe-Company/vanish/compare/vanish-cli-v0.1.22...vanish-cli-v0.1.23) (2026-07-27)
+
+
+### Features
+
+* **handoff:** add custom domains and protected previews ([#70](https://github.com/The-Vibe-Company/vanish/issues/70)) ([25f7cb9](https://github.com/The-Vibe-Company/vanish/commit/25f7cb9ace3c9506724aee3a514952f1b596041f))
+* **pro:** add 10GB plan and responsive dashboard ([#68](https://github.com/The-Vibe-Company/vanish/issues/68)) ([83a85e7](https://github.com/The-Vibe-Company/vanish/commit/83a85e7d50b06fcc7a95d97ad3592fc73124eada))
+
 ## [0.1.22](https://github.com/The-Vibe-Company/vanish/compare/vanish-cli-v0.1.21...vanish-cli-v0.1.22) (2026-06-04)
 
 
