@@ -1,0 +1,64 @@
+vanish-publish-site/SKILL.md
+  s_1aad501347b033::t_d09dc4f1ceb069 94
+README.md
+  s_1aad501347b033::t_d09dc4f1ceb069 249,251
+  s_1aad501347b033::t_d2d5fc1d98cda3 286-287
+vanish-upload-files/SKILL.md
+  s_1aad501347b033::t_d09dc4f1ceb069 79
+packages/worker/src/lib/request-body.ts
+  s_1aad501347b033::t_84895e91643d72 1-29
+packages/cli/test/api-client-upload.test.ts
+  s_1aad501347b033::t_061daa2fad62fd 1-43
+packages/worker/test/sites-route.test.ts
+  s_1aad501347b033::t_89c5600bd9009e 781,791-812,820,823
+  s_1aad501347b033::t_061daa2fad62fd 32,816,821
+vanish-connect-upgrade/SKILL.md
+  s_1aad501347b033::t_d09dc4f1ceb069 55
+packages/cli/src/lib/api-client.ts
+  s_1aad501347b033::t_5170fc49e6646c 268,343,683
+packages/cli/test/site.test.ts
+  s_1aad501347b033::t_6a465823c4d06d 187,192
+  s_1aad501347b033::t_5a018caf4728d5 181
+  s_1aad501347b033::t_d09dc4f1ceb069 2,85,178-180,182-186,188-189,191
+  s_1aad501347b033::t_6fa1caa6040482 190
+  s_1aad501347b033::t_7b8175c0698981 193-194
+packages/worker/src/routes/upload.ts
+  s_1aad501347b033::t_9c7dad7a1e4139 8,66-73,76,86,152
+packages/worker/src/types.ts
+  s_1aad501347b033::t_d09dc4f1ceb069 141-142
+packages/worker/test/types.test.ts
+  s_1aad501347b033::t_d09dc4f1ceb069 5-6,9-10
+packages/worker/test/upload-route.test.ts
+  s_1aad501347b033::t_89c5600bd9009e 34,63-78,124,130-138,150,152-153,155
+  s_1aad501347b033::t_d2d5fc1d98cda3 79-96
+packages/cli/src/commands/site.ts
+  s_1aad501347b033::t_d09dc4f1ceb069 11
+packages/worker/test/storage.test.ts
+  s_1aad501347b033::t_905f792afced4d 29-36
+packages/worker/src/routes/sites.ts
+  s_1aad501347b033::t_a76467e64b1770 9,498-506,509-515,530,570
+  s_1aad501347b033::t_e10152d8d8eb34 606
+packages/worker/src/routes/bundles.ts
+  s_1aad501347b033::t_f38796746b7c73 9,203-210,213,222,228,293,343
+packages/worker/test/bundles-upload-route.test.ts
+  s_1aad501347b033::t_061daa2fad62fd 1-134
+CLAUDE.md
+  s_1aad501347b033::t_d2d5fc1d98cda3 53
+  s_1aad501347b033::t_d09dc4f1ceb069 73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "03149c6840901dfbd53e2a9fef0536934d2d26b7",
+  "prompts": {},
+  "sessions": {
+    "s_1aad501347b033": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07bf9-7232-7ef3-afd0-75fe26a42bb2",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "StanGirard <stan@quivr.app>"
+    }
+  }
+}
