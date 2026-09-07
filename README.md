@@ -246,9 +246,9 @@ vanish update      # update the CLI to the latest version
 | Domain identity | No | No | 1 `vanish.sh` namespace + 1 custom subdomain |
 | Site domain routes | No | No | Up to 20 below owned namespaces |
 | Password protection | No | Yes | Yes |
-| Site limits | 10 MB, 100 files | 500 files, within 50 MB total | 5,000 files, within 10 GB total |
+| Site limits | 300 MB, 100 files | 500 files, within 50 MB total | 5,000 files, within 10 GB total |
 | File uploads | Images only | All except executables | All except executables |
-| Max file size | 5 MB | 50 MB | 1 GB |
+| Max file size | 300 MB | 50 MB | 1 GB |
 | Total storage | Ephemeral only | 50 MB | 10 GB |
 | Retention | 24 hours | 48 hours | 30 days, up to 365 |
 | Rate limit | 10/hour | 50/hour | 500/hour |
@@ -282,6 +282,8 @@ wrangler deploy
 For production mini-site URLs, route `*.your-domain` to the Worker. Local development uses path URLs like `http://localhost:8787/s/<site-id>/`.
 
 Set `SELF_HOSTED=true` and `DEFAULT_TIER=pro` to give newly authenticated users Pro access without billing.
+
+Uploads are streamed through the Worker and require an accurate `Content-Length` header. Configure the Cloudflare zone's maximum upload size to cover the enabled tier limits (at least 300 MB for anonymous uploads and 1 GB for Pro).
 
 Product events are disabled by default. Set `PRODUCT_EVENTS=true` to record privacy-light funnel events without filenames, paths, tokens, keys, or content.
 

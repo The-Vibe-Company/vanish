@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, truncateSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -82,7 +82,7 @@ describe('siteCommand', () => {
       slug: null,
       fileCount: 2,
       maxFiles: 100,
-      maxBytes: 10 * 1024 * 1024,
+      maxBytes: 300 * 1024 * 1024,
       expires: '2026-05-11T00:00:00.000Z',
     });
     mocks.client.createSiteReplacement.mockResolvedValue({
@@ -173,6 +173,23 @@ describe('siteCommand', () => {
       blockedFiles: [{ path: 'deploy.sh', extension: '.sh' }],
     });
     expect(result.errors[0]).toContain('deploy.sh');
+  });
+
+  it('accepts 300MB anonymous sites and rejects anything larger during preflight', async () => {
+    const payloadPath = join(dir, 'payload.bin');
+    const existingBytes = Buffer.byteLength('<h1>ok</h1>') + Buffer.byteLength('window.ok = true;');
+    writeFileSync(payloadPath, '');
+    truncateSync(payloadPath, 300 * 1024 * 1024 - existingBytes);
+
+    await siteCommand(dir, { root: 'index.html', dryRun: true, json: true, clipboard: false });
+
+    const result = JSON.parse(String(logSpy.mock.calls[0][0]));
+    expect(result.size).toBe(300 * 1024 * 1024);
+
+    truncateSync(payloadPath, 300 * 1024 * 1024 - existingBytes + 1);
+    await expect(siteCommand(dir, { root: 'index.html', dryRun: true, clipboard: false }))
+      .rejects.toThrow('exit 1');
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Anonymous sites are limited to 300.0 MB'));
   });
 
   it('rejects missing root files before creating a draft', async () => {

@@ -31,6 +31,7 @@ describe('upload and serve routes', () => {
     expect(upload.status).toBe(201);
     const created = await upload.json() as { id: string; tier: string; deletable: boolean };
     expect(created).toMatchObject({ tier: 'anonymous', deletable: false });
+    expect(bucket.lastPutWasStream).toBe(true);
 
     const served = await request(env, `/f/${created.id}.png`);
 
@@ -57,6 +58,40 @@ describe('upload and serve routes', () => {
 
     expect(served.status).toBe(200);
     expect(served.headers.get('Content-Disposition')).toContain('attachment;');
+  });
+
+  it('rejects an oversized upload from Content-Length before writing to R2', async () => {
+    const response = await request(env, '/upload', {
+      method: 'POST',
+      headers: {
+        'X-Filename': 'preview.png',
+        'Content-Type': 'application/octet-stream',
+        'Content-Length': String(300 * 1024 * 1024 + 1),
+      },
+      body: 'png',
+    });
+
+    expect(response.status).toBe(413);
+    expect(await response.json()).toMatchObject({ code: 'file_too_large', maxBytes: 300 * 1024 * 1024 });
+    expect(bucket.objects.size).toBe(0);
+  });
+
+  it('requires Content-Length before streaming an upload', async () => {
+    const response = await worker.fetch(new Request('https://vanish.sh/upload', {
+      method: 'POST',
+      headers: {
+        'X-Filename': 'preview.png',
+        'Content-Type': 'application/octet-stream',
+      },
+      body: 'png',
+    }), env, {
+      waitUntil: () => undefined,
+      passThroughOnException: () => undefined,
+    } as unknown as ExecutionContext);
+
+    expect(response.status).toBe(411);
+    expect(await response.json()).toMatchObject({ code: 'length_required' });
+    expect(bucket.objects.size).toBe(0);
   });
 
   it('serves document uploads as original bytes for browser navigations', async () => {
@@ -86,10 +121,19 @@ describe('upload and serve routes', () => {
 });
 
 function request(env: Env, path: string, init?: RequestInit) {
-  return worker.fetch(new Request(`https://vanish.sh${path}`, init), env, {
+  return worker.fetch(new Request(`https://vanish.sh${path}`, withContentLength(init)), env, {
     waitUntil: () => undefined,
     passThroughOnException: () => undefined,
   } as unknown as ExecutionContext);
+}
+
+function withContentLength(init?: RequestInit): RequestInit | undefined {
+  if (!init?.body) return init;
+  const headers = new Headers(init.headers);
+  if (!headers.has('Content-Length') && typeof init.body === 'string') {
+    headers.set('Content-Length', String(new TextEncoder().encode(init.body).byteLength));
+  }
+  return { ...init, headers };
 }
 
 function browserHeaders(headers: Record<string, string> = {}): Record<string, string> {
@@ -103,10 +147,12 @@ function browserHeaders(headers: Record<string, string> = {}): Record<string, st
 
 class UploadBucket {
   objects = new Map<string, { body: ArrayBuffer; contentType?: string }>();
+  lastPutWasStream = false;
 
-  async put(key: string, body: ArrayBuffer, options?: R2PutOptions): Promise<void> {
+  async put(key: string, body: ArrayBuffer | ReadableStream<Uint8Array>, options?: R2PutOptions): Promise<void> {
+    this.lastPutWasStream = body instanceof ReadableStream;
     this.objects.set(key, {
-      body,
+      body: await new Response(body).arrayBuffer(),
       contentType: options?.httpMetadata?.contentType,
     });
   }

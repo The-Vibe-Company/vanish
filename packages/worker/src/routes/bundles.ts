@@ -6,6 +6,7 @@ import { ALLOWED_IMAGE_EXTENSIONS, BLOCKED_EXTENSIONS, TIER_LIMITS } from '../ty
 import { calculateExpiry, isExpired } from '../lib/expiry.js';
 import { guessContentType } from '../lib/content-type.js';
 import { ensureStorageAvailable } from '../lib/storage.js';
+import { getSizedRequestBody } from '../lib/request-body.js';
 import { normalizeSitePath } from '../lib/site-path.js';
 import { hashApiKey } from '../lib/api-key.js';
 import { rateLimitMiddleware } from '../middleware/rate-limit.js';
@@ -199,11 +200,17 @@ bundles.put('/bundles/:id/files', async (c) => {
     ), 400);
   }
 
-  const body = await c.req.arrayBuffer();
-  if (body.byteLength === 0) {
+  const requestBody = getSizedRequestBody(c.req.raw, limits.maxFileSize);
+  if (!requestBody.ok && requestBody.reason === 'length_required') {
+    return c.json(structuredError('length_required', 'Content-Length header is required for bundle file uploads', 411), 411);
+  }
+  if (!requestBody.ok && requestBody.reason === 'invalid_length') {
+    return c.json(structuredError('invalid_content_length', 'Content-Length header must be a valid non-negative integer', 400), 400);
+  }
+  if (!requestBody.ok && requestBody.reason === 'empty') {
     return c.json(structuredError('empty_file', 'Empty file', 400), 400);
   }
-  if (body.byteLength > limits.maxFileSize) {
+  if (!requestBody.ok) {
     return c.json({
       ...structuredError('file_too_large', `File too large for ${auth.tier} tier.`, 413, {
         limits: { maxBytes: limits.maxFileSize },
@@ -212,12 +219,13 @@ bundles.put('/bundles/:id/files', async (c) => {
       maxBytes: limits.maxFileSize,
     }, 413);
   }
+  const { body, size } = requestBody;
 
   const existingFile = await c.env.DB.prepare(`
     SELECT size_bytes FROM bundle_files WHERE bundle_id = ? AND path = ?
   `).bind(bundle.id, path).first<{ size_bytes: number }>();
 
-  const nextBundleSize = bundle.size_bytes - (existingFile?.size_bytes || 0) + body.byteLength;
+  const nextBundleSize = bundle.size_bytes - (existingFile?.size_bytes || 0) + size;
   const quota = await ensureStorageAvailable(c.env, auth.tier, auth.userId, nextBundleSize, {
     excludeBundleId: bundle.id,
   });
@@ -282,7 +290,7 @@ bundles.put('/bundles/:id/files', async (c) => {
         path,
         path.split('/').pop() || path,
         contentType,
-        body.byteLength,
+        size,
         r2Key,
         bundle.id,
         bundle.id,
@@ -332,7 +340,7 @@ bundles.put('/bundles/:id/files', async (c) => {
     }, 413);
   }
 
-  return c.json({ ok: true, path, size: body.byteLength, contentType });
+  return c.json({ ok: true, path, size, contentType });
 });
 
 bundles.post('/bundles/:id/publish', async (c) => {

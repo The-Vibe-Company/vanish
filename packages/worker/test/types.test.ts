@@ -2,12 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { TIER_LIMITS, BLOCKED_EXTENSIONS, ALLOWED_IMAGE_EXTENSIONS } from '../src/types.js';
 
 describe('TIER_LIMITS', () => {
-  it('anonymous tier allows 5MB', () => {
-    expect(TIER_LIMITS.anonymous.maxFileSize).toBe(5 * 1024 * 1024);
+  it('anonymous tier allows 300MB files', () => {
+    expect(TIER_LIMITS.anonymous.maxFileSize).toBe(300 * 1024 * 1024);
   });
 
-  it('anonymous tier allows 10MB mini-sites', () => {
-    expect(TIER_LIMITS.anonymous.maxSiteSize).toBe(10 * 1024 * 1024);
+  it('anonymous tier allows 300MB mini-sites', () => {
+    expect(TIER_LIMITS.anonymous.maxSiteSize).toBe(300 * 1024 * 1024);
     expect(TIER_LIMITS.anonymous.maxSiteFiles).toBe(100);
   });
 

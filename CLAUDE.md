@@ -50,7 +50,7 @@ The worker uses **Hono** as its web framework. Routes are registered in `index.t
 - **`cron/cleanup.ts`**: Hourly cleanup of expired uploads/sites, stale auth sessions, and old rate limit records
 - **`db/schema.sql`**: D1 schema (tables: users, api_keys, uploads, sites, site_files, auth_sessions, rate_limits)
 - **`types.ts`**: `Env` bindings interface, `TIER_LIMITS` constant defining per-tier limits (anonymous/free/pro)
-- **`lib/`**: Utilities — `api-key.ts` (generation + SHA-256 hashing), `expiry.ts` (tier-based TTL), `rate-limit.ts` (identifier extraction), `stripe.ts` (minimal Stripe client, no SDK)
+- **`lib/`**: Utilities — `api-key.ts` (generation + SHA-256 hashing), `expiry.ts` (tier-based TTL), `rate-limit.ts` (identifier extraction), `request-body.ts` (Content-Length validation for streaming uploads), `stripe.ts` (minimal Stripe client, no SDK)
 
 ### CLI (`packages/cli/src/`)
 
@@ -70,7 +70,7 @@ Agent-ready surfaces:
 ### Tier System
 
 Three tiers with different limits defined in `TIER_LIMITS` (`packages/worker/src/types.ts`):
-- **anonymous**: Images only for file uploads, 5MB max file, static mini-sites up to 10MB, 24h retention, 10 uploads/hour
+- **anonymous**: Images only for file uploads, 300MB max file, static mini-sites up to 300MB, 24h retention, 10 uploads/hour
 - **free**: All files, 50MB max file, 50MB total storage shared across files and mini-sites, 48h retention, 50/hour
 - **pro**: All files, 1GB max file, 10GB total storage shared across files and mini-sites, up to 5,000 files per site, 30-day default retention (configurable up to 365 days via `--days`), custom site slugs, 500/hour
 
