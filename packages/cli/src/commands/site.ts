@@ -8,7 +8,7 @@ import { Spinner, formatBytes } from '../lib/progress.js';
 import { fail, failWithUnknownError } from '../lib/output.js';
 import { isPasswordGate, unlockSiteForVerification } from '../lib/site-access-session.js';
 
-const ANONYMOUS_SITE_MAX_BYTES = 10 * 1024 * 1024;
+const ANONYMOUS_SITE_MAX_BYTES = 300 * 1024 * 1024;
 const BLOCKED_SITE_EXTENSIONS = new Set([
   '.exe', '.bat', '.cmd', '.com', '.msi', '.scr',
   '.sh', '.bash', '.ps1', '.psm1',

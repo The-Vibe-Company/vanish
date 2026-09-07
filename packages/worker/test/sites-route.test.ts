@@ -29,6 +29,7 @@ describe('site routes', () => {
 
     await uploadSiteFile(env, draft.id, draft.token, 'index.html', '<h1>ok</h1>');
     await uploadSiteFile(env, draft.id, draft.token, 'assets/app.js', 'window.ok = true;');
+    expect(bucket.putBodiesWereStreams).toEqual([true, true]);
 
     const publish = await request(env, `/sites/${draft.id}/publish`, {
       method: 'POST',
@@ -777,7 +778,7 @@ function browserHeaders(headers: Record<string, string> = {}): Record<string, st
 
 async function request(env: Env, path: string, init?: RequestInit) {
   const waitUntilPromises: Promise<unknown>[] = [];
-  const response = await worker.fetch(new Request(`http://localhost:8787${path}`, init), env, {
+  const response = await worker.fetch(new Request(`http://localhost:8787${path}`, withContentLength(init)), env, {
     waitUntil: promise => {
       waitUntilPromises.push(Promise.resolve(promise));
     },
@@ -787,15 +788,39 @@ async function request(env: Env, path: string, init?: RequestInit) {
   return response;
 }
 
+function withContentLength(init?: RequestInit): RequestInit | undefined {
+  if (init?.body === null || init?.body === undefined) return init;
+
+  let size: number | null = null;
+  if (typeof init.body === 'string') {
+    size = new TextEncoder().encode(init.body).byteLength;
+  } else if (init.body instanceof URLSearchParams) {
+    size = new TextEncoder().encode(init.body.toString()).byteLength;
+  } else if (init.body instanceof ArrayBuffer) {
+    size = init.body.byteLength;
+  } else if (ArrayBuffer.isView(init.body)) {
+    size = init.body.byteLength;
+  }
+
+  if (size === null) return init;
+  const headers = new Headers(init.headers);
+  if (!headers.has('Content-Length')) {
+    headers.set('Content-Length', String(size));
+  }
+  return { ...init, headers };
+}
+
 class FakeBucket {
   objects = new Map<string, { body: ArrayBuffer; contentType?: string }>();
   failDeletes = new Set<string>();
+  putBodiesWereStreams: boolean[] = [];
   afterPut?: () => void;
   pauseNextPut?: Promise<void>;
 
-  async put(key: string, body: ArrayBuffer, options?: R2PutOptions): Promise<void> {
+  async put(key: string, body: ArrayBuffer | ReadableStream<Uint8Array>, options?: R2PutOptions): Promise<void> {
+    this.putBodiesWereStreams.push(body instanceof ReadableStream);
     this.objects.set(key, {
-      body,
+      body: await new Response(body).arrayBuffer(),
       contentType: options?.httpMetadata?.contentType,
     });
     this.afterPut?.();

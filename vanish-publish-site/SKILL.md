@@ -91,7 +91,7 @@ Respect explicit user instructions such as "do not upload", "local only", or "pr
 
 ## Limits And Gotchas
 
-- Anonymous: 24h retention, 10 MB, 100 files.
+- Anonymous: 24h retention, 300 MB, 100 files.
 - Free login: 48h retention, 50 MB total storage, 500 files per site.
 - Pro: 30-day default retention, `--days` up to 365, 10 GB total storage, 5,000 files per site, custom slugs.
 - Blocked site extensions include `.exe`, `.bat`, `.cmd`, `.com`, `.msi`, `.scr`, `.sh`, `.bash`, `.ps1`, `.psm1`.

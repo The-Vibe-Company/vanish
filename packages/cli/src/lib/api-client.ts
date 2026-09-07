@@ -265,6 +265,7 @@ export class VanishClient {
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/octet-stream',
+      'Content-Length': String(fileBuffer.byteLength),
       'X-Filename': filename,
     };
 
@@ -339,6 +340,7 @@ export class VanishClient {
     const fileBuffer = readFileSync(filePath);
     const headers: Record<string, string> = {
       'Content-Type': 'application/octet-stream',
+      'Content-Length': String(fileBuffer.byteLength),
       'X-Site-Token': token,
     };
 
@@ -678,6 +680,7 @@ export class VanishClient {
     const fileBuffer = readFileSync(filePath);
     const headers: Record<string, string> = {
       'Content-Type': 'application/octet-stream',
+      'Content-Length': String(fileBuffer.byteLength),
       'X-Bundle-Token': token,
     };
 

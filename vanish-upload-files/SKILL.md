@@ -76,7 +76,7 @@ Respect explicit user instructions such as "do not upload", "local only", or "pr
 
 ## Limits And Gotchas
 
-- Anonymous: image uploads only, 5 MB max, 24h retention.
+- Anonymous: image uploads only, 300 MB max, 24h retention.
 - Free login: all non-executable file types, 50 MB max file, 50 MB total storage, 48h retention.
 - Pro: all non-executable file types, 1 GB max file, 10 GB total storage, 30-day default retention, `--days` up to 365.
 - Blocked upload extensions: `.exe`, `.bat`, `.cmd`, `.com`, `.msi`, `.scr`, `.sh`, `.bash`, `.ps1`, `.psm1`.

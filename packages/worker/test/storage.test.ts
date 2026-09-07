@@ -26,9 +26,14 @@ describe('storage quota helpers', () => {
   });
 
   it('enforces anonymous max site size', async () => {
-    const result = await ensureStorageAvailable(env(new StorageDB()), 'anonymous', null, 11 * 1024 * 1024);
+    const result = await ensureStorageAvailable(
+      env(new StorageDB()),
+      'anonymous',
+      null,
+      300 * 1024 * 1024 + 1,
+    );
 
-    expect(result).toMatchObject({ ok: false });
+    expect(result).toMatchObject({ ok: false, maxTotalBytes: 300 * 1024 * 1024 });
   });
 
   it('enforces free shared storage quota across uploads and sites', async () => {

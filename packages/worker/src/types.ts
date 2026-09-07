@@ -138,8 +138,8 @@ export interface BundleFile {
 
 export const TIER_LIMITS = {
   anonymous: {
-    maxFileSize: 5 * 1024 * 1024, // 5 MB
-    maxSiteSize: 10 * 1024 * 1024, // 10 MB
+    maxFileSize: 300 * 1024 * 1024, // 300 MB
+    maxSiteSize: 300 * 1024 * 1024, // 300 MB
     maxSiteFiles: 100,
     maxTotalStorage: null, // no total limit (ephemeral, 24h)
     maxExpiryHours: 24,

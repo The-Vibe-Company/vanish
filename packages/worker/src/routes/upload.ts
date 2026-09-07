@@ -5,6 +5,7 @@ import { TIER_LIMITS, BLOCKED_EXTENSIONS, ALLOWED_IMAGE_EXTENSIONS } from '../ty
 import { calculateExpiry } from '../lib/expiry.js';
 import { guessContentType } from '../lib/content-type.js';
 import { getActiveStorageBytes } from '../lib/storage.js';
+import { getSizedRequestBody } from '../lib/request-body.js';
 import {
   getIdempotencyKey,
   getIdempotencyOwner,
@@ -62,15 +63,17 @@ upload.post('/upload', async (c) => {
     }
   }
 
-  // Read body as ArrayBuffer
-  const body = await c.req.arrayBuffer();
-  const size = body.byteLength;
-
-  if (size === 0) {
+  const requestBody = getSizedRequestBody(c.req.raw, limits.maxFileSize);
+  if (!requestBody.ok && requestBody.reason === 'length_required') {
+    return c.json(structuredError('length_required', 'Content-Length header is required for uploads', 411), 411);
+  }
+  if (!requestBody.ok && requestBody.reason === 'invalid_length') {
+    return c.json(structuredError('invalid_content_length', 'Content-Length header must be a valid non-negative integer', 400), 400);
+  }
+  if (!requestBody.ok && requestBody.reason === 'empty') {
     return c.json(structuredError('empty_file', 'Empty file', 400), 400);
   }
-
-  if (size > limits.maxFileSize) {
+  if (!requestBody.ok) {
     const maxMB = Math.round(limits.maxFileSize / (1024 * 1024));
     return c.json({
       ...structuredError('file_too_large', `File too large. Max ${maxMB}MB for ${tier} tier.`, 413, {
@@ -80,6 +83,7 @@ upload.post('/upload', async (c) => {
       maxBytes: limits.maxFileSize,
     }, 413);
   }
+  const { body, size } = requestBody;
 
   // Check total storage quota
   if (limits.maxTotalStorage && user) {
@@ -145,7 +149,7 @@ upload.post('/upload', async (c) => {
   }
 
   try {
-    // Upload to R2
+    // Stream directly to R2 so large uploads do not consume Worker isolate memory.
     await c.env.BUCKET.put(id, body, {
       httpMetadata: {
         contentType: contentType,

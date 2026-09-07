@@ -6,6 +6,7 @@ import { BLOCKED_EXTENSIONS, TIER_LIMITS, isPaidTier } from '../types.js';
 import { calculateExpiry, isExpired } from '../lib/expiry.js';
 import { guessContentType } from '../lib/content-type.js';
 import { ensureStorageAvailable } from '../lib/storage.js';
+import { getSizedRequestBody } from '../lib/request-body.js';
 import { normalizeSitePath, normalizeSiteSlug } from '../lib/site-path.js';
 import { buildSiteUrl, getSiteIdentifierFromHost, supportsPathSiteUrls } from '../lib/site-url.js';
 import { getRateLimitIdentifier } from '../lib/rate-limit.js';
@@ -494,10 +495,24 @@ sites.put('/sites/:id/files', async (c) => {
     return c.json({ error: `File type ${ext} is not allowed in sites` }, 400);
   }
 
-  const body = await c.req.arrayBuffer();
-  if (body.byteLength === 0) {
+  const limits = TIER_LIMITS[auth.tier];
+  const requestBody = getSizedRequestBody(c.req.raw, limits.maxSiteSize);
+  if (!requestBody.ok && requestBody.reason === 'length_required') {
+    return c.json({ error: 'Content-Length header is required for site file uploads' }, 411);
+  }
+  if (!requestBody.ok && requestBody.reason === 'invalid_length') {
+    return c.json({ error: 'Content-Length header must be a valid non-negative integer' }, 400);
+  }
+  if (!requestBody.ok && requestBody.reason === 'empty') {
     return c.json({ error: 'Empty file' }, 400);
   }
+  if (!requestBody.ok) {
+    return c.json({
+      error: `Site too large. Max ${limits.maxSiteSize} bytes for ${auth.tier} tier.`,
+      maxTotalBytes: limits.maxSiteSize,
+    }, 413);
+  }
+  const { body, size } = requestBody;
   await touchSiteDraft(c.env, site.id);
 
   const existingFile = await c.env.DB.prepare(`
@@ -512,7 +527,7 @@ sites.put('/sites/:id/files', async (c) => {
   }
 
   const replacementTargetId = getReplacementTargetId(site);
-  const nextSiteSize = site.size_bytes - (existingFile?.size_bytes || 0) + body.byteLength;
+  const nextSiteSize = site.size_bytes - (existingFile?.size_bytes || 0) + size;
   const quota = await ensureStorageAvailable(c.env, auth.tier, auth.userId, nextSiteSize, {
     excludeSiteIds: [site.id, ...(replacementTargetId ? [replacementTargetId] : [])],
   });
@@ -552,7 +567,7 @@ sites.put('/sites/:id/files', async (c) => {
         WHERE EXISTS (
           SELECT 1 FROM sites WHERE id = ? AND deleted_at IS NULL AND published_at IS NULL
         )
-      `).bind(site.id, path, contentType, body.byteLength, r2Key, site.id),
+      `).bind(site.id, path, contentType, size, r2Key, site.id),
       c.env.DB.prepare(`
         UPDATE sites
         SET size_bytes = (
@@ -588,7 +603,7 @@ sites.put('/sites/:id/files', async (c) => {
   return c.json({
     ok: true,
     path,
-    size: body.byteLength,
+    size,
     contentType,
   });
 });
