@@ -26,6 +26,9 @@ describe('posthog page integration', () => {
     expect(html).toContain('/static/array.js');
     expect(html).toContain(`posthog.init("${HOSTED_KEY}", {"api_host":"https://us.i.posthog.com"`);
     expect(html).toContain('"capture_pageview":"history_change"');
+    expect(html).toContain('"disable_capture_url_hashes":true');
+    expect(html).toContain('"cross_subdomain_cookie":false');
+    expect(html).not.toContain('"mask_all_text":true');
   });
 
   it('does not load PostHog in local dev without an explicit key', async () => {
@@ -45,6 +48,8 @@ describe('posthog page integration', () => {
     expect(init).toBeGreaterThan(scrub);
     expect(html).toContain('window.posthog.identify(state.me.id, { email: state.me.email || undefined, name: state.me.username || undefined });');
     expect(html).toContain('if (window.posthog) window.posthog.reset();');
+    expect(html.match(/resetAnalytics\(\);/g)).toHaveLength(4);
+    expect(html).toContain('"mask_all_text":true,"mask_all_element_attributes":true,"session_recording":{"maskAllInputs":true,"maskTextSelector":"*"}');
     expect(html).toContain('<div class="key-reveal ph-no-capture">');
   });
 });

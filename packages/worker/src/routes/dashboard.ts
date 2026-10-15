@@ -1,14 +1,14 @@
 import { Hono } from 'hono';
 import type { Env } from '../types.js';
 import { PLAN_PRICES_EUR, TIER_LIMITS } from '../types.js';
-import { posthogConfig, posthogInitScript } from '../lib/posthog.js';
+import { POSTHOG_MASK_USER_CONTENT, posthogConfig, posthogInitScript } from '../lib/posthog.js';
 
 const dashboard = new Hono<{ Bindings: Env }>();
 
 dashboard.get('/dashboard', (c) => {
   const baseUrl = c.env.BASE_URL;
   const selfHosted = c.env.SELF_HOSTED === 'true';
-  const analytics = posthogInitScript(posthogConfig(c.env, c.req.url));
+  const analytics = posthogInitScript(posthogConfig(c.env, c.req.url), POSTHOG_MASK_USER_CONTENT);
 
   const html = `<!doctype html>
 <html lang="en">
@@ -1780,6 +1780,10 @@ body:has(.login-screen) { background: #1649e8; }
     }
   }
 
+  function resetAnalytics() {
+    if (window.posthog) window.posthog.reset();
+  }
+
   // — API —
   function apiFetch(path, opts) {
     opts = opts || {};
@@ -1789,6 +1793,7 @@ body:has(.login-screen) { background: #1649e8; }
       if (r.status === 401) {
         localStorage.removeItem('vanish_api_key');
         apiKey = null;
+        resetAnalytics();
         renderLogin();
         throw new Error('unauthorized');
       }
@@ -1807,6 +1812,7 @@ body:has(.login-screen) { background: #1649e8; }
       if (!rs[0] || rs[0].error || !rs[0].id) {
         localStorage.removeItem('vanish_api_key');
         apiKey = null;
+        resetAnalytics();
         renderLogin();
         throw new Error('unauthorized');
       }
@@ -1836,6 +1842,7 @@ body:has(.login-screen) { background: #1649e8; }
     fetchAll().catch(function(e) {
       localStorage.removeItem('vanish_api_key');
       apiKey = null;
+      resetAnalytics();
       renderLogin();
       toast(String(e).indexOf('unauthorized') === -1 ? 'failed to validate API key' : 'invalid API key');
     });
@@ -2830,7 +2837,7 @@ body:has(.login-screen) { background: #1649e8; }
     if (action === 'signout') {
       localStorage.removeItem('vanish_api_key');
       apiKey = null;
-      if (window.posthog) window.posthog.reset();
+      resetAnalytics();
       window.location.href = '/';
       return;
     }
