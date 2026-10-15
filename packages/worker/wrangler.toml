@@ -23,6 +23,10 @@ SELF_HOSTED = "false"
 DEFAULT_TIER = "free"
 PRODUCT_EVENTS = "false"
 CUSTOM_DOMAIN_FALLBACK_HOST = "fallback.vanish.sh"
+# Optional PostHog analytics. Without POSTHOG_KEY, analytics only runs on the
+# vanish.sh host with the hosted public project key (never in local dev).
+# POSTHOG_KEY = "phc_..."
+# POSTHOG_HOST = "https://us.i.posthog.com"
 
 # Secrets (set via `wrangler secret put`):
 # GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET

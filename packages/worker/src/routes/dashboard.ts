@@ -1,12 +1,14 @@
 import { Hono } from 'hono';
 import type { Env } from '../types.js';
 import { PLAN_PRICES_EUR, TIER_LIMITS } from '../types.js';
+import { POSTHOG_MASK_USER_CONTENT, posthogConfig, posthogInitScript } from '../lib/posthog.js';
 
 const dashboard = new Hono<{ Bindings: Env }>();
 
 dashboard.get('/dashboard', (c) => {
   const baseUrl = c.env.BASE_URL;
   const selfHosted = c.env.SELF_HOSTED === 'true';
+  const analytics = posthogInitScript(posthogConfig(c.env, c.req.url), POSTHOG_MASK_USER_CONTENT);
 
   const html = `<!doctype html>
 <html lang="en">
@@ -1504,6 +1506,7 @@ body:has(.login-screen) { background: #1649e8; }
   var SELF_HOSTED = ${JSON.stringify(selfHosted)};
   var TIER_LIMITS = ${JSON.stringify(TIER_LIMITS)};
   var PLAN_PRICES_EUR = ${JSON.stringify(PLAN_PRICES_EUR)};
+  var ANALYTICS_ENABLED = ${JSON.stringify(Boolean(analytics))};
 
   // — State —
   var apiKey = localStorage.getItem('vanish_api_key');
@@ -1512,7 +1515,14 @@ body:has(.login-screen) { background: #1649e8; }
     apiKey = params.get('key');
     localStorage.setItem('vanish_api_key', apiKey);
     history.replaceState({}, '', '/dashboard');
+    // Reload so analytics starts on a page load whose navigation entry never held the key.
+    if (ANALYTICS_ENABLED) {
+      window.location.replace('/dashboard');
+      return;
+    }
   }
+
+  ${analytics}
 
   var state = {
     me: null,
@@ -1775,6 +1785,10 @@ body:has(.login-screen) { background: #1649e8; }
     }
   }
 
+  function resetAnalytics() {
+    if (window.posthog) window.posthog.reset();
+  }
+
   // — API —
   function apiFetch(path, opts) {
     opts = opts || {};
@@ -1784,6 +1798,7 @@ body:has(.login-screen) { background: #1649e8; }
       if (r.status === 401) {
         localStorage.removeItem('vanish_api_key');
         apiKey = null;
+        resetAnalytics();
         renderLogin();
         throw new Error('unauthorized');
       }
@@ -1802,10 +1817,14 @@ body:has(.login-screen) { background: #1649e8; }
       if (!rs[0] || rs[0].error || !rs[0].id) {
         localStorage.removeItem('vanish_api_key');
         apiKey = null;
+        resetAnalytics();
         renderLogin();
         throw new Error('unauthorized');
       }
       state.me = rs[0];
+      if (window.posthog) {
+        window.posthog.identify(state.me.id, { email: state.me.email || undefined, name: state.me.username || undefined });
+      }
       state.sites = (rs[1].sites || []).filter(function(s) { return !s.deleted; }).map(normalizeSite);
       state.uploads = (rs[2].uploads || []).filter(function(u) { return !u.deleted; }).map(normalizeUpload);
       state.keys = (rs[3].keys || []);
@@ -1828,6 +1847,7 @@ body:has(.login-screen) { background: #1649e8; }
     fetchAll().catch(function(e) {
       localStorage.removeItem('vanish_api_key');
       apiKey = null;
+      resetAnalytics();
       renderLogin();
       toast(String(e).indexOf('unauthorized') === -1 ? 'failed to validate API key' : 'invalid API key');
     });
@@ -2495,7 +2515,7 @@ body:has(.login-screen) { background: #1649e8; }
     if (state.revealKey) {
       var k = state.revealKey;
       revealHtml =
-        '<div class="key-reveal">' +
+        '<div class="key-reveal ph-no-capture">' +
           '<div class="kr-head">' +
             '<span class="dot dot-gold dot-pulse"></span>' +
             '<strong>' + escapeHtml(k.name) + '</strong>' +
@@ -2822,6 +2842,7 @@ body:has(.login-screen) { background: #1649e8; }
     if (action === 'signout') {
       localStorage.removeItem('vanish_api_key');
       apiKey = null;
+      resetAnalytics();
       window.location.href = '/';
       return;
     }
