@@ -25,6 +25,9 @@ describe('auth routes', () => {
       if (url === 'https://api.github.com/user') {
         return Response.json({ id: 123, login: 'stan', email: 'stan@example.com' });
       }
+      if (url === 'https://us.i.posthog.com/i/v0/e/') {
+        return Response.json({ status: 1 });
+      }
       throw new Error(`unexpected fetch ${url}`);
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -109,6 +112,27 @@ describe('auth routes', () => {
     expect(callback.status).toBe(302);
     const location = callback.headers.get('Location');
     expect(location).toMatch(/^\/dashboard#key=vnsh_/);
+  });
+
+  it('captures signed_up in PostHog only when the account is created', async () => {
+    await request(env, '/auth/callback?code=abc123');
+    await request(env, '/auth/callback?code=abc123');
+
+    const captures = fetchMock.mock.calls.filter(([url]) => url === 'https://us.i.posthog.com/i/v0/e/');
+    expect(captures).toHaveLength(1);
+    const body = JSON.parse(String((captures[0][1] as RequestInit).body));
+    const [user] = Array.from(db.users.values());
+    expect(body).toMatchObject({
+      api_key: 'phc_BCpPQFoAM6qMoomUS96dA2otiwkmMPF2VrYqiWdbiHBP',
+      event: 'signed_up',
+      distinct_id: user.id,
+      properties: {
+        method: 'github',
+        tier: 'free',
+        has_cli_session: false,
+        $set: { email: 'stan@example.com', name: 'stan' },
+      },
+    });
   });
 
   it('rotates the active web API key on repeated dashboard logins', async () => {

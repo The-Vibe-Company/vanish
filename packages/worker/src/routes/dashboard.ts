@@ -1,12 +1,14 @@
 import { Hono } from 'hono';
 import type { Env } from '../types.js';
 import { PLAN_PRICES_EUR, TIER_LIMITS } from '../types.js';
+import { posthogConfig, posthogInitScript } from '../lib/posthog.js';
 
 const dashboard = new Hono<{ Bindings: Env }>();
 
 dashboard.get('/dashboard', (c) => {
   const baseUrl = c.env.BASE_URL;
   const selfHosted = c.env.SELF_HOSTED === 'true';
+  const analytics = posthogInitScript(posthogConfig(c.env, c.req.url));
 
   const html = `<!doctype html>
 <html lang="en">
@@ -1514,6 +1516,9 @@ body:has(.login-screen) { background: #1649e8; }
     history.replaceState({}, '', '/dashboard');
   }
 
+  // Analytics starts only after the API key is scrubbed from the URL.
+  ${analytics}
+
   var state = {
     me: null,
     sites: [],
@@ -1806,6 +1811,9 @@ body:has(.login-screen) { background: #1649e8; }
         throw new Error('unauthorized');
       }
       state.me = rs[0];
+      if (window.posthog) {
+        window.posthog.identify(state.me.id, { email: state.me.email || undefined, name: state.me.username || undefined });
+      }
       state.sites = (rs[1].sites || []).filter(function(s) { return !s.deleted; }).map(normalizeSite);
       state.uploads = (rs[2].uploads || []).filter(function(u) { return !u.deleted; }).map(normalizeUpload);
       state.keys = (rs[3].keys || []);
@@ -2495,7 +2503,7 @@ body:has(.login-screen) { background: #1649e8; }
     if (state.revealKey) {
       var k = state.revealKey;
       revealHtml =
-        '<div class="key-reveal">' +
+        '<div class="key-reveal ph-no-capture">' +
           '<div class="kr-head">' +
             '<span class="dot dot-gold dot-pulse"></span>' +
             '<strong>' + escapeHtml(k.name) + '</strong>' +
@@ -2822,6 +2830,7 @@ body:has(.login-screen) { background: #1649e8; }
     if (action === 'signout') {
       localStorage.removeItem('vanish_api_key');
       apiKey = null;
+      if (window.posthog) window.posthog.reset();
       window.location.href = '/';
       return;
     }

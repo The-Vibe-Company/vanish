@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 import type { Env, User } from '../types.js';
 import { generateApiKey, getKeyPrefix, hashApiKey } from '../lib/api-key.js';
 import { logProductEvent } from '../lib/events.js';
+import { capturePostHogEvent, posthogConfig } from '../lib/posthog.js';
 
 interface GitHubUser {
   id: number;
@@ -278,6 +279,12 @@ auth.get('/auth/callback', async (c) => {
       INSERT INTO users (id, github_id, github_username, email, tier)
       VALUES (?, ?, ?, ?, ?)
     `).bind(userId, ghUser.id, ghUser.login, email, tier).run();
+    c.executionCtx.waitUntil(capturePostHogEvent(posthogConfig(c.env, c.req.url), 'signed_up', userId, {
+      method: 'github',
+      tier,
+      has_cli_session: isCliLogin,
+      $set: { email: email || undefined, name: ghUser.login },
+    }));
   }
 
   // If CLI session, store API key for polling

@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
 import type { Env } from '../types.js';
+import { posthogConfig, posthogScriptTag } from '../lib/posthog.js';
 
 const landing = new Hono<{ Bindings: Env }>();
 
-const html = `<!doctype html>
+const renderLanding = (analytics: string) => `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -503,6 +504,7 @@ const html = `<!doctype html>
     .reveal{opacity:1;transform:none}
   }
 </style>
+${analytics}
 </head>
 <body>
 
@@ -766,6 +768,6 @@ const html = `<!doctype html>
 </body>
 </html>`;
 
-landing.get('/', (c) => c.html(html));
+landing.get('/', (c) => c.html(renderLanding(posthogScriptTag(posthogConfig(c.env, c.req.url)))));
 
 export default landing;

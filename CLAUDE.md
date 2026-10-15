@@ -103,4 +103,4 @@ Tests use **Vitest** with `globals: true` (no need to import describe/it/expect)
 - **Release**: Automated via Release Please — only the CLI package gets published to npm
 - **TypeScript**: Strict mode, ES2022 target, ESM throughout
 - **Worker secrets** (set via `wrangler secret put`): `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID` (rollback compatibility), `STRIPE_PRO_PRICE_ID_EUR_10`
-- **Worker vars** (in `wrangler.toml`): `BASE_URL`, `SELF_HOSTED`, `DEFAULT_TIER`
+- **Worker vars** (in `wrangler.toml`): `BASE_URL`, `SELF_HOSTED`, `DEFAULT_TIER`; optional `POSTHOG_KEY` / `POSTHOG_HOST` for PostHog analytics (`lib/posthog.ts`, landing + dashboard pages, server-side `signed_up`)
