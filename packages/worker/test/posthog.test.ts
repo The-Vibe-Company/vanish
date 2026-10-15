@@ -37,19 +37,28 @@ describe('posthog page integration', () => {
 
     const dashboard = await page('http://localhost:8787/dashboard', { BASE_URL: 'http://localhost:8787' });
     expect(dashboard).not.toContain('posthog.init');
+    expect(dashboard).toContain('var ANALYTICS_ENABLED = false;');
   });
 
-  it('initializes dashboard analytics only after scrubbing the API key from the URL', async () => {
+  it('never starts PostHog on a page load whose URL carries an API key fragment', async () => {
+    const html = await page('https://vanish.sh/');
+    expect(html).toContain('if (!/(^#|&)key=/.test(location.hash)) {\n!function(t,e){');
+  });
+
+  it('reloads the dashboard after storing an OAuth key before starting analytics', async () => {
     const html = await page('https://vanish.sh/dashboard');
     const scrub = html.indexOf("history.replaceState({}, '', '/dashboard');");
+    const reload = html.indexOf("window.location.replace('/dashboard');");
     const init = html.indexOf('posthog.init(');
 
+    expect(html).toContain('var ANALYTICS_ENABLED = true;');
     expect(scrub).toBeGreaterThan(-1);
-    expect(init).toBeGreaterThan(scrub);
+    expect(reload).toBeGreaterThan(scrub);
+    expect(init).toBeGreaterThan(reload);
     expect(html).toContain('window.posthog.identify(state.me.id, { email: state.me.email || undefined, name: state.me.username || undefined });');
     expect(html).toContain('if (window.posthog) window.posthog.reset();');
     expect(html.match(/resetAnalytics\(\);/g)).toHaveLength(4);
-    expect(html).toContain('"mask_all_text":true,"mask_all_element_attributes":true,"session_recording":{"maskAllInputs":true,"maskTextSelector":"*"}');
+    expect(html).toContain('"mask_all_text":true,"mask_all_element_attributes":true,"session_recording":{"maskAllInputs":true,"maskTextSelector":"*","maskAllElementAttributes":true}');
     expect(html).toContain('<div class="key-reveal ph-no-capture">');
   });
 });

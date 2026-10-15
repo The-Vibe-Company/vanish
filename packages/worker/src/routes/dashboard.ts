@@ -1506,6 +1506,7 @@ body:has(.login-screen) { background: #1649e8; }
   var SELF_HOSTED = ${JSON.stringify(selfHosted)};
   var TIER_LIMITS = ${JSON.stringify(TIER_LIMITS)};
   var PLAN_PRICES_EUR = ${JSON.stringify(PLAN_PRICES_EUR)};
+  var ANALYTICS_ENABLED = ${JSON.stringify(Boolean(analytics))};
 
   // — State —
   var apiKey = localStorage.getItem('vanish_api_key');
@@ -1514,9 +1515,13 @@ body:has(.login-screen) { background: #1649e8; }
     apiKey = params.get('key');
     localStorage.setItem('vanish_api_key', apiKey);
     history.replaceState({}, '', '/dashboard');
+    // Reload so analytics starts on a page load whose navigation entry never held the key.
+    if (ANALYTICS_ENABLED) {
+      window.location.replace('/dashboard');
+      return;
+    }
   }
 
-  // Analytics starts only after the API key is scrubbed from the URL.
   ${analytics}
 
   var state = {
