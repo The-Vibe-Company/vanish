@@ -5,6 +5,7 @@ export interface Env {
   SELF_HOSTED: string;
   DEFAULT_TIER: string;
   PRODUCT_EVENTS?: string;
+  STATS_TOKEN?: string;
   POSTHOG_KEY?: string;
   POSTHOG_HOST?: string;
   GITHUB_CLIENT_ID?: string;

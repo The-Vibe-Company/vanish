@@ -17,6 +17,7 @@ import domainRoutes, { customDomainMiddleware } from './routes/domains.js';
 import siteAccessRoutes from './routes/site-access.js';
 import { handleCleanup } from './cron/cleanup.js';
 import { structuredError } from './lib/api-response.js';
+import statsRoutes from './routes/stats.js';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -27,7 +28,10 @@ app.use('*', cors({
   allowHeaders: ['Authorization', 'Content-Type', 'X-Filename', 'X-Expires-Days', 'X-Site-Token', 'X-Bundle-Token', 'Idempotency-Key', 'X-Idempotency-Key'],
 }));
 
-// Auth middleware for all routes
+// Stats has independent service-token auth, before user auth and site hosting.
+app.route('/', statsRoutes);
+
+// Auth middleware for all remaining routes
 app.use('*', authMiddleware);
 
 // Resolve customer-owned hosts before any canonical route can answer.
