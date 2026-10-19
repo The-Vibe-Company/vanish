@@ -265,6 +265,43 @@ Config is read in this order:
 
 ## Self-Hosting
 
+### Service metrics
+
+The existing Hono backend (`packages/worker/src/index.ts`) exposes
+`GET /api/stats`, authenticated only by `Authorization: Bearer <STATS_TOKEN>`.
+It returns integer counts for `total_users`, `new_users_1d`, `new_users_7d`,
+`active_users_1d`, and `active_users_7d`. Missing/empty configuration returns
+503; missing/incorrect authorization returns 401. Responses are not cached.
+The endpoint serves the configured `BASE_URL` hostname and its `www` alias;
+published site hosts keep ownership of their `/api/stats` asset paths.
+
+The canonical store is D1 `users` (`packages/worker/src/db/schema.sql`). All
+rows count; there is no existing deleted/test/anonymous-account filter.
+Anonymous uploads do not create users. New users use `users.created_at`.
+Active users are distinct users with `api_keys.last_used_at` in the window,
+updated by `src/middleware/auth.ts` on successful authenticated requests.
+Multiple keys count once; revoked keys retain their historical activity.
+Windows include both endpoints, from 24 hours / 7 days before one UTC request
+time through that time. Account creation and `updated_at` are not activity.
+Anonymous traffic and logins without a subsequent authenticated request do
+not count as active; this is authenticated API/dashboard usage, not all visits.
+
+Production ENV NEEDS: set **STATS_TOKEN as a Cloudflare Worker secret** on
+`vanish-worker`, in the account selected by the GitHub Actions
+`CLOUDFLARE_ACCOUNT_ID` repository secret. From `packages/worker`, run
+`npx wrangler secret put STATS_TOKEN` with that account selected. Do not put
+the value in Wrangler vars, browser configuration, or source control.
+`wrangler.toml` binds this Worker to D1 `vanish-db`; `.github/workflows/ci.yml`
+deploys it on main pushes, and `release.yml` supports manual deployments.
+These workflows do not provision STATS_TOKEN; set it separately before use.
+
+The repository configures `BASE_URL=https://vanish.sh`, with no configuration
+for `getvanish.app` or `vanish.so`. Their hosting/account ownership and routing
+to this backend cannot be established from this repo. To expose this endpoint
+at `https://getvanish.app/api/stats`, its operator must confirm that this is
+the intended user store and route that path to this Worker (or identify the
+correct backend). Setting the Worker secret alone does not establish routing.
+
 vanish runs on Cloudflare Workers + R2 + D1. To self-host:
 
 1. Clone this repo
