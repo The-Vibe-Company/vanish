@@ -17,17 +17,14 @@ describe('landing route', () => {
 
     expect(response.status).toBe(200);
     const html = await response.text();
-    expect(html).toContain('<title>vanish — temporary URLs from your terminal</title>');
-    expect(html).toContain('One link.<br>Anyone can see it.');
-    expect(html).toContain('Your agent publishes sites, reports, presentations, and files.');
-    expect(html).toContain('npx vanish-cli site ./demo --root index.html');
-    expect(html).toContain('Free to try');
-    expect(html).toContain('Disappears automatically');
-    expect(html).toContain('Simple pricing');
-    expect(html).toContain('<h3 class="plan-name">Pro</h3>');
-    expect(html).not.toContain('<h3 class="plan-name">Max</h3>');
-    expect(html).toContain('€10 / month');
-    expect(html).toContain('Up to 10 GB of storage');
+    expect(html).toContain('<title>vanish: public preview URLs for agent-made artifacts</title>');
+    expect(html).toContain('npx vanish-cli site ./demo');
+    expect(html).toContain('The publish command your agent was missing.');
+    expect(html).toContain('Rating plates');
+    expect(html).toContain('10 €');
+    expect(html).toContain('5,000 files · within 10 GB');
+    expect(html).toContain('300 MB · 100 files');
+    expect(html).toContain('posthog');
     expect(html).toContain('href="/auth/github?redirect=/dashboard"');
     expect(html).not.toContain('href="/auth/github">');
     expect(html).toContain('href="/dashboard"');
