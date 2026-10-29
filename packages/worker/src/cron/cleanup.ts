@@ -194,6 +194,11 @@ export async function handleCleanup(env: Env): Promise<void> {
     DELETE FROM rate_limits WHERE created_at < datetime('now', '-2 hours')
   `).run();
 
+  // Spent or expired one-time access codes.
+  await env.DB.prepare(`
+    DELETE FROM access_codes WHERE datetime(expires_at) < datetime('now') OR attempts >= 5
+  `).run();
+
   while (true) {
     const pendingObjects = await env.DB.prepare(`
       SELECT r2_key FROM pending_r2_deletions

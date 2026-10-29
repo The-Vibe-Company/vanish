@@ -11,7 +11,8 @@ import { lsCommand } from './commands/ls.js';
 import { rmCommand } from './commands/rm.js';
 import { statusCommand } from './commands/status.js';
 import { updateCommand } from './commands/update.js';
-import { sitesListCommand, siteInfoCommand, siteRmCommand, siteExtendCommand, siteVerifyCommand, siteAccessCommand } from './commands/sites.js';
+import { sitesListCommand, siteInfoCommand, siteRmCommand, siteExtendCommand, siteVerifyCommand, siteAccessCommand, fileAccessCommand } from './commands/sites.js';
+import { collectEmail } from './lib/access-options.js';
 import { keysCreateCommand, keysListCommand, keysRevokeCommand } from './commands/keys.js';
 import { bundleCommand } from './commands/bundle.js';
 import {
@@ -46,6 +47,8 @@ program
   .option('--no-clipboard', 'Do not copy URL to clipboard')
   .option('--days <days>', 'Custom retention in days (paid plans, 1-365)', parseInt)
   .option('--idempotency-key <key>', 'Stable key for safe agent retries')
+  .option('--password-stdin', 'Protect the file with a password read from stdin')
+  .option('--allow-email <email>', 'Only let these emails open the file, via a one-time code (Pro, repeatable)', collectEmail)
   .action(uploadCommand);
 
 program
@@ -58,6 +61,7 @@ program
   .option('--channel <channel>', 'Owned stable channel that creates or updates the same site URL')
   .option('--domain <hostname>', 'Attach or create a custom domain for this channel (Pro)')
   .option('--password-stdin', 'Protect the published site using a password read from stdin')
+  .option('--allow-email <email>', 'Only let these emails open the site, via a one-time code (Pro, repeatable)', collectEmail)
   .option('--days <days>', 'Custom retention in days (paid plans, 1-365)', parseInt)
   .option('--dry-run', 'Inspect and print the site manifest without uploading')
   .option('--verify', 'Fetch the published root and referenced assets after publish')
@@ -109,12 +113,27 @@ sites
 
 sites
   .command('access')
-  .description('Set link or password access for an owned mini-site')
+  .description('Set link, password, or email access for an owned mini-site')
   .argument('<site>', 'site ID, slug, or resolved channel site')
-  .requiredOption('--mode <mode>', 'Access mode: link or password')
+  .requiredOption('--mode <mode>', 'Access mode: link, password, or email')
   .option('--password-stdin', 'Read the password from stdin')
+  .option('--allow-email <email>', 'Allowed email for email mode (Pro, repeatable)', collectEmail)
   .option('--json', 'Output as JSON')
   .action(siteAccessCommand);
+
+const files = program
+  .command('files')
+  .description('Manage uploaded files');
+
+files
+  .command('access')
+  .description('Set link, password, or email access for an uploaded file')
+  .argument('<file>', 'file ID or URL')
+  .requiredOption('--mode <mode>', 'Access mode: link, password, or email')
+  .option('--password-stdin', 'Read the password from stdin')
+  .option('--allow-email <email>', 'Allowed email for email mode (Pro, repeatable)', collectEmail)
+  .option('--json', 'Output as JSON')
+  .action(fileAccessCommand);
 
 const domains = program
   .command('domains')
@@ -329,7 +348,7 @@ if (args[0] === 'site' && siteLifecycleSubcommands.includes(args[1] || '') && (!
   args.splice(0, 2, 'sites', args[1]);
 }
 
-if (args.length > 0 && !args[0].startsWith('-') && !['upload', 'up', 'site', 'sites', 'domains', 'bundle', 'keys', 'login', 'logout', 'upgrade', 'whoami', 'ls', 'rm', 'status', 'update', 'help', 'mcp-serve'].includes(args[0])) {
+if (args.length > 0 && !args[0].startsWith('-') && !['upload', 'up', 'site', 'sites', 'files', 'domains', 'bundle', 'keys', 'login', 'logout', 'upgrade', 'whoami', 'ls', 'rm', 'status', 'update', 'help', 'mcp-serve'].includes(args[0])) {
   // Shorthand: `vanish file.png` = `vanish upload file.png`
   process.argv.splice(2, 0, 'upload');
 }

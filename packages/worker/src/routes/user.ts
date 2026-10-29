@@ -121,18 +121,19 @@ user.get('/uploads', async (c) => {
   const activeOnly = c.req.query('active') !== 'false';
 
   let query = `
-    SELECT id, filename, content_type, size_bytes, expires_at, created_at, deleted_at
-    FROM uploads
-    WHERE user_id = ?
+    SELECT u.id, u.filename, u.content_type, u.size_bytes, u.expires_at, u.created_at, u.deleted_at,
+           COALESCE((SELECT ua.mode FROM upload_access ua WHERE ua.upload_id = u.id), 'link') AS access_mode
+    FROM uploads u
+    WHERE u.user_id = ?
   `;
   if (activeOnly) {
-    query += ` AND deleted_at IS NULL AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))`;
+    query += ` AND u.deleted_at IS NULL AND (u.expires_at IS NULL OR datetime(u.expires_at) > datetime('now'))`;
   }
-  query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+  query += ` ORDER BY u.created_at DESC LIMIT ? OFFSET ?`;
 
   const result = await c.env.DB.prepare(query)
     .bind(currentUser.id, limit, offset)
-    .all<Upload>();
+    .all<Upload & { access_mode: string }>();
 
   const uploads = (result.results || []).map(u => ({
     id: u.id,
@@ -144,6 +145,7 @@ user.get('/uploads', async (c) => {
     created_at: u.created_at,
     expired: u.expires_at ? new Date(u.expires_at) < new Date() : false,
     deleted: u.deleted_at !== null,
+    access_mode: u.access_mode || 'link',
   }));
 
   return c.json({ uploads, limit, offset });

@@ -25,7 +25,7 @@ const app = new Hono<{ Bindings: Env }>();
 app.use('*', cors({
   origin: '*',
   allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Authorization', 'Content-Type', 'X-Filename', 'X-Expires-Days', 'X-Site-Token', 'X-Bundle-Token', 'Idempotency-Key', 'X-Idempotency-Key'],
+  allowHeaders: ['Authorization', 'Content-Type', 'X-Filename', 'X-Expires-Days', 'X-Site-Token', 'X-Bundle-Token', 'Idempotency-Key', 'X-Idempotency-Key', 'X-Access-Mode', 'X-Access-Password', 'X-Access-Emails'],
 }));
 
 // Stats has independent service-token auth, before user auth and site hosting.

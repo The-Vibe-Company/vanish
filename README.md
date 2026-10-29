@@ -128,6 +128,23 @@ printf '%s' "$CLIENT_PREVIEW_PASSWORD" |
 vanish sites access pr-42 --mode link
 ```
 
+On Pro, restrict a site or file to specific people. Each visitor enters their email and receives a one-time code:
+
+```bash
+vanish site ./demo --root index.html --allow-email ana@acme.com --allow-email bo@acme.com
+vanish sites access pr-42 --mode email --allow-email ana@acme.com
+```
+
+Files support the same protection, set atomically at upload:
+
+```bash
+printf '%s' "$CLIENT_PASSWORD" | vanish upload report.pdf --password-stdin
+vanish upload deck.pdf --allow-email ana@acme.com
+vanish files access https://vanish.sh/f/a1b2c3d4e5f6.pdf --mode link
+```
+
+Every access change signs out everyone who opened the link before. Protected files cannot be embedded in GitHub or Markdown previews.
+
 ### Custom domains
 
 Pro accounts can reserve one permanent Vanish namespace, then publish up to 20
@@ -245,7 +262,8 @@ vanish update      # update the CLI to the latest version
 | Site URL | Readable random | Readable random | Random or custom slug |
 | Domain identity | No | No | 1 `vanish.sh` namespace + 1 custom subdomain |
 | Site domain routes | No | No | Up to 20 below owned namespaces |
-| Password protection | No | Yes | Yes |
+| Password protection (sites and files) | No | Yes | Yes |
+| Email allowlist (one-time code) | No | No | Yes |
 | Site limits | 300 MB, 100 files | 500 files, within 50 MB total | 5,000 files, within 10 GB total |
 | File uploads | Images only | All except executables | All except executables |
 | Max file size | 300 MB | 50 MB | 1 GB |
@@ -330,6 +348,14 @@ Password protection requires a secret of at least 32 characters:
 wrangler secret put ACCESS_SESSION_SECRET
 ```
 
+Email allowlists also send one-time codes through [Resend](https://resend.com). Verify the sending domain in Resend, set `ACCESS_EMAIL_FROM` in `wrangler.toml`, and add the API key:
+
+```bash
+wrangler secret put RESEND_API_KEY
+```
+
+Without it, setting email access returns `503 email_access_unavailable`; password protection keeps working.
+
 Managed custom domains use Cloudflare for SaaS. Configure the Worker with:
 
 ```bash
@@ -344,6 +370,7 @@ For the hosted GitHub Actions deployments, configure these repository secrets
 before merging:
 
 - `VANISH_ACCESS_SESSION_SECRET`
+- `RESEND_API_KEY` (optional; enables email allowlists)
 
 `CLOUDFLARE_CUSTOM_HOSTNAMES_API_TOKEN` is recommended as a least-privilege
 token with zone-read and custom-hostname permissions. Until it is set,

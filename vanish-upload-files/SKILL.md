@@ -64,6 +64,17 @@ vanish upload report.pdf --days 90 --json --no-clipboard
 
 `--days` requires Pro and supports 1-365 days. If unavailable, route to `vanish-connect-upgrade`.
 
+## Access Protection
+
+Use only when the user asks for a restricted file:
+
+```bash
+printf '%s' "$PASSWORD" | vanish upload report.pdf --password-stdin --json --no-clipboard
+vanish upload report.pdf --allow-email ana@acme.com --json --no-clipboard
+```
+
+Protection is applied atomically with the upload and requires login; `--allow-email` is Pro only. Change it later with `vanish files access <id-or-url> --mode link|password|email`. Protected files cannot be embedded in GitHub or Markdown previews.
+
 ## Privacy Gate
 
 Vanish creates public URLs. Ask before uploading if paths, names, or obvious content indicate:

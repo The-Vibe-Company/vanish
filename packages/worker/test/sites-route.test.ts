@@ -1071,26 +1071,28 @@ class FakeStatement {
     }
 
     if (sql.includes('INSERT INTO site_access')) {
-      const [siteId, passwordHash, passwordSalt, policyVersion] = this.args as [
+      const [siteId, mode, passwordHash, passwordSalt, allowedEmails] = this.args as [
         string,
-        string | number | null,
+        'link' | 'password' | 'email',
         string | null,
-        number?,
+        string | null,
+        string | null,
       ];
-      const isLink = sql.includes("VALUES (?, 'link'");
       const previous = this.db.siteAccess.get(siteId);
-      const version = sql.includes('policy_version = site_access.policy_version + 1')
-        ? (previous?.policy_version || 0) + 1
-        : (isLink ? Number(passwordHash) : Number(policyVersion));
       this.db.siteAccess.set(siteId, {
         site_id: siteId,
-        mode: isLink ? 'link' : 'password',
-        password_hash: isLink ? null : String(passwordHash),
-        password_salt: isLink ? null : passwordSalt,
-        policy_version: version,
+        mode,
+        password_hash: passwordHash,
+        password_salt: passwordSalt,
+        allowed_emails: allowedEmails,
+        policy_version: previous ? previous.policy_version + 1 : 1,
         created_at: previous?.created_at || new Date().toISOString(),
         updated_at: new Date().toISOString(),
       });
+      return;
+    }
+
+    if (sql.includes('DELETE FROM access_codes')) {
       return;
     }
 

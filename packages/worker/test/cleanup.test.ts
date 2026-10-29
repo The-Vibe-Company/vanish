@@ -129,7 +129,8 @@ class CleanupStatement {
     }
     if (sql.startsWith('DELETE FROM auth_sessions') ||
         sql.startsWith('DELETE FROM idempotency_keys') ||
-        sql.startsWith('DELETE FROM rate_limits')) {
+        sql.startsWith('DELETE FROM rate_limits') ||
+        sql.startsWith('DELETE FROM access_codes')) {
       return { meta: { changes: 0 } };
     }
     throw new Error(`Unhandled cleanup run query: ${sql}`);

@@ -12,11 +12,12 @@ import { buildSiteUrl, getSiteIdentifierFromHost, supportsPathSiteUrls } from '.
 import { getRateLimitIdentifier } from '../lib/rate-limit.js';
 import { hasProductEvent, logProductEvent, productEventsEnabled } from '../lib/events.js';
 import {
-  accessProtectionConfigured,
   getSiteAccess,
   hasSiteAccess,
-  hashSitePassword,
-  renderPasswordGate,
+  describeAccess,
+  isProtectedPolicy,
+  prepareAccessPolicy,
+  renderAccessGate,
 } from '../lib/site-access.js';
 import { rateLimitMiddleware } from '../middleware/rate-limit.js';
 import {
@@ -66,6 +67,7 @@ interface PatchSiteRequest {
 interface SiteAccessRequest {
   mode?: string;
   password?: string;
+  emails?: unknown;
 }
 
 interface PublishSiteRequest {
@@ -663,7 +665,7 @@ sites.post('/sites/:id/publish', async (c) => {
     return c.json(quota, 413);
   }
 
-  const preparedAccess = await preparePublishedSiteAccess(c.env, site.id, auth.userId, payload.access);
+  const preparedAccess = await preparePublishedSiteAccess(c.env, site.id, auth.userId ? auth.tier : null, payload.access);
   if (!preparedAccess.ok) {
     return c.json({ error: preparedAccess.error, code: preparedAccess.code }, preparedAccess.status);
   }
@@ -764,7 +766,7 @@ sites.post('/sites/:id/replacements/:draftId/publish', async (c) => {
     return c.json(quota, 413);
   }
 
-  const preparedAccess = await preparePublishedSiteAccess(c.env, target.id, user.id, payload.access);
+  const preparedAccess = await preparePublishedSiteAccess(c.env, target.id, user.tier, payload.access);
   if (!preparedAccess.ok) {
     return c.json({ error: preparedAccess.error, code: preparedAccess.code }, preparedAccess.status);
   }
@@ -997,8 +999,9 @@ export async function serveSite(
   }
 
   const access = await getSiteAccess(c.env, site.id);
-  if (access?.mode === 'password' && !(await hasSiteAccess(c.req.raw, c.env, access))) {
-    return renderPasswordGate(site.id, browserReturnPath);
+  const protectedSite = isProtectedPolicy(access);
+  if (protectedSite && !(await hasSiteAccess(c.req.raw, c.env, access))) {
+    return renderAccessGate({ kind: 'site', id: site.id }, access.mode === 'email' ? 'email' : 'password', browserReturnPath);
   }
 
   const path = pathname === '/'
@@ -1031,7 +1034,7 @@ export async function serveSite(
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
   headers.set('Referrer-Policy', 'no-referrer');
-  headers.set('Cache-Control', access?.mode === 'password' ? 'private, no-store' : 'public, max-age=300');
+  headers.set('Cache-Control', protectedSite ? 'private, no-store' : 'public, max-age=300');
   headers.set('Content-Disposition', `inline; filename="${escapeHeaderFilename(file.path.split('/').pop() || 'index')}"`);
   headers.set('Access-Control-Allow-Origin', '*');
   headers.set('Link', '<mailto:abuse@vanish.sh>; rel="abuse"');
@@ -1511,98 +1514,49 @@ async function deleteSiteObjectsAndMarkDeleted(env: Env, id: string): Promise<vo
 async function preparePublishedSiteAccess(
   env: Env,
   siteId: string,
-  userId: string | null,
+  tier: Tier | null,
   input: SiteAccessRequest | undefined,
 ): Promise<
   | {
       ok: true;
       statement: D1PreparedStatement | null;
-      response: {
-        siteId: string;
-        mode: 'link' | 'password';
-        passwordConfigured: boolean;
-      } | null;
+      response: { siteId: string } | null;
     }
-  | { ok: false; error: string; code: string; status: 400 | 401 | 503 }
+  | { ok: false; error: string; code: string; status: 400 | 401 | 403 | 503 }
 > {
   if (!input) {
     return { ok: true, statement: null, response: null };
   }
-  if (!userId) {
+  if (!tier || tier === 'anonymous') {
     return {
       ok: false,
-      error: 'Password-protected publishing requires login',
+      error: 'Protected publishing requires login',
       code: 'auth_required',
       status: 401,
     };
   }
-  if (input.mode !== 'password') {
+  if (input.mode !== 'password' && input.mode !== 'email') {
     return {
       ok: false,
-      error: 'Publish access mode must be password',
+      error: 'Publish access mode must be password or email',
       code: 'invalid_access_mode',
       status: 400,
     };
   }
-  if (!accessProtectionConfigured(env)) {
-    return {
-      ok: false,
-      error: 'Password access is not configured on this instance',
-      code: 'access_protection_unavailable',
-      status: 503,
-    };
-  }
-  if (typeof input.password !== 'string' || input.password.length < 8 || input.password.length > 128) {
-    return {
-      ok: false,
-      error: 'password must contain between 8 and 128 characters',
-      code: 'invalid_password',
-      status: 400,
-    };
-  }
 
-  const password = await hashSitePassword(input.password);
-  return {
-    ok: true,
-    statement: env.DB.prepare(`
-      INSERT INTO site_access (site_id, mode, password_hash, password_salt, policy_version)
-      VALUES (?, 'password', ?, ?, 1)
-      ON CONFLICT(site_id) DO UPDATE SET
-        mode = 'password',
-        password_hash = excluded.password_hash,
-        password_salt = excluded.password_salt,
-        policy_version = site_access.policy_version + 1,
-        updated_at = datetime('now')
-    `).bind(siteId, password.hash, password.salt),
-    response: {
-      siteId,
-      mode: 'password',
-      passwordConfigured: true,
-    },
-  };
+  const prepared = await prepareAccessPolicy(env, { kind: 'site', id: siteId }, input, tier);
+  if (!prepared.ok) {
+    return prepared;
+  }
+  return { ok: true, statement: prepared.statement, response: { siteId } };
 }
 
 async function publishedAccessResponse(
   env: Env,
-  prepared: {
-    siteId: string;
-    mode: 'link' | 'password';
-    passwordConfigured: boolean;
-  } | null,
-): Promise<{
-  siteId: string;
-  mode: 'link' | 'password';
-  policyVersion: number;
-  passwordConfigured: boolean;
-} | null> {
+  prepared: { siteId: string } | null,
+) {
   if (!prepared) return null;
-  const current = await getSiteAccess(env, prepared.siteId);
-  return {
-    siteId: prepared.siteId,
-    mode: current?.mode || prepared.mode,
-    policyVersion: current?.policy_version || 1,
-    passwordConfigured: current?.mode === 'password',
-  };
+  return { siteId: prepared.siteId, ...describeAccess(await getSiteAccess(env, prepared.siteId), false) };
 }
 
 async function readJson<T>(request: Request): Promise<T | null> {
