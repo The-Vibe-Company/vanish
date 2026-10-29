@@ -341,6 +341,66 @@ section h2 { font-size: 38px; letter-spacing: -0.025em; }
 
 /* grid children never widen the page */
 .hero-text, .hero-scenes, .scene, .ticket-left, .ticket-right, .plate, .labels, .sheet, .step, .q, .row, .row-text { min-width: 0; }
+/* ---------- motion ---------- */
+:root { --ease: cubic-bezier(.16, 1, .3, 1); }
+#command { scroll-margin-top: 80px; }
+.menu { transition: box-shadow .22s var(--ease); }
+.menu.scrolled { box-shadow: 0 2px 0 var(--green); }
+.js .lamps .lamp { opacity: .4; transition: opacity .4s var(--ease); }
+.js .lamps.lit .lamp { opacity: 1; }
+.js .lamps.lit li:nth-child(2) .lamp { transition-delay: .35s; }
+.js .lamps.lit li:nth-child(3) .lamp { transition-delay: .7s; }
+.js .lamps.lit li:nth-child(4) .lamp { transition-delay: 1.05s; }
+.cursor { display: inline-block; width: .55em; height: 1.05em; background: #fff; vertical-align: -.18em; margin-left: 3px; }
+.url { transition: text-decoration-thickness .18s var(--ease); text-decoration-thickness: 2px; }
+.url:hover { text-decoration-thickness: 4px; }
+.btn { transition: transform .18s var(--ease), background .18s var(--ease), box-shadow .18s var(--ease); }
+.btn:hover { transform: translateY(-1px); box-shadow: 0 2px 0 var(--green-deep); }
+.btn-solid:hover { background: var(--green-deep); }
+.btn-white:hover { box-shadow: 0 2px 0 #fff; }
+.copy { transition: background .18s var(--ease), transform .18s var(--ease); }
+.copy:hover { background: var(--tint); }
+.copy:active { transform: translateY(1px); }
+.copy.done { background: var(--tint-2); }
+.menu-links a:not(.btn) { position: relative; }
+.menu-links a:not(.btn)::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: 8px; height: 2px; background: var(--green); transform: scaleX(0); transform-origin: left; transition: transform .22s var(--ease); }
+.menu-links a:not(.btn):hover::after { transform: scaleX(1); }
+.sheet, .step, .q, .scene { transition: transform .22s var(--ease), box-shadow .22s var(--ease); }
+.pin { transition: transform .18s var(--ease); }
+.sheet:hover, .step:hover, .q:hover { transform: translateY(-2px); box-shadow: 0 3px 0 var(--green); }
+.step:hover .pin { transform: translateY(2px); }
+.sheet:hover svg { animation: nudge .4s steps(2) 1; }
+@keyframes nudge { 50% { transform: translateY(-2px); } }
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  .hero-text > * { animation: rise .55s cubic-bezier(.2, .7, .2, 1) both; }
+  .hero-text > :nth-child(1) { animation-delay: .05s; }
+  .hero-text > :nth-child(2) { animation-delay: .12s; }
+  .hero-text > :nth-child(3) { animation-delay: .19s; }
+  .hero-text > :nth-child(4) { animation-delay: .26s; }
+  .hero-text > :nth-child(5) { animation-delay: .33s; }
+  .hero-text > :nth-child(6) { animation-delay: .4s; }
+  .scene { animation: rise .6s cubic-bezier(.2, .7, .2, 1) both; }
+  .scene:nth-child(1) { animation-delay: .25s; }
+  .scene:nth-child(2) { animation-delay: .45s; }
+  .reveal { animation: rise .5s var(--ease) both; animation-delay: var(--d, 0ms); }
+  @keyframes blink { 50% { opacity: 0; } }
+  .cursor { animation: blink 1s steps(1) infinite; }
+  .qmark { animation: blink 1.4s steps(1) infinite; }
+  @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1px); } }
+  .walker { transform-box: fill-box; transform-origin: center bottom; animation: bob 1.1s steps(2) infinite; }
+  .w2 { animation-delay: .28s; }
+  .w3 { animation-delay: .55s; }
+  .w4 { animation-delay: .83s; }
+  @keyframes ring { 0%, 100% { outline-color: transparent; } 50% { outline-color: #f3b9b4; } }
+  .lamps.lit .lamp-expires { outline: 3px solid transparent; outline-offset: 2px; animation: ring 1.6s steps(2) 1.1s infinite; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .js .lamps .lamp { opacity: 1; transition: none; }
+  .cursor { display: none; }
+  .btn, .copy, .sheet, .step, .q, .pin, .url, .menu { transition: none; }
+  .sheet:hover, .step:hover, .q:hover, .btn:hover { transform: none; }
+}
 </style>
 ${analytics}
 </head>
@@ -382,7 +442,7 @@ ${analytics}
           <span class="tab">Any folder, any machine</span>
         </div>
         <div class="cmdbox-row">
-          <pre class="cmd"><code><span class="prompt">$</span> npx vanish-cli site ./demo --root index.html</code></pre>
+          <pre class="cmd"><code><span class="prompt">$</span> npx vanish-cli site ./demo --root index.html<span class="cursor" aria-hidden="true"></span></code></pre>
           <button type="button" class="copy" data-copy="npx vanish-cli site ./demo --root index.html">Copy command</button>
         </div>
       </div>
@@ -432,7 +492,7 @@ ${analytics}
           <rect x="53" y="24" width="8" height="1" fill="#14201a"/>
           <g fill="#5aa06f"><rect x="53" y="27" width="10" height="1"/><rect x="53" y="30" width="7" height="1"/><rect x="53" y="33" width="10" height="1"/><rect x="53" y="36" width="5" height="1"/></g>
           <!-- question mark -->
-          <g fill="#d63a2f"><rect x="55" y="6" width="8" height="2"/><rect x="61" y="8" width="2" height="2"/><rect x="59" y="10" width="2" height="2"/><rect x="58" y="12" width="2" height="2"/><rect x="58" y="16" width="2" height="2"/></g>
+          <g class="qmark" fill="#d63a2f"><rect x="55" y="6" width="8" height="2"/><rect x="61" y="8" width="2" height="2"/><rect x="59" y="10" width="2" height="2"/><rect x="58" y="12" width="2" height="2"/><rect x="58" y="16" width="2" height="2"/></g>
           <!-- desk -->
           <rect x="44" y="44" width="54" height="3" fill="#184d2e"/>
           <rect x="47" y="47" width="3" height="5" fill="#184d2e"/>
@@ -485,24 +545,29 @@ ${analytics}
           <text x="44.9" y="31.1" class="stamp stamp-url">quiet-river-42.vanish.sh</text>
           <rect x="58" y="9" width="4" height="3" fill="#d63a2f"/><rect x="59" y="12" width="2" height="2" fill="#8a1f17"/>
           <!-- people -->
+          <g class="walker w1">
           <rect x="34" y="30" width="6" height="2" fill="#14201a"/>
           <rect x="34" y="32" width="6" height="5" fill="#f2d6c0"/>
           <rect x="33" y="37" width="8" height="8" fill="#2e7a4b"/>
           <rect x="34" y="45" width="2" height="5" fill="#14201a"/><rect x="38" y="45" width="2" height="5" fill="#14201a"/>
+          </g><g class="walker w2">
           <rect x="44" y="36" width="4" height="2" fill="#14201a"/>
           <rect x="44" y="38" width="4" height="4" fill="#f2d6c0"/>
           <rect x="43" y="42" width="6" height="5" fill="#d63a2f"/>
           <rect x="44" y="47" width="1" height="3" fill="#14201a"/><rect x="47" y="47" width="1" height="3" fill="#14201a"/>
+          </g><g class="walker w3">
           <rect x="80" y="30" width="6" height="2" fill="#14201a"/>
           <rect x="80" y="32" width="6" height="5" fill="#f2d6c0"/>
           <rect x="79" y="37" width="8" height="8" fill="#184d2e"/>
           <rect x="76" y="38" width="3" height="2" fill="#184d2e"/><rect x="73" y="36" width="3" height="2" fill="#184d2e"/><rect x="71" y="34" width="2" height="2" fill="#f2d6c0"/>
           <rect x="80" y="45" width="2" height="5" fill="#14201a"/><rect x="84" y="45" width="2" height="5" fill="#14201a"/>
+          </g><g class="walker w4">
           <rect x="98" y="30" width="6" height="2" fill="#14201a"/>
           <rect x="98" y="32" width="6" height="5" fill="#f2d6c0"/>
           <rect x="97" y="37" width="8" height="8" fill="#5aa06f"/>
           <rect x="94" y="40" width="3" height="5" fill="#184d2e"/>
           <rect x="98" y="45" width="2" height="5" fill="#14201a"/><rect x="102" y="45" width="2" height="5" fill="#14201a"/>
+          </g>
         </svg>
         <figcaption>Pinned at a public URL, with the day it comes down. Everyone with the link sees it.</figcaption>
       </figure>
@@ -520,9 +585,9 @@ ${analytics}
 <!-- WHAT GOES THROUGH -->
 <section class="strip">
   <div class="wrap">
-    <h2 class="strip-title">What goes through</h2>
+    <h2 class="strip-title reveal" style="--d:350ms">What goes through</h2>
     <ul class="sheets">
-      <li class="sheet">
+      <li class="sheet reveal" style="--d:368ms">
         <svg viewBox="0 0 40 40" shape-rendering="crispEdges" aria-hidden="true">
           <rect x="3" y="5" width="34" height="32" fill="#184d2e"/><rect x="4" y="6" width="32" height="30" fill="#ffffff"/>
           <rect x="7" y="9" width="26" height="18" fill="#cfe6d6"/><rect x="26" y="11" width="3" height="3" fill="#ffffff"/>
@@ -533,7 +598,7 @@ ${analytics}
         <h3>Photo</h3>
         <code>npx vanish-cli upload photo.jpg</code>
       </li>
-      <li class="sheet">
+      <li class="sheet reveal" style="--d:386ms">
         <svg viewBox="0 0 40 40" shape-rendering="crispEdges" aria-hidden="true">
           <rect x="3" y="5" width="34" height="32" fill="#184d2e"/><rect x="4" y="6" width="32" height="30" fill="#ffffff"/>
           <rect x="7" y="9" width="12" height="2" fill="#184d2e"/>
@@ -544,7 +609,7 @@ ${analytics}
         <h3>Image</h3>
         <code>npx vanish-cli upload chart.png</code>
       </li>
-      <li class="sheet">
+      <li class="sheet reveal" style="--d:404ms">
         <svg viewBox="0 0 40 40" shape-rendering="crispEdges" aria-hidden="true">
           <rect x="3" y="5" width="34" height="32" fill="#184d2e"/><rect x="4" y="6" width="32" height="30" fill="#e6f2ea"/>
           <rect x="7" y="10" width="18" height="3" fill="#184d2e"/>
@@ -554,7 +619,7 @@ ${analytics}
         <h3>Text</h3>
         <code>npx vanish-cli upload notes.md</code>
       </li>
-      <li class="sheet">
+      <li class="sheet reveal" style="--d:422ms">
         <svg viewBox="0 0 40 40" shape-rendering="crispEdges" aria-hidden="true">
           <rect x="3" y="5" width="34" height="32" fill="#184d2e"/><rect x="4" y="6" width="24" height="30" fill="#ffffff"/><rect x="28" y="14" width="8" height="22" fill="#ffffff"/><rect x="28" y="6" width="8" height="8" fill="#cfe6d6"/>
           <rect x="7" y="17" width="26" height="3" fill="#184d2e"/>
@@ -565,7 +630,7 @@ ${analytics}
         <code>npx vanish-cli upload report.pdf</code>
         <p class="sheet-note">once signed in</p>
       </li>
-      <li class="sheet">
+      <li class="sheet reveal" style="--d:440ms">
         <svg viewBox="0 0 40 40" shape-rendering="crispEdges" aria-hidden="true">
           <rect x="3" y="5" width="34" height="32" fill="#184d2e"/><rect x="4" y="6" width="32" height="30" fill="#ffffff"/>
           <rect x="4" y="6" width="32" height="5" fill="#184d2e"/>
@@ -586,23 +651,23 @@ ${analytics}
 <!-- HOW IT WORKS -->
 <section class="how">
   <div class="wrap">
-    <h2>How it works</h2>
-    <p class="sub-h2">Three steps, and the third one happens on its own.</p>
+    <h2 class="reveal" style="--d:890ms">How it works</h2>
+    <p class="sub-h2 reveal" style="--d:458ms">Three steps, and the third one happens on its own.</p>
     <ol class="steps">
-      <li class="step">
+      <li class="step reveal" style="--d:476ms">
         <span class="pin" aria-hidden="true"></span>
         <span class="step-no">1</span>
         <h3>Your agent makes something.</h3>
         <p>A site, a report, a deck, a prototype, a screenshot. Any folder or file, on any machine.</p>
       </li>
-      <li class="step">
+      <li class="step reveal" style="--d:494ms">
         <span class="pin" aria-hidden="true"></span>
         <span class="step-no">2</span>
         <h3>One command.</h3>
         <p>Run it yourself or let the agent run it: three skills ship with the CLI. No account needed to try.</p>
         <pre class="mini"><code><span class="prompt">$</span> npx vanish-cli site ./demo --root index.html</code></pre>
       </li>
-      <li class="step">
+      <li class="step reveal" style="--d:512ms">
         <span class="pin" aria-hidden="true"></span>
         <span class="step-no">3</span>
         <h3>Everyone with the link sees it, until it expires.</h3>
@@ -615,9 +680,9 @@ ${analytics}
 <!-- ONE COMMAND IN, ONE URL OUT -->
 <section class="ticket">
   <div class="wrap">
-    <h2>One command in, one URL out</h2>
+    <h2 class="reveal" style="--d:908ms">One command in, one URL out</h2>
     <div class="ticket-grid">
-      <div class="ticket-left">
+      <div class="ticket-left reveal" style="--d:530ms">
         <ul class="lamps" aria-label="Status">
           <li><span class="lamp lamp-sent" aria-hidden="true"></span><span class="lamp-k">Sent</span><span class="lamp-v">17:58:00 UTC</span></li>
           <li><span class="lamp lamp-transit" aria-hidden="true"></span><span class="lamp-k">In transit</span><span class="lamp-v">4 files, 12.0 KB</span></li>
@@ -643,7 +708,7 @@ ${analytics}
         </div>
       </div>
 
-      <div class="ticket-right">
+      <div class="ticket-right reveal" style="--d:548ms">
         <div class="arrival">
           <span class="pin" aria-hidden="true"></span>
           <h3 class="kicker">What came back</h3>
@@ -674,8 +739,8 @@ ${analytics}
 <!-- RATING PLATES -->
 <section class="plates-section">
   <div class="wrap">
-    <h2>Plans and limits</h2>
-    <p class="sub-h2">Three tiers, one pipe. Every limit below is the real one.</p>
+    <h2 class="reveal" style="--d:926ms">Plans and limits</h2>
+    <p class="sub-h2 reveal" style="--d:566ms">Three tiers, one pipe. Every limit below is the real one.</p>
 
     <div class="board">
       <div class="labels" aria-hidden="true">
@@ -691,7 +756,7 @@ ${analytics}
         <div class="cell foot"></div>
       </div>
 
-      <div class="plate">
+      <div class="plate reveal" style="--d:584ms">
         <div class="cell head"><h3>Anonymous</h3></div>
         <div class="cell price"><strong>Free</strong> <span>no account</span></div>
         <div class="cell"><span class="lab">Mini-site</span><span class="val">300 MB · 100 files</span></div>
@@ -704,7 +769,7 @@ ${analytics}
         <div class="cell foot"><a class="btn btn-line" href="#command">Run the command</a></div>
       </div>
 
-      <div class="plate plate-mid">
+      <div class="plate plate-mid reveal" style="--d:602ms">
         <span class="usual">Usual start</span>
         <div class="cell head"><h3>Free</h3></div>
         <div class="cell price"><strong>Free</strong> <span>GitHub login</span></div>
@@ -718,7 +783,7 @@ ${analytics}
         <div class="cell foot"><a class="btn btn-solid" href="/auth/github?redirect=/dashboard">Sign in with GitHub</a></div>
       </div>
 
-      <div class="plate">
+      <div class="plate reveal" style="--d:620ms">
         <div class="cell head"><h3>Pro</h3></div>
         <div class="cell price"><strong>10 €</strong> <span>per month</span></div>
         <div class="cell"><span class="lab">Mini-site</span><span class="val">5,000 files · within 10 GB</span></div>
@@ -737,26 +802,26 @@ ${analytics}
 <!-- QUESTIONS -->
 <section class="faq">
   <div class="wrap">
-    <h2>Questions</h2>
-    <p class="sub-h2">The five we get. The answers are the real ones.</p>
+    <h2 class="reveal" style="--d:944ms">Questions</h2>
+    <p class="sub-h2 reveal" style="--d:638ms">The five we get. The answers are the real ones.</p>
     <dl class="qa">
-      <div class="q">
+      <div class="q reveal" style="--d:656ms">
         <dt>Is it public?</dt>
         <dd>Yes, to anyone who has the link. There is no password: expiry is the safety. Each skill asks before publishing anything that looks private.</dd>
       </div>
-      <div class="q">
+      <div class="q reveal" style="--d:674ms">
         <dt>What if I need it longer?</dt>
         <dd>Anonymous keeps it 24 hours, Free 48 hours, Pro 30 days. On Pro, <code>--days 90</code> sets the retention, up to 365.</dd>
       </div>
-      <div class="q">
+      <div class="q reveal" style="--d:692ms">
         <dt>Can I update it?</dt>
         <dd>A site you own takes new files at the same URL with <code>--update quiet-river-42</code>. The reviewer's link keeps working.</dd>
       </div>
-      <div class="q">
+      <div class="q reveal" style="--d:710ms">
         <dt>What is blocked?</dt>
         <dd>Executables, on every tier. Anonymous file uploads take images only; every other type once signed in.</dd>
       </div>
-      <div class="q">
+      <div class="q reveal" style="--d:728ms">
         <dt>Can I run my own?</dt>
         <dd>Yes. Open source under MIT, runs on Cloudflare Workers, R2 and D1. Clone it and run your own station.</dd>
       </div>
@@ -767,37 +832,37 @@ ${analytics}
 <!-- OPERATING NOTES -->
 <section class="notes">
   <div class="wrap">
-    <h2>Good to know</h2>
-    <p class="sub-h2">What the command does, in the order you will meet it.</p>
+    <h2 class="reveal" style="--d:962ms">Good to know</h2>
+    <p class="sub-h2 reveal" style="--d:746ms">What the command does, in the order you will meet it.</p>
 
     <ol class="rows">
-      <li class="row">
+      <li class="row reveal" style="--d:764ms">
         <span class="no">01</span>
         <div class="row-text"><h3>Agent skills</h3><p>Three skills ship with the CLI and route each artifact to the right command. Each one asks before publishing anything that looks private.</p></div>
         <pre class="mini"><code>vanish-publish-site · vanish-upload-files · vanish-connect-upgrade</code></pre>
       </li>
-      <li class="row">
+      <li class="row reveal" style="--d:782ms">
         <span class="no">02</span>
         <div class="row-text"><h3>Single file</h3><p>A file keeps its extension in the URL. Images on every tier; every other type once signed in.</p></div>
         <pre class="mini"><code><span class="prompt">$</span> npx vanish-cli upload screenshot.png
 https://vanish.sh/f/a1b2c3d4e5f6.png</code></pre>
       </li>
-      <li class="row">
+      <li class="row reveal" style="--d:800ms">
         <span class="no">03</span>
         <div class="row-text"><h3>Update in place</h3><p>A site you own takes new files at the same URL. The reviewer's link keeps working.</p></div>
         <pre class="mini"><code><span class="prompt">$</span> vanish site ./demo --root index.html --update quiet-river-42</code></pre>
       </li>
-      <li class="row">
+      <li class="row reveal" style="--d:818ms">
         <span class="no">04</span>
         <div class="row-text"><h3>Expiry and slug</h3><p>Every URL is public to anyone who has it. Pro sets <code>--days 90</code>, up to 365, and names the site with <code>--slug workshop-demo</code>.</p></div>
         <pre class="mini"><code>https://workshop-demo.vanish.sh/</code></pre>
       </li>
-      <li class="row">
+      <li class="row reveal" style="--d:836ms">
         <span class="no">05</span>
         <div class="row-text"><h3>Run your own</h3><p>Open source under MIT. Runs on Cloudflare Workers, R2 and D1. Clone it and run your own station.</p></div>
         <p class="links"><a href="https://github.com/The-Vibe-Company/vanish">Source on GitHub</a> <a href="https://github.com/The-Vibe-Company/vanish/blob/main/LICENSE">MIT license</a></p>
       </li>
-      <li class="row">
+      <li class="row reveal" style="--d:854ms">
         <span class="no">06</span>
         <div class="row-text"><h3>Account</h3><p>Sign in with GitHub to reach the Free tier. The dashboard lists what is live and when it goes.</p></div>
         <pre class="mini"><code>vanish login · vanish whoami · vanish status
@@ -810,12 +875,12 @@ vanish ls · vanish rm &lt;id&gt; · vanish upgrade</code></pre>
 <!-- FINAL CALL -->
 <section class="band">
   <div class="wrap">
-    <h2>Hand it over now.</h2>
+    <h2 class="reveal" style="--d:980ms">Hand it over now.</h2>
     <p class="band-sub">One command, one public URL, gone on its own. No account needed to try.</p>
-    <div class="band-row">
+    <div class="band-row reveal" style="--d:872ms">
       <div class="cmdbox cmdbox-band">
         <div class="cmdbox-row">
-          <pre class="cmd"><code><span class="prompt">$</span> npx vanish-cli site ./demo --root index.html</code></pre>
+          <pre class="cmd"><code><span class="prompt">$</span> npx vanish-cli site ./demo --root index.html<span class="cursor" aria-hidden="true"></span></code></pre>
           <button type="button" class="copy" data-copy="npx vanish-cli site ./demo --root index.html">Copy command</button>
         </div>
       </div>
@@ -849,15 +914,33 @@ vanish ls · vanish rm &lt;id&gt; · vanish upgrade</code></pre>
   </div>
 </footer>
 <script>
-/* optional: the page reads the same without it */
-document.querySelectorAll('.copy').forEach(function (b) {
-  b.addEventListener('click', function () {
-    if (!navigator.clipboard) return;
-    navigator.clipboard.writeText(b.dataset.copy).then(function () {
-      var t = b.textContent; b.textContent = 'Copied'; setTimeout(function () { b.textContent = t; }, 1500);
+(function () {
+  var d = document;
+  d.documentElement.classList.add('js');
+  var lamps = d.querySelector('.lamps');
+  var light = function () { if (lamps) lamps.classList.add('lit'); };
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (lamps && !reduce && 'IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (entries) {
+      if (entries.some(function (en) { return en.isIntersecting; })) { light(); io.disconnect(); }
+    }, { threshold: 0.3 });
+    io.observe(lamps);
+    setTimeout(light, 1500);
+  } else { light(); }
+  var menu = d.querySelector('.menu');
+  var onScroll = function () { if (menu) menu.classList.toggle('scrolled', window.scrollY > 8); };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+  d.querySelectorAll('.copy').forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (!navigator.clipboard) return;
+      navigator.clipboard.writeText(b.dataset.copy).then(function () {
+        var t = b.textContent; b.textContent = 'Copied'; b.classList.add('done');
+        setTimeout(function () { b.textContent = t; b.classList.remove('done'); }, 1500);
+      });
     });
   });
-});
+})();
 </script>
 </body>
 </html>
