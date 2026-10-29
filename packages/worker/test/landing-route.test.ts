@@ -18,12 +18,12 @@ describe('landing route', () => {
     expect(response.status).toBe(200);
     const html = await response.text();
     expect(html).toContain('<title>vanish: public preview URLs for agent-made artifacts</title>');
+    expect(html).toContain('npx vanish-cli site ./demo');
     expect(html).toContain('The publish command your agent was missing.');
-    expect(html).toContain('npx vanish-cli site ./demo --root index.html');
     expect(html).toContain('Rating plates');
-    expect(html).toContain('300 MB · 100 files');
-    expect(html).toContain('5,000 files · within 10 GB');
     expect(html).toContain('10 €');
+    expect(html).toContain('5,000 files · within 10 GB');
+    expect(html).toContain('300 MB · 100 files');
     expect(html).toContain('posthog');
     expect(html).toContain('href="/auth/github?redirect=/dashboard"');
     expect(html).not.toContain('href="/auth/github">');
