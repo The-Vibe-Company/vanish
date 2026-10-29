@@ -89,7 +89,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 
 /* hero */
 .hero { padding: 40px 0 44px; }
-.hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 44px; align-items: start; }
+.hero-grid { display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr); gap: 44px; align-items: center; }
 .eyebrow { font-weight: 600; font-size: 15px; color: var(--green); letter-spacing: 0.02em; margin-bottom: 14px; }
 h1 { font-size: 50px; font-weight: 800; letter-spacing: -0.03em; text-wrap: balance; line-height: 1.05; }
 .lead { font-size: 18px; line-height: 1.55; margin-top: 20px; max-width: 34em; }
@@ -112,26 +112,28 @@ h1 { font-size: 50px; font-weight: 800; letter-spacing: -0.03em; text-wrap: bala
   background: #fff; color: var(--green); font: 600 15px var(--sans); cursor: pointer; white-space: nowrap;
 }
 
-/* hero result */
-.result { position: relative; margin-top: 26px; background: var(--tint); border: 2px solid var(--green); border-radius: 3px; padding: 22px 20px 18px; }
 .kicker { font-size: 15px; font-weight: 700; letter-spacing: 0.01em; color: var(--green); }
 .url {
   display: block; margin-top: 10px; font-family: var(--mono); font-weight: 700; font-size: 22px;
   color: var(--ink); text-decoration: underline; text-decoration-color: var(--green); text-underline-offset: 5px;
   overflow-wrap: anywhere; line-height: 1.3;
 }
-.result-exp { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 16px; font-weight: 600; font-family: var(--mono); }
 
 /* hero scenes */
-.hero-scenes { display: grid; gap: 18px; }
+.hero-scenes { display: block; }
+.scene-art { position: relative; }
 .scene { position: relative; margin: 0; border: 2px solid var(--green); border-radius: 3px; overflow: hidden; background: #fff; }
 .scene svg { display: block; width: 100%; height: auto; }
-.scene-tag {
-  position: absolute; top: 0; left: 0; z-index: 1;
-  background: var(--green); color: #fff; font-weight: 700; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase;
-  padding: 5px 10px; border-radius: 0 0 3px 0;
+.scene-plate {
+  position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%);
+  display: flex; flex-direction: column; gap: 2px; align-items: center; text-align: center;
+  background: #fff; border: 2px solid var(--green); border-radius: 3px; padding: 8px 14px 9px;
+  color: var(--ink); text-decoration: none; box-shadow: 0 3px 0 var(--green); white-space: nowrap;
+  transition: transform .18s var(--ease), box-shadow .18s var(--ease);
 }
-.scene-tag-after { background: #b3281e; }
+.scene-plate:hover { transform: translateX(-50%) translateY(-2px); box-shadow: 0 5px 0 var(--green); }
+.scene-plate-url { font: 700 19px/1.2 var(--mono); text-decoration: underline; text-decoration-color: var(--green); text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.scene-plate-exp { font: 600 13px/1.3 var(--mono); color: #b3281e; }
 .scene figcaption { padding: 10px 14px 12px; font-size: 16px; font-weight: 600; border-top: 2px solid var(--green); background: var(--pale); }
 .stamp { font-family: var(--mono); font-size: 3.1px; font-weight: 700; fill: #fff; }
 .stamp-url { font-size: 2.25px; }
@@ -159,7 +161,9 @@ section h2 { font-size: 38px; letter-spacing: -0.025em; }
 /* how it works */
 .how { padding: 72px 0 24px; }
 .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 40px; }
-.step { position: relative; border: 2px solid var(--green); border-radius: 3px; background: var(--pale); padding: 28px 20px 22px; min-width: 0; }
+.step { position: relative; border: 2px solid var(--green); border-radius: 3px; background: var(--pale); padding: 0 20px 22px; min-width: 0; overflow: hidden; }
+.step-art { margin: 0 -20px 18px; border-bottom: 2px solid var(--green); background: #fff; }
+.step-art svg { display: block; width: 100%; height: auto; }
 .step-no { display: inline-block; font-family: var(--mono); font-weight: 700; font-size: 15px; color: #fff; background: var(--green); padding: 3px 9px; margin-bottom: 12px; }
 .step h3 { font-size: 21px; line-height: 1.2; text-wrap: balance; min-height: 2.4em; }
 .step p { margin-top: 10px; font-size: 16px; line-height: 1.55; }
@@ -167,17 +171,10 @@ section h2 { font-size: 38px; letter-spacing: -0.025em; }
 
 /* ticket */
 .ticket { padding: 72px 0 24px; }
-.ticket-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.25fr); gap: 40px; margin-top: 32px; align-items: start; }
-.lamps { border: 2px solid var(--green); border-radius: 3px; padding: 6px 18px; }
-.lamps li { display: grid; grid-template-columns: 14px 88px 1fr; gap: 14px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--tint-2); font-size: 16px; }
-.lamps li:last-child { border-bottom: 0; }
-.lamp { width: 14px; height: 14px; flex: 0 0 14px; display: inline-block; background: var(--green-mid); box-shadow: inset 0 0 0 3px #fff, inset 0 0 0 7px var(--green-mid); }
-.lamp-sent { background: var(--green-mid); }
-.lamp-transit { background: var(--tint-3); box-shadow: inset 0 0 0 3px #fff, inset 0 0 0 7px var(--tint-3); }
-.lamp-arrived { background: var(--green); box-shadow: inset 0 0 0 3px #fff, inset 0 0 0 7px var(--green); }
-.lamp-expires { background: var(--red); box-shadow: inset 0 0 0 3px #fff, inset 0 0 0 7px var(--red); }
-.lamp-k { font-weight: 600; color: var(--green); }
-.lamp-v { font-family: var(--mono); font-size: 15px; }
+.ticket-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.2fr); gap: 40px; margin-top: 36px; align-items: start; }
+.capsule-top { margin-top: 0; }
+.came-back { margin: 0 0 20px; }
+.came-back .url { margin-top: 8px; font-size: 24px; }
 
 .sub { font-size: 16px; margin-top: 4px; }
 .capsule { margin-top: 28px; }
@@ -190,8 +187,6 @@ section h2 { font-size: 38px; letter-spacing: -0.025em; }
 .root { display: inline-block; font-size: 12px; font-weight: 700; color: #fff; background: var(--green); padding: 2px 7px; }
 .note { margin-top: 16px; font-size: 16px; line-height: 1.55; }
 
-.arrival { position: relative; background: var(--tint); border: 2px solid var(--green); border-radius: 3px; padding: 26px 22px 24px; }
-.arrival .url { margin-top: 14px; font-size: 24px; }
 .jsonbox { margin-top: 24px; background: var(--green); color: #fff; border-radius: 4px; overflow: hidden; }
 .jsonbox { max-width: 100%; min-width: 0; }
 .jsonbox pre { margin: 0; padding: 16px 18px; font-size: 14px; line-height: 1.6; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -301,9 +296,11 @@ section h2 { font-size: 38px; letter-spacing: -0.025em; }
   .cmdbox-tabs { overflow-x: auto; }
   .tab { font-size: 12px; padding: 9px 10px; }
   .url { font-size: 19px; }
-  .arrival .url { font-size: 19px; }
-  .result-exp { font-size: 15px; }
   .scene figcaption { font-size: 15px; }
+  .scene-plate { padding: 6px 10px 7px; }
+  .scene-plate-url { font-size: 15px; }
+  .scene-plate-exp { font-size: 12px; }
+  .came-back .url { font-size: 19px; }
   .facts p { gap: 6px 0; padding: 12px 0; font-size: 15px; }
   .facts span { padding: 0 10px; white-space: normal; text-align: center; }
   .strip { padding: 36px 0; }
@@ -319,9 +316,6 @@ section h2 { font-size: 38px; letter-spacing: -0.025em; }
   .how, .ticket, .plates-section, .faq, .notes { padding-top: 52px; }
   .steps { margin-top: 32px; }
   .step h3 { font-size: 19px; min-height: 0; }
-  .lamps { padding: 4px 14px; }
-  .lamps li { grid-template-columns: 14px 84px 1fr; gap: 10px; font-size: 15px; }
-  .lamp-v { font-size: 14px; }
   .jsonbox pre { font-size: 13px; }
   .board { gap: 34px; }
   .plate .cell { padding: 10px 16px; }
@@ -345,11 +339,6 @@ section h2 { font-size: 38px; letter-spacing: -0.025em; }
 #command { scroll-margin-top: 80px; }
 .menu { transition: box-shadow .22s var(--ease); }
 .menu.scrolled { box-shadow: 0 2px 0 var(--green); }
-.js .lamps .lamp { opacity: .4; transition: opacity .4s var(--ease); }
-.js .lamps.lit .lamp { opacity: 1; }
-.js .lamps.lit li:nth-child(2) .lamp { transition-delay: .35s; }
-.js .lamps.lit li:nth-child(3) .lamp { transition-delay: .7s; }
-.js .lamps.lit li:nth-child(4) .lamp { transition-delay: 1.05s; }
 .cursor { display: inline-block; width: .55em; height: 1.05em; background: #fff; vertical-align: -.18em; margin-left: 3px; }
 .url { transition: text-decoration-thickness .18s var(--ease); text-decoration-thickness: 2px; }
 .url:hover { text-decoration-thickness: 4px; }
@@ -391,11 +380,8 @@ section h2 { font-size: 38px; letter-spacing: -0.025em; }
   .w2 { animation-delay: .28s; }
   .w3 { animation-delay: .55s; }
   .w4 { animation-delay: .83s; }
-  @keyframes ring { 0%, 100% { outline-color: transparent; } 50% { outline-color: #f3b9b4; } }
-  .lamps.lit .lamp-expires { outline: 3px solid transparent; outline-offset: 2px; animation: ring 1.6s steps(2) 1.1s infinite; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .js .lamps .lamp { opacity: 1; transition: none; }
   .cursor { display: none; }
   .btn, .copy, .sheet, .step, .q, .pin, .url, .menu { transition: none; }
   .sheet:hover, .step:hover, .q:hover, .btn:hover { transform: none; }
@@ -427,7 +413,7 @@ ${analytics}
 
 <main id="main">
 
-<!-- HERO: before / after -->
+<!-- HERO: the board -->
 <section class="hero">
   <div class="wrap hero-grid">
     <div class="hero-text">
@@ -446,69 +432,12 @@ ${analytics}
         </div>
       </div>
       <p class="no-account"><strong>No account needed to try:</strong> sites and images, live for 24 hours. <a href="/auth/github?redirect=/dashboard">Sign in with GitHub</a> for every file type, 48 hours and a password on the link.</p>
-
-      <div class="result">
-        <span class="pin" aria-hidden="true"></span>
-        <p class="kicker">What comes back · Public to anyone with the link</p>
-        <a class="url" href="https://quiet-river-42.vanish.sh/">https://quiet-river-42.vanish.sh/</a>
-        <p class="result-exp"><span class="lamp lamp-expires" aria-hidden="true"></span>Expires 2026-10-30 17:58 UTC</p>
-      </div>
     </div>
 
     <div class="hero-scenes">
       <figure class="scene">
-        <span class="scene-tag">Before</span>
-        <svg viewBox="0 0 120 64" shape-rendering="crispEdges" role="img" aria-label="A developer at a desk holds a sheet the agent just made; the door beside them is empty">
-          <rect width="120" height="64" fill="#f3f8f5"/>
-          <rect x="0" y="52" width="120" height="12" fill="#cfe6d6"/>
-          <rect x="0" y="52" width="120" height="1" fill="#a9d1b6"/>
-          <!-- door, nobody in it -->
-          <rect x="4" y="16" width="18" height="36" fill="#184d2e"/>
-          <rect x="6" y="18" width="14" height="34" fill="#e6f2ea"/>
-          <rect x="17" y="34" width="2" height="2" fill="#184d2e"/>
-          <!-- window -->
-          <rect x="100" y="8" width="18" height="18" fill="#184d2e"/>
-          <rect x="102" y="10" width="14" height="14" fill="#e6f2ea"/>
-          <rect x="108" y="10" width="2" height="14" fill="#184d2e"/>
-          <rect x="102" y="16" width="14" height="2" fill="#184d2e"/>
-          <!-- chair -->
-          <rect x="27" y="26" width="3" height="26" fill="#184d2e"/>
-          <rect x="27" y="40" width="16" height="2" fill="#184d2e"/>
-          <rect x="33" y="42" width="3" height="10" fill="#184d2e"/>
-          <!-- developer, seated -->
-          <rect x="32" y="20" width="7" height="2" fill="#14201a"/>
-          <rect x="32" y="22" width="7" height="6" fill="#f2d6c0"/>
-          <rect x="32" y="22" width="2" height="2" fill="#14201a"/>
-          <rect x="30" y="28" width="11" height="12" fill="#2e7a4b"/>
-          <rect x="41" y="40" width="8" height="3" fill="#14201a"/>
-          <rect x="47" y="43" width="3" height="9" fill="#14201a"/>
-          <rect x="47" y="51" width="6" height="1" fill="#14201a"/>
-          <rect x="41" y="32" width="8" height="2" fill="#2e7a4b"/>
-          <rect x="49" y="31" width="3" height="3" fill="#f2d6c0"/>
-          <!-- the sheet the agent made -->
-          <rect x="50" y="20" width="16" height="20" fill="#184d2e"/>
-          <rect x="51" y="21" width="14" height="18" fill="#ffffff"/>
-          <rect x="53" y="24" width="8" height="1" fill="#14201a"/>
-          <g fill="#5aa06f"><rect x="53" y="27" width="10" height="1"/><rect x="53" y="30" width="7" height="1"/><rect x="53" y="33" width="10" height="1"/><rect x="53" y="36" width="5" height="1"/></g>
-          <!-- question mark -->
-          <g class="qmark" fill="#d63a2f"><rect x="55" y="6" width="8" height="2"/><rect x="61" y="8" width="2" height="2"/><rect x="59" y="10" width="2" height="2"/><rect x="58" y="12" width="2" height="2"/><rect x="58" y="16" width="2" height="2"/></g>
-          <!-- desk -->
-          <rect x="44" y="44" width="54" height="3" fill="#184d2e"/>
-          <rect x="47" y="47" width="3" height="5" fill="#184d2e"/>
-          <rect x="92" y="47" width="3" height="5" fill="#184d2e"/>
-          <!-- monitor with the agent's terminal -->
-          <rect x="68" y="24" width="28" height="18" fill="#184d2e"/>
-          <rect x="70" y="26" width="24" height="13" fill="#0f3a21"/>
-          <g fill="#5aa06f"><rect x="72" y="28" width="2" height="1"/><rect x="75" y="28" width="12" height="1"/><rect x="72" y="31" width="16" height="1"/><rect x="72" y="34" width="9" height="1"/></g>
-          <rect x="82" y="34" width="3" height="2" fill="#ffffff"/>
-          <rect x="80" y="42" width="4" height="2" fill="#184d2e"/>
-        </svg>
-        <figcaption>Your agent made it. Nobody to give it to.</figcaption>
-      </figure>
-
-      <figure class="scene">
-        <span class="scene-tag scene-tag-after">After</span>
-        <svg viewBox="0 0 120 64" shape-rendering="crispEdges" role="img" aria-label="The same sheet pinned on the town notice board with its URL and the date it comes down; people pass by and one points at it">
+        <div class="scene-art">
+          <svg viewBox="0 0 120 64" shape-rendering="crispEdges" role="img" aria-label="The same sheet pinned on the town notice board with its URL and the date it comes down; people pass by and one points at it">
           <rect width="120" height="64" fill="#ffffff"/>
           <rect x="0" y="50" width="120" height="14" fill="#cfe6d6"/>
           <rect x="0" y="50" width="120" height="1" fill="#a9d1b6"/>
@@ -568,6 +497,11 @@ ${analytics}
           <rect x="98" y="45" width="2" height="5" fill="#14201a"/><rect x="102" y="45" width="2" height="5" fill="#14201a"/>
           </g>
         </svg>
+          <a class="scene-plate" href="https://quiet-river-42.vanish.sh/">
+            <span class="scene-plate-url">quiet-river-42.vanish.sh</span>
+            <span class="scene-plate-exp">Expires 2026-10-30 17:58 UTC</span>
+          </a>
+        </div>
         <figcaption>Pinned at a public URL until the date on it. Everyone with the link sees it.</figcaption>
       </figure>
     </div>
@@ -656,18 +590,138 @@ ${analytics}
     <ol class="steps">
       <li class="step reveal" style="--d:346ms">
         <span class="pin" aria-hidden="true"></span>
+        <div class="step-art"><svg viewBox="0 0 120 64" shape-rendering="crispEdges" aria-hidden="true">
+          <rect width="120" height="64" fill="#f3f8f5"/>
+          <rect x="0" y="52" width="120" height="12" fill="#cfe6d6"/>
+          <rect x="0" y="52" width="120" height="1" fill="#a9d1b6"/>
+          <!-- door, nobody in it -->
+          <rect x="4" y="16" width="18" height="36" fill="#184d2e"/>
+          <rect x="6" y="18" width="14" height="34" fill="#e6f2ea"/>
+          <rect x="17" y="34" width="2" height="2" fill="#184d2e"/>
+          <!-- window -->
+          <rect x="100" y="8" width="18" height="18" fill="#184d2e"/>
+          <rect x="102" y="10" width="14" height="14" fill="#e6f2ea"/>
+          <rect x="108" y="10" width="2" height="14" fill="#184d2e"/>
+          <rect x="102" y="16" width="14" height="2" fill="#184d2e"/>
+          <!-- chair -->
+          <rect x="27" y="26" width="3" height="26" fill="#184d2e"/>
+          <rect x="27" y="40" width="16" height="2" fill="#184d2e"/>
+          <rect x="33" y="42" width="3" height="10" fill="#184d2e"/>
+          <!-- developer, seated -->
+          <rect x="32" y="20" width="7" height="2" fill="#14201a"/>
+          <rect x="32" y="22" width="7" height="6" fill="#f2d6c0"/>
+          <rect x="32" y="22" width="2" height="2" fill="#14201a"/>
+          <rect x="30" y="28" width="11" height="12" fill="#2e7a4b"/>
+          <rect x="41" y="40" width="8" height="3" fill="#14201a"/>
+          <rect x="47" y="43" width="3" height="9" fill="#14201a"/>
+          <rect x="47" y="51" width="6" height="1" fill="#14201a"/>
+          <rect x="41" y="32" width="8" height="2" fill="#2e7a4b"/>
+          <rect x="49" y="31" width="3" height="3" fill="#f2d6c0"/>
+          <!-- the sheet the agent made -->
+          <rect x="50" y="20" width="16" height="20" fill="#184d2e"/>
+          <rect x="51" y="21" width="14" height="18" fill="#ffffff"/>
+          <rect x="53" y="24" width="8" height="1" fill="#14201a"/>
+          <g fill="#5aa06f"><rect x="53" y="27" width="10" height="1"/><rect x="53" y="30" width="7" height="1"/><rect x="53" y="33" width="10" height="1"/><rect x="53" y="36" width="5" height="1"/></g>
+          <!-- question mark -->
+          <g class="qmark" fill="#d63a2f"><rect x="55" y="6" width="8" height="2"/><rect x="61" y="8" width="2" height="2"/><rect x="59" y="10" width="2" height="2"/><rect x="58" y="12" width="2" height="2"/><rect x="58" y="16" width="2" height="2"/></g>
+          <!-- desk -->
+          <rect x="44" y="44" width="54" height="3" fill="#184d2e"/>
+          <rect x="47" y="47" width="3" height="5" fill="#184d2e"/>
+          <rect x="92" y="47" width="3" height="5" fill="#184d2e"/>
+          <!-- monitor with the agent's terminal -->
+          <rect x="68" y="24" width="28" height="18" fill="#184d2e"/>
+          <rect x="70" y="26" width="24" height="13" fill="#0f3a21"/>
+          <g fill="#5aa06f"><rect x="72" y="28" width="2" height="1"/><rect x="75" y="28" width="12" height="1"/><rect x="72" y="31" width="16" height="1"/><rect x="72" y="34" width="9" height="1"/></g>
+          <rect x="82" y="34" width="3" height="2" fill="#ffffff"/>
+          <rect x="80" y="42" width="4" height="2" fill="#184d2e"/>
+        </svg></div>
         <span class="step-no">1</span>
         <h3>Your agent makes something.</h3>
-        <p>A site, a report, a deck, a prototype, a screenshot. Any folder or file, on any machine.</p>
+        <p>A site, a report, a deck, a prototype, a screenshot. It sits on your machine, and nobody else can see it.</p>
       </li>
       <li class="step reveal" style="--d:358ms">
         <span class="pin" aria-hidden="true"></span>
+        <div class="step-art"><svg viewBox="0 0 120 64" shape-rendering="crispEdges" aria-hidden="true">
+          <rect width="120" height="64" fill="#f3f8f5"/>
+          <rect x="0" y="52" width="120" height="12" fill="#cfe6d6"/>
+          <rect x="0" y="52" width="120" height="1" fill="#a9d1b6"/>
+          <rect x="14" y="6" width="92" height="46" fill="#184d2e"/>
+          <rect x="16" y="8" width="88" height="42" fill="#0f3a21"/>
+          <rect x="16" y="8" width="88" height="6" fill="#184d2e"/>
+          <g fill="#cfe6d6"><rect x="19" y="10" width="2" height="2"/><rect x="23" y="10" width="2" height="2"/><rect x="27" y="10" width="2" height="2"/></g>
+          <rect x="20" y="19" width="3" height="3" fill="#5aa06f"/>
+          <rect x="25" y="19" width="46" height="3" fill="#ffffff"/>
+          <g fill="#5aa06f"><rect x="20" y="26" width="28" height="2"/><rect x="20" y="31" width="50" height="2"/><rect x="20" y="36" width="18" height="2"/></g>
+          <rect x="20" y="41" width="3" height="4" fill="#d63a2f"/>
+          <rect x="25" y="41" width="58" height="4" fill="#ffffff"/>
+          <rect x="44" y="52" width="32" height="2" fill="#184d2e"/>
+        </svg></div>
         <span class="step-no">2</span>
         <h3>One command.</h3>
         <p>Run it yourself, or let the agent run it: the CLI ships with three agent skills that pick the right command for a folder, a file or an account question.</p>
       </li>
       <li class="step reveal" style="--d:370ms">
         <span class="pin" aria-hidden="true"></span>
+        <div class="step-art"><svg viewBox="0 0 120 64" shape-rendering="crispEdges" aria-hidden="true">
+          <rect width="120" height="64" fill="#ffffff"/>
+          <rect x="0" y="50" width="120" height="14" fill="#cfe6d6"/>
+          <rect x="0" y="50" width="120" height="1" fill="#a9d1b6"/>
+          <!-- lamppost -->
+          <rect x="9" y="24" width="2" height="26" fill="#14201a"/>
+          <rect x="7" y="20" width="6" height="4" fill="#184d2e"/>
+          <!-- tree -->
+          <rect x="110" y="36" width="3" height="14" fill="#184d2e"/>
+          <rect x="104" y="22" width="15" height="14" fill="#2e7a4b"/>
+          <rect x="107" y="17" width="9" height="5" fill="#2e7a4b"/>
+          <!-- town board -->
+          <rect x="18" y="3" width="84" height="3" fill="#0f3a21"/>
+          <rect x="20" y="6" width="80" height="35" fill="#184d2e"/>
+          <rect x="23" y="9" width="74" height="29" fill="#a9d1b6"/>
+          <rect x="26" y="41" width="3" height="9" fill="#184d2e"/>
+          <rect x="91" y="41" width="3" height="9" fill="#184d2e"/>
+          <g fill="#8fc4a1"><rect x="25" y="34" width="2" height="2"/><rect x="60" y="11" width="2" height="2"/><rect x="94" y="36" width="2" height="2"/><rect x="38" y="12" width="2" height="2"/></g>
+          <!-- other notices -->
+          <rect x="26" y="13" width="12" height="10" fill="#e6f2ea"/>
+          <g fill="#2e7a4b"><rect x="28" y="16" width="8" height="1"/><rect x="28" y="18" width="6" height="1"/><rect x="28" y="20" width="8" height="1"/></g>
+          <rect x="30" y="11" width="4" height="3" fill="#d63a2f"/><rect x="31" y="14" width="2" height="2" fill="#8a1f17"/>
+          <rect x="83" y="12" width="11" height="12" fill="#ffffff"/>
+          <rect x="85" y="19" width="2" height="3" fill="#5aa06f"/><rect x="88" y="16" width="2" height="6" fill="#2e7a4b"/><rect x="91" y="18" width="2" height="4" fill="#184d2e"/>
+          <rect x="86" y="10" width="4" height="3" fill="#d63a2f"/><rect x="87" y="13" width="2" height="2" fill="#8a1f17"/>
+          <!-- the same sheet, pinned -->
+          <rect x="41" y="11" width="38" height="24" fill="#184d2e"/>
+          <rect x="42" y="12" width="36" height="22" fill="#ffffff"/>
+          <rect x="45" y="16" width="10" height="1" fill="#14201a"/>
+          <g fill="#5aa06f"><rect x="45" y="19" width="14" height="1"/><rect x="45" y="22" width="10" height="1"/><rect x="45" y="25" width="12" height="1"/></g>
+          <rect x="63" y="15" width="12" height="4" fill="#d63a2f"/>
+          <text x="64.2" y="18.2" class="stamp">10-30</text>
+          <rect x="44" y="28" width="34" height="4" fill="#184d2e"/>
+          <text x="44.9" y="31.1" class="stamp stamp-url">quiet-river-42.vanish.sh</text>
+          <rect x="58" y="9" width="4" height="3" fill="#d63a2f"/><rect x="59" y="12" width="2" height="2" fill="#8a1f17"/>
+          <!-- people -->
+          <g class="walker w1">
+          <rect x="34" y="30" width="6" height="2" fill="#14201a"/>
+          <rect x="34" y="32" width="6" height="5" fill="#f2d6c0"/>
+          <rect x="33" y="37" width="8" height="8" fill="#2e7a4b"/>
+          <rect x="34" y="45" width="2" height="5" fill="#14201a"/><rect x="38" y="45" width="2" height="5" fill="#14201a"/>
+          </g><g class="walker w2">
+          <rect x="44" y="36" width="4" height="2" fill="#14201a"/>
+          <rect x="44" y="38" width="4" height="4" fill="#f2d6c0"/>
+          <rect x="43" y="42" width="6" height="5" fill="#d63a2f"/>
+          <rect x="44" y="47" width="1" height="3" fill="#14201a"/><rect x="47" y="47" width="1" height="3" fill="#14201a"/>
+          </g><g class="walker w3">
+          <rect x="80" y="30" width="6" height="2" fill="#14201a"/>
+          <rect x="80" y="32" width="6" height="5" fill="#f2d6c0"/>
+          <rect x="79" y="37" width="8" height="8" fill="#184d2e"/>
+          <rect x="76" y="38" width="3" height="2" fill="#184d2e"/><rect x="73" y="36" width="3" height="2" fill="#184d2e"/><rect x="71" y="34" width="2" height="2" fill="#f2d6c0"/>
+          <rect x="80" y="45" width="2" height="5" fill="#14201a"/><rect x="84" y="45" width="2" height="5" fill="#14201a"/>
+          </g><g class="walker w4">
+          <rect x="98" y="30" width="6" height="2" fill="#14201a"/>
+          <rect x="98" y="32" width="6" height="5" fill="#f2d6c0"/>
+          <rect x="97" y="37" width="8" height="8" fill="#5aa06f"/>
+          <rect x="94" y="40" width="3" height="5" fill="#184d2e"/>
+          <rect x="98" y="45" width="2" height="5" fill="#14201a"/><rect x="102" y="45" width="2" height="5" fill="#14201a"/>
+          </g>
+        </svg></div>
         <span class="step-no">3</span>
         <h3>Everyone with the link sees it, until it expires.</h3>
         <p>24 hours without an account, 48 hours signed in, 30 days on Pro. Until then, a site you own takes new files at the same URL.</p>
@@ -680,16 +734,10 @@ ${analytics}
 <section class="ticket">
   <div class="wrap">
     <h2 class="reveal" style="--d:382ms">One command in, one URL out</h2>
+    <p class="sub-h2 reveal" style="--d:388ms">The folder that went in, and the answer that came back.</p>
     <div class="ticket-grid">
       <div class="ticket-left reveal" style="--d:394ms">
-        <ul class="lamps" aria-label="Status">
-          <li><span class="lamp lamp-sent" aria-hidden="true"></span><span class="lamp-k">Sent</span><span class="lamp-v">17:58:00 UTC</span></li>
-          <li><span class="lamp lamp-transit" aria-hidden="true"></span><span class="lamp-k">In transit</span><span class="lamp-v">4 files, 12.0 KB</span></li>
-          <li><span class="lamp lamp-arrived" aria-hidden="true"></span><span class="lamp-k">Arrived</span><span class="lamp-v">quiet-river-42</span></li>
-          <li><span class="lamp lamp-expires" aria-hidden="true"></span><span class="lamp-k">Expires</span><span class="lamp-v">2026-10-30 17:58 UTC</span></li>
-        </ul>
-
-        <div class="capsule">
+        <div class="capsule capsule-top">
           <h3 class="kicker">What was sent · ./demo</h3>
           <p class="sub">Files in the folder sent</p>
           <table class="files">
@@ -708,6 +756,7 @@ ${analytics}
       </div>
 
       <div class="ticket-right reveal" style="--d:406ms">
+        <p class="came-back"><span class="kicker">What came back</span><a class="url" href="https://quiet-river-42.vanish.sh/">https://quiet-river-42.vanish.sh/</a></p>
         <div class="jsonbox">
           <div class="cmdbox-tabs"><span class="tab tab-on">The same run with --json</span></div>
 <pre><code>{
@@ -875,16 +924,6 @@ ${analytics}
 (function () {
   var d = document;
   d.documentElement.classList.add('js');
-  var lamps = d.querySelector('.lamps');
-  var light = function () { if (lamps) lamps.classList.add('lit'); };
-  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (lamps && !reduce && 'IntersectionObserver' in window) {
-    var io = new IntersectionObserver(function (entries) {
-      if (entries.some(function (en) { return en.isIntersecting; })) { light(); io.disconnect(); }
-    }, { threshold: 0.3 });
-    io.observe(lamps);
-    setTimeout(light, 1500);
-  } else { light(); }
   var menu = d.querySelector('.menu');
   var onScroll = function () { if (menu) menu.classList.toggle('scrolled', window.scrollY > 8); };
   window.addEventListener('scroll', onScroll, { passive: true });
