@@ -19,8 +19,13 @@ describe('landing route', () => {
     const html = await response.text();
     expect(html).toContain('<title>vanish: public preview URLs for agent-made artifacts</title>');
     expect(html).toContain('The publish command your agent was missing.');
+    expect(html).toContain('A public URL for anything your agent makes. It expires on its own.');
+    expect(html).toContain('A photo, an image, a text, a file, a whole website');
+    expect(html).toContain('npx vanish-cli upload photo.jpg');
+    expect(html).toContain('No account needed to try.');
     expect(html).toContain('npx vanish-cli site ./demo --root index.html');
-    expect(html).toContain('Rating plates');
+    expect(html).toContain('Plans and limits');
+    expect(html).toContain('Is it public?');
     expect(html).toContain('300 MB · 100 files');
     expect(html).toContain('5,000 files · within 10 GB');
     expect(html).toContain('10 €');
