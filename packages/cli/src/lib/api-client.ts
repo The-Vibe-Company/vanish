@@ -2,6 +2,26 @@ import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import type { VanishConfig } from './config.js';
 
+export type AccessMode = 'link' | 'password' | 'email';
+
+/** Access settings sent by the owner. Passwords never come from argv. */
+export type AccessInput =
+  | { mode: 'link' }
+  | { mode: 'password'; password: string }
+  | { mode: 'email'; emails: string[] };
+
+export interface AccessDetails {
+  mode: AccessMode;
+  policyVersion: number;
+  passwordConfigured: boolean;
+  emailCount?: number;
+  allowedEmails?: string[];
+}
+
+export interface FileAccessInfo extends AccessDetails {
+  uploadId: string;
+}
+
 export interface UploadResult {
   url: string;
   id: string;
@@ -10,6 +30,7 @@ export interface UploadResult {
   expires: string | null;
   tier?: string;
   deletable?: boolean;
+  access?: FileAccessInfo;
 }
 
 export interface CreateSiteResult {
@@ -108,7 +129,7 @@ export interface SiteInfo {
   published_at: string | null;
   expired: boolean;
   deleted: boolean;
-  access_mode?: 'link' | 'password';
+  access_mode?: AccessMode;
 }
 
 export interface SiteFileInfo {
@@ -159,11 +180,8 @@ export interface DomainListInfo {
   routeLimit?: number;
 }
 
-export interface SiteAccessInfo {
+export interface SiteAccessInfo extends AccessDetails {
   siteId: string;
-  mode: 'link' | 'password';
-  policyVersion: number;
-  passwordConfigured: boolean;
 }
 
 export interface CreateKeyResult {
@@ -220,10 +238,7 @@ interface RequestOptions {
 }
 
 interface PublishSiteOptions extends RequestOptions {
-  access?: {
-    mode: 'password';
-    password: string;
-  };
+  access?: Exclude<AccessInput, { mode: 'link' }>;
 }
 
 export class VanishApiError extends Error {
@@ -259,7 +274,10 @@ export class VanishClient {
     return this.apiUrl;
   }
 
-  async upload(filePath: string, options?: { days?: number; idempotencyKey?: string }): Promise<UploadResult> {
+  async upload(
+    filePath: string,
+    options?: { days?: number; idempotencyKey?: string; access?: AccessInput },
+  ): Promise<UploadResult> {
     const fileBuffer = readFileSync(filePath);
     const filename = basename(filePath);
 
@@ -278,6 +296,16 @@ export class VanishClient {
     }
     if (options?.idempotencyKey) {
       headers['Idempotency-Key'] = options.idempotencyKey;
+    }
+    if (options?.access) {
+      headers['X-Access-Mode'] = options.access.mode;
+      if (options.access.mode === 'password') {
+        // Percent-encoded so non-ASCII passwords survive HTTP headers.
+        headers['X-Access-Password'] = encodeURIComponent(options.access.password);
+      }
+      if (options.access.mode === 'email') {
+        headers['X-Access-Emails'] = options.access.emails.join(',');
+      }
     }
 
     const response = await fetch(`${this.apiUrl}/upload`, {
@@ -392,10 +420,7 @@ export class VanishClient {
     options?: {
       slug?: string;
       days?: number;
-      access?: {
-        mode: 'password';
-        password: string;
-      };
+      access?: Exclude<AccessInput, { mode: 'link' }>;
     },
     requestOptions?: RequestOptions,
   ): Promise<PublishSiteResult> {
@@ -519,7 +544,7 @@ export class VanishClient {
 
   async setSiteAccess(
     siteIdOrSlug: string,
-    input: { mode: 'link' } | { mode: 'password'; password: string },
+    input: AccessInput,
   ): Promise<SiteAccessInfo> {
     const response = await fetch(`${this.apiUrl}/sites/${encodeURIComponent(siteIdOrSlug)}/access`, {
       method: 'PATCH',
@@ -530,6 +555,28 @@ export class VanishClient {
       await throwApiError(response, 'Failed to update site access');
     }
     return response.json() as Promise<SiteAccessInfo>;
+  }
+
+  async getFileAccess(uploadId: string): Promise<FileAccessInfo> {
+    const response = await fetch(`${this.apiUrl}/uploads/${encodeURIComponent(uploadId)}/access`, {
+      headers: this.authHeaders(),
+    });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to get file access');
+    }
+    return response.json() as Promise<FileAccessInfo>;
+  }
+
+  async setFileAccess(uploadId: string, input: AccessInput): Promise<FileAccessInfo> {
+    const response = await fetch(`${this.apiUrl}/uploads/${encodeURIComponent(uploadId)}/access`, {
+      method: 'PATCH',
+      headers: this.jsonHeaders(),
+      body: JSON.stringify(input),
+    });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to update file access');
+    }
+    return response.json() as Promise<FileAccessInfo>;
   }
 
   async createDomain(hostname: string, channel: string): Promise<DomainInfo> {

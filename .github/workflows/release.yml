@@ -96,6 +96,7 @@ jobs:
           CUSTOM_HOSTNAMES_API_TOKEN: ${{ secrets.CLOUDFLARE_CUSTOM_HOSTNAMES_API_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           WORKER_ZONE_ID: ${{ steps.handoff-zone.outputs.zone_id }}
           ACCESS_SECRET: ${{ secrets.VANISH_ACCESS_SESSION_SECRET }}
+          RESEND_KEY: ${{ secrets.RESEND_API_KEY }}
         run: |
           test -n "$CUSTOM_HOSTNAMES_API_TOKEN"
           test -n "$WORKER_ZONE_ID"
@@ -107,6 +108,10 @@ jobs:
           printf '%s' "$CUSTOM_HOSTNAMES_API_TOKEN" | npx wrangler secret put CLOUDFLARE_API_TOKEN
           printf '%s' "$WORKER_ZONE_ID" | npx wrangler secret put CLOUDFLARE_ZONE_ID
           printf '%s' "$ACCESS_SECRET" | npx wrangler secret put ACCESS_SESSION_SECRET
+          # Optional: email allowlists stay unavailable (503) until this secret exists.
+          if [ -n "$RESEND_KEY" ]; then
+            printf '%s' "$RESEND_KEY" | npx wrangler secret put RESEND_API_KEY
+          fi
 
       - name: Deploy to Cloudflare
         run: npx wrangler deploy

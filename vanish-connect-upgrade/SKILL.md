@@ -61,6 +61,7 @@ The config file can contain `api_key` and `api_url`. Environment variables overr
 - `--update` fails or is needed: login is required.
 - `--channel` is requested: login is required.
 - `--slug` or `--days` is requested: Pro is required.
+- `--password-stdin` on sites or files needs login; `--allow-email` (email allowlist) needs Pro.
 - Anonymous upload fails for non-image files: login is required.
 - Storage quota or file size blocks sharing: check status, then suggest cleanup or upgrade.
 - The API key is missing or invalid: login again or set `VANISH_API_KEY`.

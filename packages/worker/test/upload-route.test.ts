@@ -190,6 +190,10 @@ class UploadStatement {
   async first<T>(): Promise<T | null> {
     const sql = normalizeSql(this.sql);
 
+    if (sql.includes('FROM upload_access')) {
+      return null;
+    }
+
     if (sql.includes('FROM api_keys ak JOIN users u')) {
       return null;
     }

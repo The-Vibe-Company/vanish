@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Env, Upload } from '../types.js';
 import { isExpired } from '../lib/expiry.js';
+import { getUploadAccess, hasAccess, isProtectedPolicy, renderAccessGate } from '../lib/site-access.js';
 
 const serve = new Hono<{ Bindings: Env }>();
 
@@ -25,6 +26,16 @@ serve.get('/f/:id{.+}', async (c) => {
     return c.json({ error: 'This file has expired' }, 410);
   }
 
+  // Check access before touching R2 so a gate never streams the file.
+  const access = await getUploadAccess(c.env, upload.id);
+  const protectedFile = isProtectedPolicy(access);
+  if (protectedFile) {
+    const subject = { kind: 'upload' as const, id: upload.id };
+    if (!(await hasAccess(c.req.raw, c.env, subject, access))) {
+      return renderAccessGate(subject, access.mode === 'email' ? 'email' : 'password', new URL(c.req.url).pathname);
+    }
+  }
+
   // Fetch from R2
   const object = await c.env.BUCKET.get(id);
   if (!object) {
@@ -42,8 +53,13 @@ serve.get('/f/:id{.+}', async (c) => {
   headers.set('Content-Length', String(upload.size_bytes));
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
-  headers.set('Cache-Control', 'public, max-age=3600');
+  headers.set('Cache-Control', protectedFile ? 'private, no-store' : 'public, max-age=3600');
+  if (protectedFile) headers.set('Vary', 'Cookie');
   const isAttachment = isActiveContent(contentType, upload.filename);
+  if (isAttachment) {
+    // Defense in depth: if a browser renders it anyway, give it an opaque origin.
+    headers.set('Content-Security-Policy', 'sandbox');
+  }
   const disposition = isAttachment ? 'attachment' : 'inline';
   headers.set('Content-Disposition', `${disposition}; filename="${escapeHeaderFilename(upload.filename)}"`);
   headers.set('Link', '<mailto:abuse@vanish.sh>; rel="abuse"');

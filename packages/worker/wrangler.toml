@@ -23,6 +23,8 @@ SELF_HOSTED = "false"
 DEFAULT_TIER = "free"
 PRODUCT_EVENTS = "false"
 CUSTOM_DOMAIN_FALLBACK_HOST = "fallback.vanish.sh"
+# Sender for access-code emails; the domain must be verified in Resend.
+ACCESS_EMAIL_FROM = "Vanish <access@vanish.sh>"
 # Optional PostHog analytics. Without POSTHOG_KEY, analytics only runs on the
 # vanish.sh host with the hosted public project key (never in local dev).
 # POSTHOG_KEY = "phc_..."
@@ -33,4 +35,5 @@ CUSTOM_DOMAIN_FALLBACK_HOST = "fallback.vanish.sh"
 # STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID,
 # STRIPE_PRO_PRICE_ID_EUR_10
 # CLOUDFLARE_API_TOKEN, CLOUDFLARE_ZONE_ID, ACCESS_SESSION_SECRET
+# RESEND_API_KEY (optional; email allowlist codes)
 # STATS_TOKEN (GET /api/stats service bearer token)

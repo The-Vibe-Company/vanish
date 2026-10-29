@@ -18,6 +18,8 @@ export interface Env {
   CLOUDFLARE_ZONE_ID?: string;
   CUSTOM_DOMAIN_FALLBACK_HOST?: string;
   ACCESS_SESSION_SECRET?: string;
+  RESEND_API_KEY?: string;
+  ACCESS_EMAIL_FROM?: string;
 }
 
 export type Tier = 'anonymous' | 'free' | 'pro';
@@ -105,14 +107,25 @@ export interface DomainReservation {
   updated_at: string;
 }
 
-export interface SiteAccess {
-  site_id: string;
-  mode: 'link' | 'password';
+export type AccessMode = 'link' | 'password' | 'email';
+
+export interface AccessPolicy {
+  mode: AccessMode;
   password_hash: string | null;
   password_salt: string | null;
+  /** JSON array of lowercase emails when mode is 'email'. */
+  allowed_emails: string | null;
   policy_version: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface SiteAccess extends AccessPolicy {
+  site_id: string;
+}
+
+export interface UploadAccess extends AccessPolicy {
+  upload_id: string;
 }
 
 export interface Bundle {

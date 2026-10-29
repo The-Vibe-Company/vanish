@@ -1,10 +1,12 @@
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { resolve, basename } from 'node:path';
 import { loadConfig } from '../lib/config.js';
 import { VanishClient } from '../lib/api-client.js';
 import { copyToClipboard } from '../lib/clipboard.js';
 import { Spinner, formatBytes } from '../lib/progress.js';
 import { fail, failWithUnknownError } from '../lib/output.js';
+import { describeAccessMode } from '../lib/access-options.js';
+import type { AccessInput } from '../lib/api-client.js';
 
 export interface UploadOptions {
   json?: boolean;
@@ -12,6 +14,8 @@ export interface UploadOptions {
   clipboard?: boolean;
   days?: number;
   idempotencyKey?: string;
+  passwordStdin?: boolean;
+  allowEmail?: string[];
 }
 
 export async function uploadCommand(files: string[], options: UploadOptions): Promise<void> {
@@ -32,6 +36,7 @@ export async function uploadCommand(files: string[], options: UploadOptions): Pr
   }
 
   const config = loadConfig();
+  const access = resolveUploadAccess(options, Boolean(config.api_key));
   const client = new VanishClient(config);
   const results = [];
   const shouldCopy = options.clipboard !== false; // default: true
@@ -51,6 +56,7 @@ export async function uploadCommand(files: string[], options: UploadOptions): Pr
       spinner.start();
       const result = await client.upload(file, {
         days: options.days,
+        access,
         idempotencyKey: options.idempotencyKey
           ? buildScopedIdempotencyKey(options.idempotencyKey, i)
           : undefined,
@@ -118,6 +124,10 @@ function printActivationHint(
     process.stderr.write(`Expires in ${result.expiresInHours}h.\n`);
   }
 
+  if (result.access && result.access.mode !== 'link') {
+    process.stderr.write(`${describeAccessMode(result.access)}\n`);
+  }
+
   if (canDelete && result.deleteCommand) {
     process.stderr.write(`Delete this file: ${result.deleteCommand}\n`);
   }
@@ -125,4 +135,26 @@ function printActivationHint(
 
 function hoursUntil(iso: string): number {
   return Math.max(0, Math.round((new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60)));
+}
+
+function resolveUploadAccess(options: UploadOptions, loggedIn: boolean): AccessInput | undefined {
+  const emails = options.allowEmail?.length ? options.allowEmail : undefined;
+  if (!options.passwordStdin && !emails) {
+    return undefined;
+  }
+  if (options.passwordStdin && emails) {
+    fail('Error: Use either --password-stdin or --allow-email, not both.', options, 'conflicting_access_options');
+  }
+  if (!loggedIn) {
+    fail('Error: --password-stdin and --allow-email require login. Use: vanish login', options, 'auth_required');
+  }
+  if (emails) {
+    return { mode: 'email', emails };
+  }
+
+  const password = process.stdin.isTTY ? '' : readFileSync(0, 'utf8').trimEnd();
+  if (password.length < 8 || password.length > 128) {
+    fail('Error: password from stdin must contain between 8 and 128 characters.', options, 'invalid_password');
+  }
+  return { mode: 'password', password };
 }

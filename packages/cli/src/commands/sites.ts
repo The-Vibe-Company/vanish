@@ -5,38 +5,71 @@ import { VanishClient } from '../lib/api-client.js';
 import { formatBytes } from '../lib/progress.js';
 import { fail, failWithUnknownError } from '../lib/output.js';
 import { isPasswordGate, unlockSiteForVerification } from '../lib/site-access-session.js';
+import { describeAccessMode, parseFileTarget } from '../lib/access-options.js';
+import type { AccessInput } from '../lib/api-client.js';
 
 interface JsonOptions {
   json?: boolean;
 }
 
-export async function siteAccessCommand(
-  id: string,
-  options: JsonOptions & { mode?: 'link' | 'password'; passwordStdin?: boolean },
-): Promise<void> {
-  if (options.mode !== 'link' && options.mode !== 'password') {
-    fail('Error: --mode must be link or password', options, 'invalid_access_mode');
-  }
-  if (options.mode === 'password' && !options.passwordStdin) {
-    fail('Error: password mode requires --password-stdin', options, 'password_stdin_required');
-  }
+type AccessCommandOptions = JsonOptions & {
+  mode?: string;
+  passwordStdin?: boolean;
+  allowEmail?: string[];
+};
 
+export async function siteAccessCommand(id: string, options: AccessCommandOptions): Promise<void> {
+  const input = accessInputFromOptions(options);
   const client = authedClient(options);
   try {
     const channel = await client.getSiteChannel(id);
     const target = channel?.site.id || id;
-    const access = options.mode === 'password'
-      ? await client.setSiteAccess(target, { mode: 'password', password: readPasswordFromStdin(options) })
-      : await client.setSiteAccess(target, { mode: 'link' });
+    const access = await client.setSiteAccess(target, input);
     if (options.json) {
       console.log(JSON.stringify(access, null, 2));
     } else {
       console.log(`Access mode: ${access.mode}`);
-      console.log(access.passwordConfigured ? 'Password protection enabled.' : 'Anyone with the link can view this site.');
+      console.log(describeAccessMode(access));
     }
   } catch (error) {
     failWithUnknownError(error, options, 'Failed to update site access');
   }
+}
+
+/** `vanish files access <file>`: change who can open an uploaded file. */
+export async function fileAccessCommand(file: string, options: AccessCommandOptions): Promise<void> {
+  const input = accessInputFromOptions(options);
+  const client = authedClient(options);
+  try {
+    const access = await client.setFileAccess(parseFileTarget(file), input);
+    if (options.json) {
+      console.log(JSON.stringify(access, null, 2));
+    } else {
+      console.log(`Access mode: ${access.mode}`);
+      console.log(describeAccessMode(access));
+    }
+  } catch (error) {
+    failWithUnknownError(error, options, 'Failed to update file access');
+  }
+}
+
+function accessInputFromOptions(options: AccessCommandOptions): AccessInput {
+  if (options.mode !== 'link' && options.mode !== 'password' && options.mode !== 'email') {
+    fail('Error: --mode must be link, password, or email', options, 'invalid_access_mode');
+  }
+  if (options.mode === 'password') {
+    if (!options.passwordStdin) {
+      fail('Error: password mode requires --password-stdin', options, 'password_stdin_required');
+    }
+    return { mode: 'password', password: readPasswordFromStdin(options) };
+  }
+  if (options.mode === 'email') {
+    if (!options.allowEmail?.length) {
+      fail('Error: email mode requires at least one --allow-email', options, 'allow_email_required');
+    }
+    return { mode: 'email', emails: options.allowEmail! };
+  }
+  return { mode: 'link' };
 }
 
 export async function sitesListCommand(options: JsonOptions & { active?: boolean }): Promise<void> {
@@ -192,7 +225,9 @@ async function verifySite(
       name: 'root',
       ok: root.ok && !passwordGate,
       message: passwordGate
-        ? 'Password required; rerun with --password-stdin'
+        ? (root.headers.get('x-vanish-access') === 'email-required'
+          ? 'Restricted to allowed emails; it cannot be verified from the CLI'
+          : 'Password required; rerun with --password-stdin')
         : `Root responded ${root.status}`,
     });
 

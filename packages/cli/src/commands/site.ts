@@ -5,6 +5,7 @@ import { loadConfig } from '../lib/config.js';
 import { VanishClient } from '../lib/api-client.js';
 import { copyToClipboard } from '../lib/clipboard.js';
 import { Spinner, formatBytes } from '../lib/progress.js';
+import { describeAccessMode } from '../lib/access-options.js';
 import { fail, failWithUnknownError } from '../lib/output.js';
 import { isPasswordGate, unlockSiteForVerification } from '../lib/site-access-session.js';
 
@@ -27,6 +28,7 @@ export interface SiteOptions {
   verify?: boolean;
   domain?: string;
   passwordStdin?: boolean;
+  allowEmail?: string[];
 }
 
 interface SiteFile {
@@ -84,11 +86,18 @@ export async function siteCommand(folder: string, options: SiteOptions): Promise
   if (options.domain && !options.channel) {
     fail('Error: --domain requires --channel so the hostname remains stable across publishes.', options, 'domain_requires_channel');
   }
-  if (options.dryRun && (options.domain || options.passwordStdin)) {
-    fail('Error: --domain and --password-stdin cannot be used with --dry-run.', options, 'dry_run_configuration_conflict');
+  const allowedEmails = options.allowEmail?.length ? options.allowEmail : undefined;
+  if (options.passwordStdin && allowedEmails) {
+    fail('Error: Use either --password-stdin or --allow-email, not both.', options, 'conflicting_access_options');
   }
-  if ((options.domain || options.passwordStdin) && !config.api_key) {
-    fail('Error: --domain and --password-stdin require login. Use: vanish login', options, 'auth_required');
+  if (options.verify && allowedEmails) {
+    fail('Error: --verify cannot open an email-restricted site. Publish without --verify.', options, 'verify_requires_password_or_link');
+  }
+  if (options.dryRun && (options.domain || options.passwordStdin || allowedEmails)) {
+    fail('Error: --domain, --password-stdin and --allow-email cannot be used with --dry-run.', options, 'dry_run_configuration_conflict');
+  }
+  if ((options.domain || options.passwordStdin || allowedEmails) && !config.api_key) {
+    fail('Error: --domain, --password-stdin and --allow-email require login. Use: vanish login', options, 'auth_required');
   }
   const requestedPassword = options.passwordStdin ? readPasswordFromStdin(options) : undefined;
   let updateTarget = options.update;
@@ -232,7 +241,9 @@ export async function siteCommand(folder: string, options: SiteOptions): Promise
     spinner.update(isUpdate ? 'Publishing update' : 'Publishing site');
     const publishAccess = requestedPassword
       ? { mode: 'password' as const, password: requestedPassword }
-      : undefined;
+      : allowedEmails
+        ? { mode: 'email' as const, emails: allowedEmails }
+        : undefined;
     const published = isUpdate
       ? (options.idempotencyKey
         ? await client.publishSiteReplacement(updateTarget!, draft.id, draft.token, {
@@ -341,8 +352,8 @@ export async function siteCommand(folder: string, options: SiteOptions): Promise
         process.stderr.write(`Custom domain update failed: ${domainError}\n`);
         process.stderr.write(`Published successfully at: ${published.url}\n`);
       }
-      if (access?.passwordConfigured) {
-        process.stderr.write('Password protection enabled.\n');
+      if (access && access.mode !== 'link') {
+        process.stderr.write(`${describeAccessMode(access)}\n`);
       }
     }
   } catch (err) {

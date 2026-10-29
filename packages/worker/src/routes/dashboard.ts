@@ -517,6 +517,8 @@ code { font-family: var(--mono); }
 .file-row.expired .fn { text-decoration: line-through; }
 .file-name { display: flex; align-items: center; gap: .6rem; min-width: 0; }
 .fn { color: var(--fg-bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-lock { display: inline-flex; flex: none; color: var(--accent); }
+.form-row textarea { width: 100%; resize: vertical; min-height: 5.5rem; font: inherit; }
 .file-icon { color: var(--fg-dim); flex-shrink: 0; }
 .kind-image { color: var(--blue); }
 .kind-video { color: var(--red); }
@@ -1717,8 +1719,19 @@ body:has(.login-screen) { background: #1649e8; }
                   '<div class="form-error" id="modal-password-error" role="alert" hidden></div>' +
                 '</div>'
               : '') +
+            (c.emailsInput
+              ? '<div class="form-row" style="margin-top:1rem">' +
+                  '<label for="modal-emails">Allowed emails</label>' +
+                  '<textarea id="modal-emails" data-modal-emails rows="4" maxlength="13000" required aria-describedby="modal-emails-hint modal-emails-error">' + escapeHtml(c.emailsValue || '') + '</textarea>' +
+                  '<div class="form-hint" id="modal-emails-hint">One per line, up to 50. Each visitor gets a one-time code by email.</div>' +
+                  '<div class="form-error" id="modal-emails-error" role="alert" hidden></div>' +
+                '</div>'
+              : '') +
           '</div>' +
           '<div class="modal-actions">' +
+            (c.extraActions || []).map(function(extra) {
+              return '<button class="btn ghost" data-action="' + attr(extra.action) + '" data-id="' + attr(c.extraId || '') + '">' + escapeHtml(extra.label) + '</button>';
+            }).join('') +
             '<button class="btn ghost" data-action="modal-cancel">Cancel</button>' +
             '<button class="btn ' + (c.destructive === false ? 'solid' : 'danger') + '" data-action="modal-confirm">' +
               escapeHtml(c.confirmLabel || 'Confirm') +
@@ -1727,6 +1740,7 @@ body:has(.login-screen) { background: #1649e8; }
         '</div>' +
       '</div>';
     var initialFocus = modalHost.querySelector('[data-modal-password]') ||
+      modalHost.querySelector('[data-modal-emails]') ||
       modalHost.querySelector(c.destructive === false ? '[data-action="modal-confirm"]' : 'button[data-action="modal-cancel"]');
     if (initialFocus) initialFocus.focus();
   }
@@ -1743,6 +1757,20 @@ body:has(.login-screen) { background: #1649e8; }
       }
       passwordInput.focus();
       return;
+    }
+    var emailsInput = modalHost.querySelector('[data-modal-emails]');
+    if (emailsInput) {
+      value = parseEmailList(emailsInput.value);
+      if (!value.length) {
+        var emailsError = modalHost.querySelector('#modal-emails-error');
+        emailsInput.setAttribute('aria-invalid', 'true');
+        if (emailsError) {
+          emailsError.textContent = 'Add at least one email address.';
+          emailsError.hidden = false;
+        }
+        emailsInput.focus();
+        return;
+      }
     }
     closeModal();
     fn && fn(value);
@@ -1762,6 +1790,7 @@ body:has(.login-screen) { background: #1649e8; }
     if (e.key === 'Enter') {
       var target = e.target;
       if (target && target.closest && target.closest('[data-action="modal-cancel"]')) return;
+      if (target && target.tagName === 'TEXTAREA') return;
       e.preventDefault();
       confirmModal();
     }
@@ -1885,11 +1914,76 @@ body:has(.login-screen) { background: #1649e8; }
       mime: mimeShort(u.content_type, u.filename),
       bytes: u.size_bytes || 0,
       url: u.url,
+      access_mode: u.access_mode || 'link',
       created: createdAt || 0,
       expires: expiresAt || 0,
       hasExpiry: expiresAt != null,
       expired: expiresAt != null && expiresAt <= Date.now()
     };
+  }
+
+  // — Access —
+  var LOCK_SVG = '<svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="5.5" width="8" height="5.5" rx="1"/><path d="M4 5.5V4a2 2 0 0 1 4 0v1.5"/></svg>';
+  function accessLabel(mode) {
+    if (mode === 'password') return 'Password protected';
+    if (mode === 'email') return 'Restricted to emails';
+    return 'Anyone with link';
+  }
+  function parseEmailList(raw) {
+    return String(raw || '').split(/[^A-Za-z0-9._%+@-]+/).filter(function(part) { return part.indexOf('@') > 0; });
+  }
+  // PATCHes /sites/:id/access or /uploads/:id/access and updates local state.
+  function patchAccess(kind, id, payload, okMessage) {
+    var path = (kind === 'site' ? '/sites/' : '/uploads/') + encodeURIComponent(id) + '/access';
+    var list = kind === 'site' ? state.sites : state.uploads;
+    state.accessPending[id] = true;
+    delete state.accessErrors[id];
+    rerenderMain();
+    if (kind === 'site') focusSiteAccessRegion(id, 'email-site');
+    return apiFetch(path, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function(r) {
+      delete state.accessPending[id];
+      if (r && !r.error) {
+        var item = list.find(function(x) { return x.id === id; });
+        if (item) item.access_mode = r.mode || payload.mode;
+        toast(okMessage);
+      } else {
+        state.accessErrors[id] = (r && r.error) || 'Unable to update access.';
+        if (kind !== 'site') toast('error: ' + state.accessErrors[id]);
+      }
+      rerenderMain();
+      if (kind === 'site') focusSiteAccessRegion(id, 'email-site');
+    }).catch(function() {
+      delete state.accessPending[id];
+      state.accessErrors[id] = 'Network error. Check your connection and try again.';
+      if (kind !== 'site') toast('network error');
+      rerenderMain();
+    });
+  }
+  function openEmailAccess(kind, id) {
+    var path = (kind === 'site' ? '/sites/' : '/uploads/') + encodeURIComponent(id) + '/access';
+    apiFetch(path).then(function(current) {
+      if (!current || current.error) {
+        toast('error: ' + ((current && current.error) || 'could not load access settings'));
+        return;
+      }
+      openConfirm({
+        title: kind === 'site' ? 'Share this mini-site with specific people' : 'Share this file with specific people',
+        body: 'Only these addresses can open it. Saving signs out everyone who opened it before.',
+        confirmLabel: 'Save allowed emails',
+        destructive: false,
+        emailsInput: true,
+        emailsValue: ((current && current.allowedEmails) || []).join(String.fromCharCode(10)),
+        onConfirm: function(emails) {
+          patchAccess(kind, id, { mode: 'email', emails: emails }, 'email access saved');
+        }
+      });
+    }).catch(function() {
+      toast('network error');
+    });
   }
 
   // — Render dispatch —
@@ -2244,7 +2338,7 @@ body:has(.login-screen) { background: #1649e8; }
             '<div class="sd-field"><div class="sd-label">Files</div><div class="sd-val">' + s.file_count + '</div></div>' +
             '<div class="sd-field"><div class="sd-label">Size</div><div class="sd-val">' + fmtBytes(s.size_bytes) + '</div></div>' +
             '<div class="sd-field"><div class="sd-label">Root</div><code class="sd-mono">' + escapeHtml(s.root_path) + '</code></div>' +
-            '<div class="sd-field"><div class="sd-label">Access</div><div class="sd-val">' + (s.access_mode === 'password' ? 'Password protected' : 'Anyone with link') + '</div></div>' +
+            '<div class="sd-field"><div class="sd-label">Access</div><div class="sd-val">' + accessLabel(s.access_mode) + '</div></div>' +
             '<div class="sd-field"><div class="sd-label">Created</div><div class="sd-val">' + fmtDate(s.created) + ' · ' + fmtAgo(s.created) + '</div></div>' +
           '</div>' +
           (accessError ? '<div class="form-error" role="alert">' + escapeHtml(accessError) + '</div>' : '') +
@@ -2258,6 +2352,10 @@ body:has(.login-screen) { background: #1649e8; }
               '<button class="btn ghost btn-sm" data-action="link-site" data-id="' + attr(s.id) + '"' +
                 (accessPending || s.access_mode === 'link' ? ' disabled' : '') +
                 (s.access_mode === 'link' ? ' aria-current="true"' : '') + '>Anyone with link</button>' +
+              (state.me && state.me.tier === 'pro'
+                ? '<button class="btn ghost btn-sm" data-action="email-site" data-id="' + attr(s.id) + '"' + (accessPending ? ' disabled' : '') + '>' +
+                    (s.access_mode === 'email' ? 'Edit allowed emails' : 'Allowed emails') + '</button>'
+                : '') +
               '<a class="btn ghost btn-sm" href="' + attr(s.url) + '" target="_blank" rel="noopener">Open ↗</a>') +
             '<div class="sd-spacer"></div>' +
             (s.expired ? '' : '<button class="btn danger-ghost btn-sm" data-action="delete-site" data-id="' + attr(s.id) + '" data-name="' + attr(label) + '">Delete</button>') +
@@ -2473,7 +2571,9 @@ body:has(.login-screen) { background: #1649e8; }
       (!f.hasExpiry ? '<span class="dim">∞</span>' : '<span class="' + (soon ? 'warn' : '') + '"' + countdownAttr(f.expires, 'until', soon ? 'warn' : '') + '>' + fmtTimeUntil(remaining) + '</span>');
     var md = '![' + f.name + '](' + f.url + ')';
     return '<div class="file-row' + (expired ? ' expired' : '') + '">' +
-      '<div class="file-name">' + fileIconSvg(f.kind) + '<span class="fn">' + escapeHtml(f.name) + '</span></div>' +
+      '<div class="file-name">' + fileIconSvg(f.kind) + '<span class="fn">' + escapeHtml(f.name) + '</span>' +
+        (f.access_mode !== 'link' ? '<span class="file-lock" title="' + attr(accessLabel(f.access_mode)) + '" aria-label="' + attr(accessLabel(f.access_mode)) + '">' + LOCK_SVG + '</span>' : '') +
+      '</div>' +
       '<div class="file-mime" data-label="Type"><code>' + escapeHtml(f.mime) + '</code></div>' +
       '<div class="file-size" data-label="Size">' + fmtBytes(f.bytes) + '</div>' +
       '<div class="file-uploaded dim" data-label="Uploaded">' + fmtAgo(f.created) + '</div>' +
@@ -2483,6 +2583,7 @@ body:has(.login-screen) { background: #1649e8; }
           '<svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 1v6h6V1H3zM7 7v2H1V3h2"/></svg>' +
         '</button>' +
         '<button class="iconbtn" title="Markdown" data-action="copy" data-text="' + attr(md) + '" data-msg="Markdown copied">md</button>' +
+        (expired ? '' : '<button class="iconbtn" title="Access: ' + attr(accessLabel(f.access_mode)) + '" aria-label="Change access" data-action="file-access" data-id="' + attr(f.id) + '" data-name="' + attr(f.name) + '"' + (state.accessPending[f.id] ? ' disabled' : '') + '>' + LOCK_SVG + '</button>') +
         (expired ? '' : '<button class="iconbtn iconbtn-danger" title="Delete" data-action="delete-file" data-id="' + attr(f.id) + '" data-name="' + attr(f.name) + '">' +
           '<svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 3h8M5 5v4M7 5v4M3 3l1 7h4l1-7M5 3V2h2v1"/></svg>' +
         '</button>') +
@@ -2503,6 +2604,7 @@ body:has(.login-screen) { background: #1649e8; }
       '</div>' +
       '<div class="fc-actions">' +
         '<button class="btn ghost btn-xs" data-action="copy" data-text="' + attr(f.url) + '" data-msg="URL copied">copy url</button>' +
+        (expired ? '' : '<button class="btn ghost btn-xs" data-action="file-access" data-id="' + attr(f.id) + '" data-name="' + attr(f.name) + '">' + (f.access_mode === 'link' ? 'access' : 'protected') + '</button>') +
         (expired ? '' : '<button class="btn danger-ghost btn-xs" data-action="delete-file" data-id="' + attr(f.id) + '" data-name="' + attr(f.name) + '">delete</button>') +
       '</div>' +
     '</div>';
@@ -3078,6 +3180,46 @@ body:has(.login-screen) { background: #1649e8; }
     if (action === 'files-view') {
       state.filesView = el.getAttribute('data-view');
       rerenderMain();
+      return;
+    }
+    if (action === 'email-site') {
+      var emailSiteId = el.getAttribute('data-id');
+      if (!emailSiteId || state.accessPending[emailSiteId]) return;
+      openEmailAccess('site', emailSiteId);
+      return;
+    }
+    if (action === 'file-access') {
+      var accessFileId = el.getAttribute('data-id');
+      var accessFile = state.uploads.find(function(f) { return f.id === accessFileId; });
+      if (!accessFile || state.accessPending[accessFileId]) return;
+      openConfirm({
+        title: 'Who can open ' + (el.getAttribute('data-name') || 'this file') + '?',
+        body: 'Currently: ' + accessLabel(accessFile.access_mode) + '. Set a shared password below' +
+          (state.me && state.me.tier === 'pro' ? ', or use “Allowed emails” to restrict it to specific people.' : '. Email allowlists are available on Pro.'),
+        confirmLabel: 'Set password',
+        destructive: false,
+        passwordInput: true,
+        extraActions: [
+          (state.me && state.me.tier === 'pro') ? { label: 'Allowed emails', action: 'file-access-email' } : null,
+          accessFile.access_mode !== 'link' ? { label: 'Anyone with link', action: 'file-access-link' } : null
+        ].filter(Boolean),
+        extraId: accessFileId,
+        onConfirm: function(password) {
+          patchAccess('upload', accessFileId, { mode: 'password', password: password }, 'password protection enabled');
+        }
+      });
+      return;
+    }
+    if (action === 'file-access-email') {
+      var emailFileId = el.getAttribute('data-id');
+      closeModal();
+      openEmailAccess('upload', emailFileId);
+      return;
+    }
+    if (action === 'file-access-link') {
+      var linkFileId = el.getAttribute('data-id');
+      closeModal();
+      patchAccess('upload', linkFileId, { mode: 'link' }, 'link access enabled');
       return;
     }
     if (action === 'delete-file') {

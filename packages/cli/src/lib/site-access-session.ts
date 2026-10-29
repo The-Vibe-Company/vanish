@@ -22,6 +22,8 @@ export async function unlockSiteForVerification(
   return { Cookie: cookie };
 }
 
+/** True for any Vanish access gate (password or email), which must never count as content. */
 export function isPasswordGate(response: Response): boolean {
-  return response.headers.get('x-vanish-access') === 'password-required';
+  const gate = response.headers.get('x-vanish-access');
+  return gate === 'password-required' || gate === 'email-required';
 }

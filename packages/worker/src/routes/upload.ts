@@ -6,6 +6,7 @@ import { calculateExpiry } from '../lib/expiry.js';
 import { guessContentType } from '../lib/content-type.js';
 import { getActiveStorageBytes } from '../lib/storage.js';
 import { getSizedRequestBody } from '../lib/request-body.js';
+import { describeAccess, getUploadAccess, prepareAccessPolicy } from '../lib/site-access.js';
 import {
   getIdempotencyKey,
   getIdempotencyOwner,
@@ -49,6 +50,10 @@ upload.post('/upload', async (c) => {
   const ext = filename.includes('.') ? '.' + filename.split('.').pop()!.toLowerCase() : '';
   if (BLOCKED_EXTENSIONS.has(ext)) {
     return c.json(structuredError('blocked_file_type', `File type ${ext} is not allowed`, 400), 400);
+  }
+
+  if (c.req.header('X-Access-Mode') && c.req.header('X-Access-Mode') !== 'link' && !user) {
+    return c.json(structuredError('auth_required', 'Access protection requires login', 401), 401);
   }
 
   // Image-only restriction for anonymous tier
@@ -141,6 +146,21 @@ upload.post('/upload', async (c) => {
 
   const id = nanoid(12);
   const expiresAt = calculateExpiry(tier, customDays);
+
+  // Optional protection, applied in the same batch as the upload row so the
+  // file is never briefly public. The password header is percent-encoded.
+  const accessMode = c.req.header('X-Access-Mode');
+  const preparedAccess = accessMode
+    ? await prepareAccessPolicy(c.env, { kind: 'upload', id }, {
+      mode: accessMode,
+      password: decodeHeaderValue(c.req.header('X-Access-Password')),
+      emails: c.req.header('X-Access-Emails'),
+    }, user ? tier : null)
+    : null;
+  if (preparedAccess && !preparedAccess.ok) {
+    return c.json(structuredError(preparedAccess.code, preparedAccess.error, preparedAccess.status), preparedAccess.status);
+  }
+
   if (idempotencyKey) {
     const reservation = await reserveIdempotencyKey(c.env, 'upload', idempotencyOwner, idempotencyKey);
     if (!reservation.ok) {
@@ -161,10 +181,15 @@ upload.post('/upload', async (c) => {
     });
 
     // Record in D1
-    await c.env.DB.prepare(`
+    const insertUpload = c.env.DB.prepare(`
       INSERT INTO uploads (id, user_id, filename, content_type, size_bytes, expires_at)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(id, user?.id || null, filename, contentType, size, expiresAt).run();
+    `).bind(id, user?.id || null, filename, contentType, size, expiresAt);
+    if (preparedAccess?.ok) {
+      await c.env.DB.batch([insertUpload, preparedAccess.statement]);
+    } else {
+      await insertUpload.run();
+    }
   } catch (err) {
     if (idempotencyKey) {
       await clearIdempotencyReservation(c.env, 'upload', idempotencyOwner, idempotencyKey).catch(clearErr => {
@@ -185,6 +210,7 @@ upload.post('/upload', async (c) => {
     expires: expiresAt,
     tier,
     deletable: Boolean(user),
+    ...(preparedAccess?.ok ? { access: { uploadId: id, ...describeAccess(await getUploadAccess(c.env, id), false) } } : {}),
   };
 
   if (idempotencyKey) {
@@ -199,3 +225,12 @@ upload.post('/upload', async (c) => {
 });
 
 export default upload;
+
+function decodeHeaderValue(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}

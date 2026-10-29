@@ -77,6 +77,20 @@ vanish site <folder> --root <root-file> --days <1-365> --json --no-clipboard
 
 `--slug` and `--days` require Pro. If unavailable, route to `vanish-connect-upgrade`.
 
+## Access Protection
+
+Use only when the user asks for a restricted link (for a client, a password, specific people):
+
+```bash
+printf '%s' "$PASSWORD" | vanish site <folder> --root <root-file> --password-stdin --json --no-clipboard
+vanish site <folder> --root <root-file> --allow-email ana@acme.com --allow-email bo@acme.com --json --no-clipboard
+```
+
+- Never put a password on the command line; pipe it with `--password-stdin` and tell the user to share it separately from the URL.
+- `--allow-email` is Pro only; visitors get a one-time code by email. It cannot be combined with `--verify`.
+- Change it later without republishing: `vanish sites access <id-or-slug> --mode link|password|email [--password-stdin] [--allow-email <email>] --json`. Every change signs out previous visitors.
+- Login or tier errors route to `vanish-connect-upgrade`.
+
 ## Privacy Gate
 
 Vanish creates public URLs. Ask before publishing if paths, names, or obvious content indicate:
