@@ -26,6 +26,8 @@ describe('landing route', () => {
     expect(html).toContain('npx vanish-cli site ./demo --root index.html');
     expect(html).toContain('Plans and limits');
     expect(html).toContain('Is it public?');
+    expect(html).toContain('Who can open it');
+    expect(html).not.toContain('There is no password');
     expect(html).toContain('300 MB · 100 files');
     expect(html).toContain('5,000 files · within 10 GB');
     expect(html).toContain('10 €');
