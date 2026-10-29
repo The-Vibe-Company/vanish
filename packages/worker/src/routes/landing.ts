@@ -11,7 +11,7 @@ const renderLanding = (analytics: string) => `<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>vanish: public preview URLs for agent-made artifacts</title>
 <meta name="description" content="One command turns a folder or a file into a public URL that expires on its own. Built for coding agents: --json output, update in place, no account needed to try." />
-<meta name="theme-color" content="#0a4bb0" />
+<meta name="theme-color" content="#083f99" />
 <meta property="og:title" content="vanish: the publish command your agent was missing" />
 <meta property="og:description" content="A folder goes in, a public URL comes back, and the URL expires on its own. No account needed to try." />
 <meta property="og:type" content="website" />
@@ -24,8 +24,9 @@ const renderLanding = (analytics: string) => `<!doctype html>
 
 <style>
   :root{
-    --blue:#0a4bb0;
-    --blue-d:#083a8a;
+    --blue:#083f99;
+    --blue-d:#062f73;
+    --band:#fff;
     --white:#fff;
     --green:#14893f;
     --green-lit:#2fcf6a;
@@ -43,24 +44,29 @@ const renderLanding = (analytics: string) => `<!doctype html>
   .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   a{color:inherit}
   code{font-family:var(--mono);font-size:.88em}
-  main,.topline,.footline{max-width:1200px;margin:0 auto;padding-inline:24px}
+  main,.footline{max-width:1200px;margin:0 auto;padding-inline:24px}
 
   /* top line */
-  .topline{position:sticky;top:0;z-index:5;background:var(--blue);display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:20px}
+  .topline{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:14px;background:var(--band);color:var(--blue);border-bottom:4px solid var(--blue);max-width:none}
+  .topline-inner{max-width:1200px;margin:0 auto;padding-inline:24px;width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px}
   .wordmark{display:inline-flex;align-items:center;gap:10px;text-decoration:none;min-height:44px}
   .wordmark-text{font:700 34px/1 var(--head);text-transform:lowercase;letter-spacing:.02em}
-  .rivet{width:12px;height:12px;border-radius:50%;border:3px solid #fff}
+  .rivet{width:12px;height:12px;border-radius:50%;border:3px solid currentColor}
   .topline nav,.footline nav{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-  .topline nav a,.footline nav a{font:600 16px/1 var(--head);text-transform:uppercase;letter-spacing:.08em;text-decoration:none;padding:14px 12px;min-height:44px;display:inline-flex;align-items:center;white-space:nowrap}
-  .nav-signin{border:3px solid #fff;border-radius:10px}
+  .topline nav a,.footline nav a{font:600 18px/1 var(--head);text-transform:uppercase;letter-spacing:.08em;text-decoration:none;padding:12px 14px;min-height:46px;display:inline-flex;align-items:center;white-space:nowrap;border-radius:10px}
+  .topline nav a:hover{background:#e3ebf8}
+  .topline .nav-signin{background:var(--blue);color:#fff;border:3px solid var(--blue)}
+  .topline .nav-signin:hover{background:var(--blue-d);border-color:var(--blue-d)}
+  .footline nav a{border:3px solid rgba(255,255,255,.7)}
+  .footline nav a:hover{background:rgba(255,255,255,.14)}
   .engraved{font:600 15px/1.2 var(--head);text-transform:uppercase;letter-spacing:.12em}
   .engraved code{text-transform:none;letter-spacing:0}
 
   /* intro */
   .intro{padding:36px 0 40px}
-  .intro .engraved{margin-bottom:14px}
+  .intro .engraved{margin-bottom:14px;font-size:17px;padding-bottom:8px;border-bottom:3px solid #fff;display:inline-block}
   h1{font:700 clamp(46px,9vw,112px)/.95 var(--head);text-transform:uppercase;letter-spacing:.005em;max-width:14ch;text-wrap:balance}
-  .lead{font-size:clamp(19px,2vw,24px);line-height:1.4;max-width:46em;margin-top:24px}
+  .lead{font-size:clamp(20px,2.1vw,26px);font-weight:500;line-height:1.4;max-width:42em;margin-top:24px}
 
   /* lamps: lit = filled with light, off = hollow */
   .lamps{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;margin-bottom:36px}
@@ -71,10 +77,10 @@ const renderLanding = (analytics: string) => `<!doctype html>
   .is-on-blue .bulb::after{background:#fff}
   .is-on-green .bulb{background:var(--green-lit);box-shadow:inset 0 0 0 6px var(--blue)}
   .is-on-green .bulb::after{background:#fff}
-  .is-off .bulb{background:var(--blue);border-color:rgba(255,255,255,.55)}
-  .is-off .lamp-label,.is-off .lamp-value{color:rgba(255,255,255,.7)}
+  .is-off .bulb{background:var(--blue);border-color:rgba(255,255,255,.75)}
+  .is-off .lamp-label,.is-off .lamp-value{color:rgba(255,255,255,.88)}
   .lamp-label{font:700 clamp(24px,3vw,40px)/1 var(--head);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
-  .lamp-value{font:500 14px/1.2 var(--mono);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lamp-value{font:600 16px/1.2 var(--mono);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
   /* enamel plates */
   .panes{display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:stretch}
@@ -91,7 +97,7 @@ const renderLanding = (analytics: string) => `<!doctype html>
   .btn{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 22px;border-radius:12px;font:600 17px/1 var(--head);text-transform:uppercase;letter-spacing:.08em;text-decoration:none;border:3px solid var(--blue);cursor:pointer;white-space:nowrap}
   .btn-primary{background:var(--blue);color:#fff}
   .btn-outline{background:#fff;color:var(--blue)}
-  .btn code{text-transform:none;letter-spacing:0}
+  .btn code{text-transform:none;letter-spacing:0;margin-left:.35em}
   .action-note{font-size:15px;color:var(--dim)}
   .inset{border-top:3px solid var(--blue);padding:14px 0 4px;margin-bottom:18px}
   .inset .engraved{color:var(--blue);margin-bottom:10px}
@@ -109,14 +115,14 @@ const renderLanding = (analytics: string) => `<!doctype html>
   .cap-blue{background:var(--blue)}
   .cap-green{background:var(--green);flex-basis:44px}
   .capsule-url{flex:1;min-width:0;display:flex;align-items:center;padding:0 14px;font:700 17px/1 var(--mono);color:var(--blue);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .json{font:400 13.5px/1.55 var(--mono);color:var(--ink);overflow-x:auto;padding:2px 0}
+  .json{font:400 13.5px/1.55 var(--mono);color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere;padding:2px 0}
   .json code{font-size:inherit}
   .json .k{color:var(--blue);font-weight:700}.json .s{color:#0f7a37}.json .n{color:#a63d00}
 
   /* tiers */
   .section-head{margin:72px 0 28px}
   .section-head h2{font:700 clamp(44px,6vw,80px)/1 var(--head);text-transform:uppercase}
-  .section-head p{font-size:21px;margin-top:10px}
+  .section-head p{font-size:22px;font-weight:500;margin-top:10px}
   .plates{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
   .tier{padding:26px 24px 24px;display:flex;flex-direction:column;border-radius:18px}
   .tier::before{inset:7px;border-radius:12px}
@@ -135,17 +141,17 @@ const renderLanding = (analytics: string) => `<!doctype html>
   .notes-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px 32px}
   .note{border-top:5px solid #fff;padding-top:16px;min-width:0}
   .note h3{font:700 28px/1 var(--head);margin-bottom:12px;letter-spacing:.04em}
-  .note p{font-size:20px}
-  .list{margin:12px 0 0;padding-left:20px;font-size:17px}
+  .note p{font-size:20px;font-weight:500}
+  .list{margin:12px 0 0;padding-left:20px;font-size:18px;font-weight:500}
   .list li{margin-bottom:4px}
-  .mini{margin-top:14px;padding:0;font:500 13px/1.6 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;color:#fff}
+  .mini{margin-top:14px;padding:12px 14px;border-radius:10px;background:#fff;color:var(--blue);font:600 14px/1.6 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere}
   .mini code{font-size:inherit}
 
   /* foot line */
   .footline{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between;padding-block:56px 36px}
   .footline .wordmark-text{font-size:30px}
   .footline .dim{color:#fff}
-  .footline .credit{font-size:15px}
+  .footline .credit{font-size:16px;font-weight:500}
   .footline .credit a{text-decoration-thickness:1px;text-underline-offset:3px}
   .skip{position:absolute;left:16px;top:-100px;z-index:10;background:#fff;color:var(--blue);padding:12px 16px;border-radius:10px;font:600 16px/1 var(--head);text-transform:uppercase;letter-spacing:.08em;text-decoration:none}
   .skip:focus{top:16px}
@@ -154,9 +160,10 @@ const renderLanding = (analytics: string) => `<!doctype html>
   @media (max-width:1000px){.plates,.notes-grid{grid-template-columns:1fr}.panes{grid-template-columns:1fr}}
   @media (max-width:640px){
     body{font-size:18px}
-    main,.topline,.footline{padding-inline:16px}
-    .topline nav a{padding:14px 8px}
+    main,.footline{padding-inline:16px}
+    .topline nav a{padding:12px 10px;font-size:16px}
     .topline nav a:nth-child(1){display:none}
+    .topline-inner{padding-inline:16px}
     .lamps{grid-template-columns:1fr 1fr;gap:26px 12px}
     .bulb{width:92px;border-width:7px}
     .pane,.sign{padding:22px 18px}
@@ -164,7 +171,7 @@ const renderLanding = (analytics: string) => `<!doctype html>
     .capsule-url{font-size:13.5px;padding:0 8px}
     .cap-green{flex-basis:34px}.cap{flex-basis:18px}
     .json{font-size:12px}
-    .mini,.mini code{font-size:12.5px}
+    .mini,.mini code{font-size:13px}
     .section-head{margin-top:52px}
   }
   @media (prefers-reduced-motion:no-preference){
@@ -177,6 +184,7 @@ ${analytics}
 <a class="skip" href="#top">Skip to content</a>
 
 <header class="topline">
+<div class="topline-inner">
   <a class="wordmark" href="/" aria-label="vanish, home">
     <span class="rivet" aria-hidden="true"></span>
     <span class="wordmark-text">vanish</span>
@@ -187,6 +195,7 @@ ${analytics}
     <a href="/dashboard">Dashboard</a>
     <a class="nav-signin" href="/auth/github?redirect=/dashboard">Sign in</a>
   </nav>
+</div>
 </header>
 
 <main id="top">
