@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.1.23](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.22...@vanish/worker-v0.1.23) (2026-10-30)
+
+
+### Features
+
+* **access:** protect files and restrict sites and files to allowed emails ([#79](https://github.com/The-Vibe-Company/vanish/issues/79)) ([4bd0daa](https://github.com/The-Vibe-Company/vanish/commit/4bd0daa2ae33037dd1c8a6f8ef4b122ad789d7d6))
+* **analytics:** add PostHog to vanish.sh landing and dashboard ([#73](https://github.com/The-Vibe-Company/vanish/issues/73)) ([d55fefa](https://github.com/The-Vibe-Company/vanish/commit/d55fefaec1d4e2d851ca9c3508b542315501e6ee))
+* **api:** add bearer-protected user stats endpoint ([#74](https://github.com/The-Vibe-Company/vanish/issues/74)) ([aa0c73f](https://github.com/The-Vibe-Company/vanish/commit/aa0c73fad05248e49be115f4c0c2cdd2270b047e))
+* **dashboard:** neutral shadcn-style restyle ([#84](https://github.com/The-Vibe-Company/vanish/issues/84)) ([3869382](https://github.com/The-Vibe-Company/vanish/commit/38693827bf2de136ab353266251da5a8d5b374f9))
+* **dashboard:** restyle dashboard as the enamel station sign ([#76](https://github.com/The-Vibe-Company/vanish/issues/76)) ([46bb1df](https://github.com/The-Vibe-Company/vanish/commit/46bb1dfe28db815f8d61fb4e2952db5857df9fc6))
+* **handoff:** add custom domains and protected previews ([#70](https://github.com/The-Vibe-Company/vanish/issues/70)) ([25f7cb9](https://github.com/The-Vibe-Company/vanish/commit/25f7cb9ace3c9506724aee3a514952f1b596041f))
+* **landing:** hero on the board, illustrated steps, simpler ticket ([#83](https://github.com/The-Vibe-Company/vanish/issues/83)) ([8ae0d0e](https://github.com/The-Vibe-Company/vanish/commit/8ae0d0eab6972cbb58fee62a62a77ce83d598fca))
+* **landing:** motion and polish on the notice-board landing ([#82](https://github.com/The-Vibe-Company/vanish/issues/82)) ([8f01145](https://github.com/The-Vibe-Company/vanish/commit/8f01145ea5ec8f69919a89d0da9f11a36ba8663c))
+* **landing:** notice-board landing told as a before / after ([#81](https://github.com/The-Vibe-Company/vanish/issues/81)) ([7b69a45](https://github.com/The-Vibe-Company/vanish/commit/7b69a45b4fd40753fd0df9972b4465f89eec7c7a))
+* **landing:** redesign landing as a pneumatic tube station ([#78](https://github.com/The-Vibe-Company/vanish/issues/78)) ([c354bb0](https://github.com/The-Vibe-Company/vanish/commit/c354bb0e3bc9ead407b8f0280f769f2efcf035e4))
+* **landing:** redesign landing as the enamel station sign ([#75](https://github.com/The-Vibe-Company/vanish/issues/75)) ([9176545](https://github.com/The-Vibe-Company/vanish/commit/9176545087121c7b84d0509781ea5bf162edcdb3))
+* **landing:** share image for Open Graph and Twitter cards ([#85](https://github.com/The-Vibe-Company/vanish/issues/85)) ([23b00c5](https://github.com/The-Vibe-Company/vanish/commit/23b00c5d17167959bebb0da242a7e650907b192d))
+* **limits:** increase anonymous limits to 300 MB ([#72](https://github.com/The-Vibe-Company/vanish/issues/72)) ([5cfe8c5](https://github.com/The-Vibe-Company/vanish/commit/5cfe8c55c073f362ff2866c622c62df36e564cae))
+* **pro:** add 10GB plan and responsive dashboard ([#68](https://github.com/The-Vibe-Company/vanish/issues/68)) ([83a85e7](https://github.com/The-Vibe-Company/vanish/commit/83a85e7d50b06fcc7a95d97ad3592fc73124eada))
+* **web:** redesign landing page and dashboard ([#65](https://github.com/The-Vibe-Company/vanish/issues/65)) ([5b0515f](https://github.com/The-Vibe-Company/vanish/commit/5b0515f212f608f26e67c60df7c78a0399cea376))
+
+
+### Bug Fixes
+
+* **dashboard:** cover mobile sticky nav chrome ([#69](https://github.com/The-Vibe-Company/vanish/issues/69)) ([fb88169](https://github.com/The-Vibe-Company/vanish/commit/fb88169472ff750c3da2f0e43dbe3bcbfc2a021e))
+
+
+### Reverts
+
+* enamel landing and dashboard redesign ([#75](https://github.com/The-Vibe-Company/vanish/issues/75), [#76](https://github.com/The-Vibe-Company/vanish/issues/76)) ([#77](https://github.com/The-Vibe-Company/vanish/issues/77)) ([0f879eb](https://github.com/The-Vibe-Company/vanish/commit/0f879eba37756c1727043c785d22b9ab80f11329))
+
 ## [0.1.22](https://github.com/The-Vibe-Company/vanish/compare/@vanish/worker-v0.1.21...@vanish/worker-v0.1.22) (2026-06-04)
 
 
