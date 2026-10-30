@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../types.js';
 import { posthogConfig, posthogScriptTag } from '../lib/posthog.js';
+import { ogImageBytes } from '../lib/og-image.js';
 
 const landing = new Hono<{ Bindings: Env }>();
 
@@ -16,6 +17,14 @@ const renderLanding = (analytics: string) => `<!doctype html>
 <meta property="og:description" content="A folder or a file goes in, a public URL comes back, and the URL expires on its own. No account needed to try." />
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://vanish.sh/" />
+<meta property="og:image" content="https://vanish.sh/og.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="vanish: a public URL for anything your agent makes, pinned on a notice board until it expires" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="vanish: a public URL for anything your agent makes" />
+<meta name="twitter:description" content="A folder or a file goes in, a public URL comes back, and the URL expires on its own. No account needed to try." />
+<meta name="twitter:image" content="https://vanish.sh/og.png" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%23184d2e'/%3E%3Crect x='1' y='1' width='6' height='3' fill='%23d63a2f'/%3E%3Crect x='2' y='4' width='4' height='1' fill='%238a1f17'/%3E%3Crect x='3' y='5' width='2' height='2' fill='%23ffffff'/%3E%3C/svg%3E" />
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -944,5 +953,16 @@ ${analytics}
 `;
 
 landing.get('/', (c) => c.html(renderLanding(posthogScriptTag(posthogConfig(c.env, c.req.url)))));
+
+landing.get('/og.png', () => {
+  const bytes = ogImageBytes();
+  return new Response(bytes.slice().buffer, {
+    headers: {
+      'Content-Type': 'image/png',
+      'Content-Length': String(bytes.byteLength),
+      'Cache-Control': 'public, max-age=86400',
+    },
+  });
+});
 
 export default landing;
