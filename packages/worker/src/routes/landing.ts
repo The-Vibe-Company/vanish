@@ -21,7 +21,7 @@ const COMMAND = 'npx vanish-cli site ./demo --root index.html';
 
 const commandBar = (extra = '') => `<div class="cmd${extra}">
   <code><span class="cmd-p" aria-hidden="true">$</span> ${COMMAND}</code>
-  <button type="button" class="copy" data-copy="${COMMAND}" aria-label="Copy command">${icon(ICON_COPY)}<span>Copy</span></button>
+  <button type="button" class="copy" data-copy="${COMMAND}">${icon(ICON_COPY)}<span class="copy-label" aria-live="polite">Copy</span></button>
 </div>`;
 
 const wordmark = (cls = '') => `<a class="wordmark${cls}" href="/" aria-label="vanish"><span aria-hidden="true"><b>v</b><b>a</b><b>n</b><b>i</b><b>s</b><b>h</b></span></a>`;
@@ -273,7 +273,7 @@ h1 em, h2 em { font-style: italic; color: var(--signal); }
 .stage[data-site="blank"] .st-site { opacity: 0; transition: none; }
 .stage[data-site="expired"] .st-gone { transition-delay: .35s; }
 
-/* what the URL serves once it is gone: the worker's 410, as a browser shows JSON */
+/* what the URL serves once it is gone: the worker's JSON answer, as a browser shows it */
 .st-gone { background: #fff; padding: 16px 20px; font: 13px/1.5 var(--mono); color: #1d1a16; }
 .st-gone-pp { display: flex; align-items: center; gap: 6px; font: 12px/1 var(--sans); color: #57534c; margin-bottom: 12px; }
 .st-gone-pp i { width: 12px; height: 12px; border: 1px solid #a8a29a; border-radius: 3px; }
@@ -367,6 +367,7 @@ h2 { font-family: var(--serif); font-size: clamp(42px, 5.4vw, 76px); line-height
 .tile-2 { grid-column: span 2; }
 .tile-copy { padding: 28px 30px 0; font-size: 19px; line-height: 1.45; color: var(--ink-3); max-width: 36em; }
 .tile-copy strong { color: var(--ink); font-weight: 600; }
+.tile-copy a, .qa dd a { color: var(--ink); font-weight: 500; text-underline-offset: 3px; }
 .tile-copy code.long { white-space: normal; }
 .tile-viz { position: relative; flex: 1; min-height: 0; margin-top: 28px; }
 .tile-ink { background: var(--night); box-shadow: none; }
@@ -504,7 +505,7 @@ h2 { font-family: var(--serif); font-size: clamp(42px, 5.4vw, 76px); line-height
 .foot nav { display: flex; flex-wrap: wrap; gap: 4px; }
 .foot nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; color: var(--night-dim); text-decoration: none; font-size: 15px; }
 .foot nav a:hover { color: var(--night-text); }
-.foot-line { padding-bottom: 36px; font: 13px var(--mono); color: #7d7568; }
+.foot-line { padding-bottom: 36px; font: 13px var(--mono); color: #9a9183; }
 
 /* motion on the page: one entrance as things scroll in */
 @media (prefers-reduced-motion: no-preference) {
@@ -568,7 +569,7 @@ h2 { font-family: var(--serif); font-size: clamp(42px, 5.4vw, 76px); line-height
   .hero-row { margin-top: 28px; }
   .cmd { padding-left: 14px; border-radius: 12px; }
   .cmd code { font-size: 13px; white-space: normal; overflow-wrap: anywhere; }
-  .copy span { display: none; }
+  .copy .copy-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .copy { padding: 0 14px; }
   .stage-wrap { margin-top: 40px; }
   .stage-wrap .wrap { padding: 0; }
@@ -621,7 +622,7 @@ ${analytics}
 
   <div class="stage-wrap">
     <div class="wrap">
-      <div class="fit" role="img" aria-label="A terminal runs npx vanish-cli site ./demo --root index.html and prints https://quiet-river-42.vanish.sh/. A browser opens that URL, and a tag on its corner counts down the 24 hours until it expires. When the time runs out, the same URL answers: This site has expired.">
+      <div class="fit" role="img" aria-label="A terminal runs npx vanish-cli site ./demo --root index.html and prints https://quiet-river-42.vanish.sh/. A browser opens that URL, and a tag on its corner counts down the 24 hours until it expires. When the time runs out, the same URL only answers: Site not found.">
         <div class="fit-box" data-fit>
           <div class="stage" data-stage data-site="live" data-term="done" data-chip="live" aria-hidden="true">
             <div class="st-win st-browser">
@@ -658,7 +659,7 @@ ${analytics}
                 </div>
                 <div class="st-layer st-gone">
                   <div class="st-gone-pp"><i></i>Pretty-print</div>
-                  <div>{"error":"This site has expired"}</div>
+                  <div>{"error":"Site not found"}</div>
                 </div>
               </div>
             </div>
@@ -698,7 +699,7 @@ ${analytics}
       <li class="beat">
         <p class="beat-t" aria-hidden="true">00:01</p>
         <h3>One command.</h3>
-        <p>Run it yourself, or let the agent run it: the CLI ships with three agent skills that pick the right command for a folder, a file or an account question.</p>
+        <p>Run it yourself, or let the agent run it: the Vanish agent skills pick the right command for a folder, a file or an account question.</p>
       </li>
       <li class="beat">
         <p class="beat-t" aria-hidden="true">24:00</p>
@@ -786,21 +787,21 @@ ${analytics}
           <div class="json" aria-hidden="true">
 <pre>{
   <span class="hl"><span class="k">"url"</span>: <span class="s">"https://quiet-river-42.vanish.sh/"</span>,</span>
-  <span class="k">"id"</span>: <span class="s">"quiet-river-42"</span>,
+  <span class="k">"id"</span>: <span class="s">"k8m2q9z4p1ad"</span>,
   <span class="k">"rootPath"</span>: <span class="s">"index.html"</span>,
   <span class="k">"size"</span>: <span class="n">12235</span>,
   <span class="k">"fileCount"</span>: <span class="n">4</span>,
   <span class="k">"expires"</span>: <span class="s">"2026-11-03T17:58:00.000Z"</span>,
   <span class="k">"expiresInHours"</span>: <span class="n">48</span>,
   <span class="k">"tier"</span>: <span class="s">"free"</span>,
-  <span class="k">"updateCommand"</span>: <span class="s">"vanish site ./demo --root index.html --update quiet-river-42"</span>
+  <span class="k">"updateCommand"</span>: <span class="s">"vanish site ./demo --root index.html --update k8m2q9z4p1ad"</span>
 }</pre>
           </div>
         </div>
       </article>
 
       <article class="tile in" style="--d:100ms">
-        <p class="tile-copy"><strong>Your agent knows the way.</strong> Three skills ship with the CLI, and they ask before publishing anything that looks private.</p>
+        <p class="tile-copy"><strong>Your agent knows the way.</strong> The <a href="https://github.com/The-Vibe-Company/vanish">repo</a> includes agent skills that pick the right command, and ask before publishing anything that looks private.</p>
         <ul class="skills">
           <li>vanish-publish-site<span>folders</span></li>
           <li>vanish-upload-files<span>files</span></li>
@@ -832,7 +833,7 @@ ${analytics}
         <div class="life-track"><span class="life-bar" style="--to:72.5%;--d:240ms"></span><span class="life-more" style="--from:73.5%"></span></div>
       </div>
       <div class="life-axis" aria-hidden="true"><span style="left:0">1 h</span><span style="left:35%">1 day</span><span class="opt" style="left:56.4%">1 week</span><span style="left:72.5%">30 days</span><span class="opt" style="left:84.6%">90 days</span><span style="left:100%">1 year</span></div>
-      <figcaption class="life-note">Every URL carries its own end date. When it passes, the URL answers 410 and the files are deleted.</figcaption>
+      <figcaption class="life-note">Every URL carries its own end date. When it passes, the link stops working and the files are deleted.</figcaption>
     </figure>
 
 ${plansTable()}
@@ -863,7 +864,7 @@ ${plansTable()}
       </div>
       <div class="in">
         <dt>Does my agent know how to use it?</dt>
-        <dd>The CLI ships with three skills: <code>vanish-publish-site</code> for folders, <code>vanish-upload-files</code> for files, <code>vanish-connect-upgrade</code> for login, quota and slugs. Claude Code, Codex and the others pick them up.</dd>
+        <dd>The <a href="https://github.com/The-Vibe-Company/vanish">vanish repo</a> includes agent skills: <code>vanish-publish-site</code> for folders, <code>vanish-upload-files</code> for files, <code>vanish-connect-upgrade</code> for login, quota and slugs. Add them to Claude Code, Codex or any agent that reads skills.</dd>
       </div>
       <div class="in">
         <dt>Can I run my own?</dt>
@@ -890,7 +891,7 @@ ${plansTable()}
       ${wordmark()}
       <nav aria-label="Footer">
         <a href="https://github.com/The-Vibe-Company/vanish">GitHub</a>
-        <a href="https://github.com/The-Vibe-Company/vanish/blob/main/CHANGELOG.md">Changelog</a>
+        <a href="https://github.com/The-Vibe-Company/vanish/blob/main/packages/cli/CHANGELOG.md">Changelog</a>
         <a href="/dashboard">Dashboard</a>
         <a href="mailto:abuse@vanish.sh?subject=Vanish%20abuse%20report">Report abuse</a>
       </nav>
@@ -910,7 +911,7 @@ ${plansTable()}
   onScroll();
 
   d.querySelectorAll('.copy').forEach(function (b) {
-    var label = b.querySelector('span');
+    var label = b.querySelector('.copy-label');
     b.addEventListener('click', function () {
       if (!navigator.clipboard) return;
       navigator.clipboard.writeText(b.getAttribute('data-copy')).then(function () {

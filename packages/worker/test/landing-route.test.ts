@@ -31,8 +31,9 @@ describe('landing route', () => {
     expect(html).toContain('300 MB · 100 files');
     expect(html).toContain('5,000 files · within 10 GB');
     expect(html).toContain('10 €');
-    // The hero stage shows what an expired URL really answers, and anonymous users cannot update.
-    expect(html).toContain('{"error":"This site has expired"}');
+    // The hero stage shows what an expired URL answers, and anonymous users cannot update.
+    expect(html).toContain('{"error":"Site not found"}');
+    expect(html).not.toContain('ships with three');
     expect(html).toContain('No, sign in first');
     expect(html).not.toContain('Sites you created');
     expect(html).toContain('posthog');
