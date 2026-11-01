@@ -46,7 +46,7 @@ describe('dashboard route', () => {
     )?.[1];
     const guardCss = mobileCss?.match(/\.sidebar::before\s*\{([^}]*)\}/)?.[1];
 
-    expect(html).toContain('<meta name="theme-color" content="#fafafa">');
+    expect(html).toContain('<meta name="theme-color" content="#f3efe7">');
     expect(mobileCss).toBeDefined();
     expect(guardCss).toBeDefined();
     expect(guardCss).toMatch(/position:\s*absolute/);
@@ -55,7 +55,7 @@ describe('dashboard route', () => {
     expect(guardCss).toMatch(/left:\s*0/);
     expect(guardCss).toMatch(/height:\s*100vh/);
     expect(guardCss).toMatch(/height:\s*100svh/);
-    expect(guardCss).toMatch(/background:\s*#fafafa/);
+    expect(guardCss).toMatch(/background:\s*#f3efe7/);
     expect(guardCss).toMatch(/pointer-events:\s*none/);
   });
 
