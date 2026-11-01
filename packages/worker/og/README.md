@@ -2,7 +2,7 @@
 
 `og.png` is the 1200 x 630 image shown when a vanish.sh link is shared (Open Graph and Twitter cards). The worker serves it at `/og.png` from `src/lib/og-image.ts`, where it is inlined as base64.
 
-To change it, edit `index.html` (the board scene is copied from the landing), then:
+To change it, edit `index.html` (type, palette and the expiry chip follow the landing), then:
 
 ```bash
 aeom capture --dir packages/worker/og --pages / --widths 1200 --out /tmp/og-cap
