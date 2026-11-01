@@ -405,7 +405,8 @@ code { font-family: var(--mono); font-size: .9em; }
 .file-mime code { color: var(--ink-2); font-size: .78rem; }
 .file-actions { display: flex; gap: .25rem; justify-self: end; }
 .dim { color: var(--ink-2); }
-.warn { color: var(--signal-ink); font-weight: 600; }
+.warn { color: var(--signal-ink); }
+.file-expiry .warn, .fc-meta .warn { font-weight: 600; }
 
 .files-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: .75rem; }
 .file-card {
